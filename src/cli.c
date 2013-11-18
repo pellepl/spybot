@@ -1,0 +1,944 @@
+/*
+ * cli.c
+ *
+ *  Created on: Jul 24, 2012
+ *      Author: petera
+ */
+
+#include "cli.h"
+#include "uart_driver.h"
+#include "taskq.h"
+#include "miniutils.h"
+#include "system.h"
+#include "spi_dev.h"
+#include "spi_driver.h"
+#include "i2c_driver.h"
+#include "i2c_dev.h"
+
+#include "lsm303_driver.h"
+#include "range_sens_hcsr04_driver.h"
+
+#define CLI_PROMPT "> "
+#define IS_STRING(s) ((u8_t*)(s) >= (u8_t*)in && (u8_t*)(s) < (u8_t*)in + sizeof(in))
+
+typedef int(*func)(int a, ...);
+
+typedef struct cmd_s {
+  const char* name;
+  const func fn;
+  const char* help;
+} cmd;
+
+struct {
+  uart_rx_callback prev_uart_rx_f;
+  void *prev_uart_arg;
+  uart *uart_pipe;
+  u8_t uart_pipe_stars;
+  char uart_pipe_via;
+} cli_state;
+
+static u8_t in[256];
+
+static int _argc;
+static void *_args[16];
+
+static int f_uwrite(int uart, char* data);
+static int f_uread(int uart, int numchars);
+static int f_uconnect(int uart);
+static int f_uconf(int uart, int speed);
+
+static int f_test_us(int high, int low, int times);
+
+static int f_rand();
+
+static int f_reset();
+static int f_time(int d, int h, int m, int s, int ms);
+static int f_help(char *s);
+static int f_dump();
+static int f_dump_trace();
+static int f_assert();
+static int f_dbg();
+
+#ifdef CONFIG_I2C
+static int f_i2c_read(int addr, int reg);
+static int f_i2c_write(int addr, int reg, int data);
+static int f_i2c_scan(void);
+#ifdef CONFIG_LSM303
+static int f_lsm_open();
+static int f_lsm_readacc();
+static int f_lsm_readmag();
+static int f_lsm_read();
+static int f_lsm_calibrate();
+static int f_lsm_close();
+#endif
+#endif
+
+#ifdef CONFIG_ADC
+static int f_adc();
+#endif
+
+static int f_col(int col);
+static int f_hardfault(int a);
+
+static int f_range_init(void);
+
+static int f_range(void);
+static int f_servo(int p);
+
+void CLI_uart_pipe_irq(void *a, u8_t c);
+
+#define HELP_UART_DEFS "uart - 0,1,2,3 - 0 is COMM, 1 is DBG, 2 is SPL, 3 is BT\n"
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////
+
+static cmd c_tbl[] = {
+    {.name = "dump",  .fn = (func)f_dump,
+            .help = "Dumps state of all system\n"
+    },
+    {.name = "dump_trace",  .fn = (func)f_dump_trace,
+            .help = "Dumps system trace\n"
+    },
+    {.name = "time",  .fn = (func)f_time,
+            .help = "Prints or sets time\n"\
+                "time or time <day> <hour> <minute> <second> <millisecond>\n"
+    },
+    {.name = "uwrite",  .fn = (func)f_uwrite,
+        .help = "Writes to uart\n"\
+        "uwrite <uart> <string>\n"\
+        HELP_UART_DEFS \
+        "ex: uwrite 2 \"foo\"\n"
+    },
+    {.name = "uread",  .fn = (func)f_uread,
+        .help = "Reads from uart\n"\
+        "uread <uart> (<numchars>)\n"\
+        HELP_UART_DEFS \
+        "numchars - number of chars to read, if omitted uart is drained\n"\
+        "ex: uread 2 10\n"
+    },
+    {.name = "uconnect",  .fn = (func)f_uconnect,
+        .help = "Connects to another uart\n"\
+        "uconnect <uart> (-via)\n"\
+        HELP_UART_DEFS \
+        "-via - vias data to original channel\n"\
+        "Once connected, enter '***' to disconnect\n"\
+        "ex: uconnect 2\n"
+    },
+    {.name = "uconf",  .fn = (func)f_uconf,
+        .help = "Configure uart\n"\
+        "uconf <uart> <speed>\n"\
+        HELP_UART_DEFS \
+        "ex: uconf 2 9600\n"
+    },
+
+    {.name = "test_us",  .fn = (func)f_test_us,
+            .help = "Flips PA4 on given times\n"\
+                "test_us <uptime> <downtime> <times>\n"
+    },
+
+    {.name = "range_init",  .fn = (func)f_range_init,
+            .help = "Initiates range sensor\n"
+    },
+
+    {.name = "range",  .fn = (func)f_range,
+            .help = "Range sample\n"
+    },
+
+    {.name = "servo",  .fn = (func)f_servo,
+            .help = "Set PB9 servo, 0-99\n"
+    },
+
+#ifdef CONFIG_I2C
+    {.name = "i2c_r",     .fn = (func)f_i2c_read,
+        .help = "i2c read reg\n"
+    },
+    {.name = "i2c_w",     .fn = (func)f_i2c_write,
+        .help = "i2c write reg\n"
+    },
+    {.name = "i2c_scan",     .fn = (func)f_i2c_scan,
+        .help = "scans i2c bus for all addresses\n"
+    },
+
+    {.name = "lsm_open",     .fn = (func)f_lsm_open,
+        .help = "setups and configures lsm303 device\n"
+    },
+    {.name = "lsm_calib",     .fn = (func)f_lsm_calibrate,
+        .help = "calibrate lsm303 device\n"
+    },
+    {.name = "lsm_acc",     .fn = (func)f_lsm_readacc,
+        .help = "reads out lsm303 acceleration values\n"
+    },
+    {.name = "lsm_mag",     .fn = (func)f_lsm_readmag,
+        .help = "reads out lsm303 magneto values\n"
+    },
+    {.name = "lsm_read",     .fn = (func)f_lsm_read,
+        .help = "reads out lsm303 values\n"
+    },
+    {.name = "lsm_close",     .fn = (func)f_lsm_close,
+        .help = "closes lsm303 device\n"
+    },
+
+#endif
+
+    #ifdef CONFIG_ADC
+    {.name = "adc",     .fn = (func)f_adc,
+        .help = "Sample adc\n"
+    },
+#endif
+#if 0
+    {.name = "test",     .fn = (func)f_test,
+        .help = "Test func\n"
+    },
+#endif
+
+    {.name = "dbg",   .fn = (func)f_dbg,
+        .help = "Set debug filter and level\n"\
+        "dbg (level <dbg|info|warn|fatal>) (enable [x]*) (disable [x]*)\n"\
+        "x - <task|heap|comm|cnc|cli|nvs|spi|all>\n"\
+        "ex: dbg level info disable all enable cnc comm\n"
+    },
+    {.name = "assert",  .fn = (func)f_assert,
+        .help = "Asserts system\n"\
+        "NOTE system will need to be rebooted\n"
+    },
+    {.name = "rand",  .fn = (func)f_rand,
+        .help = "Generates pseudo random sequence\n"
+    },
+    {.name = "col",  .fn = (func)f_col,
+        .help = "Set text color\n"
+    },
+    {.name = "reset",  .fn = (func)f_reset,
+        .help = "Resets system\n"
+    },
+    {.name = "hardfault",  .fn = (func)f_hardfault,
+        .help = "Generate hardfault, div by zero\n"
+    },
+    {.name = "help",  .fn = (func)f_help,
+        .help = "Prints help\n"\
+        "help or help <command>\n"
+    },
+    {.name = "?",     .fn = (func)f_help,
+        .help = "Prints help\n"\
+        "help or help <command>\n"
+    },
+
+    // menu end marker
+    {.name = NULL,    .fn = (func)0,        .help = NULL},
+};
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static int f_rand() {
+  print("%08x\n", rand_next());
+  return 0;
+}
+
+static int f_reset() {
+  SYS_reboot(REBOOT_USER);
+  return 0;
+}
+
+static int f_time(int ad, int ah, int am, int as, int ams) {
+  if (_argc == 0) {
+    u16_t d, ms; u8_t h, m, s;
+    SYS_get_time(&d, &h, &m, &s, &ms);
+    print("day:%i time:%02i:%02i:%02i.%03i\n", d,h,m,s,ms);
+  } else if (_argc == 5) {
+    SYS_set_time(ad, ah, am, as, ams);
+  } else {
+    return -1;
+  }
+  return 0;
+}
+
+#ifdef DBG_OFF
+static int f_dbg() {
+  print("Debug disabled compile-time\n");
+  return 0;
+}
+#else
+const char* DBG_BIT_NAME[] = _DBG_BIT_NAMES;
+
+static void print_debug_setting() {
+  print("DBG level: %i\n", SYS_dbg_get_level());
+  int d;
+  for (d = 0; d < sizeof(DBG_BIT_NAME)/sizeof(const char*); d++) {
+    print("DBG mask %s: %s\n", DBG_BIT_NAME[d], SYS_dbg_get_mask() & (1<<d) ? "ON":"OFF");
+  }
+}
+
+static int f_dbg() {
+  enum state {NONE, LEVEL, ENABLE, DISABLE} st = NONE;
+  int a;
+  if (_argc == 0) {
+    print_debug_setting();
+    return 0;
+  }
+  for (a = 0; a < _argc; a++) {
+    u32_t f = 0;
+    char *s = (char*)_args[a];
+    if (!IS_STRING(s)) {
+      return -1;
+    }
+    if (strcmp("level", s) == 0) {
+      st = LEVEL;
+    } else if (strcmp("enable", s) == 0) {
+      st = ENABLE;
+    } else if (strcmp("disable", s) == 0) {
+      st = DISABLE;
+    } else {
+      switch (st) {
+      case LEVEL:
+        if (strcmp("dbg", s) == 0) {
+          SYS_dbg_level(D_DEBUG);
+        }
+        else if (strcmp("info", s) == 0) {
+          SYS_dbg_level(D_INFO);
+        }
+        else if (strcmp("warn", s) == 0) {
+          SYS_dbg_level(D_WARN);
+        }
+        else if (strcmp("fatal", s) == 0) {
+          SYS_dbg_level(D_FATAL);
+        } else {
+          return -1;
+        }
+        break;
+      case ENABLE:
+      case DISABLE: {
+        int d;
+        for (d = 0; f == 0 && d < sizeof(DBG_BIT_NAME)/sizeof(const char*); d++) {
+          if (strcmp(DBG_BIT_NAME[d], s) == 0) {
+            f = (1<<d);
+          }
+        }
+        if (strcmp("all", s) == 0) {
+          f = D_ANY;
+        }
+        if (f == 0) {
+          return -1;
+        }
+        if (st == ENABLE) {
+          SYS_dbg_mask_enable(f);
+        } else {
+          SYS_dbg_mask_disable(f);
+        }
+        break;
+      }
+      default:
+        return -1;
+      }
+    }
+  }
+  print_debug_setting();
+  return 0;
+}
+#endif
+
+static int f_assert() {
+  ASSERT(FALSE);
+  return 0;
+}
+
+static int f_uwrite(int uart, char* data) {
+  if (_argc != 2 || !IS_STRING(data)) {
+    return -1;
+  }
+  if (uart < 0 || uart >= CONFIG_UART_CNT) {
+    return -1;
+  }
+  char c;
+  while ((c = *data++) != 0) {
+    UART_put_char(_UART(uart), c);
+  }
+  return 0;
+}
+
+static int f_uread(int uart, int numchars) {
+  if (_argc < 1  || _argc > 2) {
+    return -1;
+  }
+  if (uart < 0 || uart >= CONFIG_UART_CNT) {
+    return -1;
+  }
+  if (_argc == 1) {
+    numchars = 0x7fffffff;
+  }
+  int l = UART_rx_available(_UART(uart));
+  l = MIN(l, numchars);
+  int ix = 0;
+  while (ix++ < l) {
+    print("%c", UART_get_char(_UART(uart)));
+  }
+  print("\n%i bytes read\n", l);
+  return 0;
+}
+
+static int f_uconf(int uart, int speed) {
+  if (_argc != 2) {
+    return -1;
+  }
+  if (IS_STRING(uart) || IS_STRING(speed) || uart < 0 || uart >= CONFIG_UART_CNT) {
+    return -1;
+  }
+  USART_TypeDef *uart_hw = _UART(uart)->hw;
+
+  USART_Cmd(uart_hw, DISABLE);
+
+  USART_InitTypeDef USART_InitStructure;
+  USART_InitStructure.USART_BaudRate = speed;
+  USART_InitStructure.USART_WordLength = USART_WordLength_8b;
+  USART_InitStructure.USART_StopBits = USART_StopBits_1;
+  USART_InitStructure.USART_Parity = USART_Parity_No ;
+  USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
+  USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
+
+  /* Configure the USART */
+  USART_Init(uart_hw, &USART_InitStructure);
+
+  USART_Cmd(uart_hw, ENABLE);
+
+  return 0;
+}
+
+static int f_uconnect(int uart) {
+  if (_argc < 1) {
+    return -1;
+  }
+  if (IS_STRING(uart) || uart < 0 || uart >= CONFIG_UART_CNT) {
+    return -1;
+  }
+
+  if (uart == UARTSTDIN) {
+    print("Cannot pipe STDIN channel\n");
+    return 0;
+  }
+
+  int i;
+  char via = FALSE;
+  for (i = 1; i < _argc; i++) {
+    if (strcmp("-via", _args[i]) == 0) {
+      via = TRUE;
+      break;
+    }
+  }
+
+  cli_state.uart_pipe_via = via;
+
+  print("\nPiping uart %i, bash '***' to exit\n", uart);
+
+  cli_state.uart_pipe = _UART(uart);
+  UART_get_callback(_UART(uart),
+      &cli_state.prev_uart_rx_f, &cli_state.prev_uart_arg);
+  UART_set_callback(_UART(uart), CLI_uart_pipe_irq, NULL);
+
+  return 0;
+}
+
+static int f_udisconnect() {
+  if (cli_state.uart_pipe == 0) {
+    return -1;
+  }
+  UART_set_callback(cli_state.uart_pipe,
+      cli_state.prev_uart_rx_f, cli_state.prev_uart_arg);
+  cli_state.uart_pipe = 0;
+  print("\nUART pipe disconnected\n");
+  print(CLI_PROMPT);
+  return 0;
+}
+
+static int f_help(char *s) {
+  if (IS_STRING(s)) {
+    int i = 0;
+    while (c_tbl[i].name != NULL) {
+      if (strcmp(s, c_tbl[i].name) == 0) {
+        print("%s\t%s", c_tbl[i].name, c_tbl[i].help);
+        return 0;
+      }
+      i++;
+    }
+    print("%s\tno such command\n",s);
+  } else {
+    print("  "APP_NAME" CONTROL\n");
+    int i = 0;
+    while (c_tbl[i].name != NULL) {
+      int len = strpbrk(c_tbl[i].help, "\n") - c_tbl[i].help;
+      char tmp[64];
+      strncpy(tmp, c_tbl[i].help, len+1);
+      tmp[len+1] = 0;
+      char fill[24];
+      int fill_len = sizeof(fill)-strlen(c_tbl[i].name);
+      memset(fill, ' ', sizeof(fill));
+      fill[fill_len] = 0;
+      print("  %s%s%s", c_tbl[i].name, fill, tmp);
+      i++;
+    }
+  }
+  return 0;
+}
+
+static int f_dump() {
+  print("FULL DUMP\n=========\n");
+  TASK_dump(IOSTD);
+  print("\n");
+  print("=========\n");
+  return 0;
+}
+
+static int f_dump_trace() {
+#ifdef DBG_TRACE_MON
+  SYS_dump_trace(IOSTD);
+#else
+  print("trace not enabled\n");
+#endif
+  return 0;
+}
+
+#ifdef CONFIG_I2C
+
+static lsm303_dev lsm_dev;
+static int lsm_op = 0;
+static int lsm_still = 0;
+static int lsm_readings = 0;
+static s16_t lsm_last_mag[3];
+static s16_t lsm_mag_min[3];
+static s16_t lsm_mag_max[3];
+
+static void lsm_cb(lsm303_dev *dev, int res) {
+  s16_t *mag = lsm_get_mag_reading(&lsm_dev);
+  s16_t *acc = lsm_get_acc_reading(&lsm_dev);
+  switch (lsm_op) {
+  case 0: // open
+    if (res != I2C_OK) {
+      print("error %i\n", res);
+    } else {
+      print("lsm opened\n");
+    }
+    break;
+  case 1: // readacc
+    if (res != I2C_OK) {
+      print("error %i\n", res);
+    } else {
+      print("lsm acc %04x %04x %04x\n", acc[0], acc[1], acc[2]);
+    }
+    break;
+  case 2: // readmag
+    if (res != I2C_OK) {
+      print("error %i\n", res);
+    } else {
+      print("lsm mag %04x %04x %04x\n", mag[0], mag[1], mag[2]);
+    }
+    break;
+  case 3: // read both
+    if (res != I2C_OK) {
+      print("error %i\n", res);
+    } else {
+      print("lsm acc %04x %04x %04x, mag %04x %04x %04x\n", acc[0], acc[1], acc[2], mag[0], mag[1], mag[2]);
+      u16_t heading = lsm_get_heading(&lsm_dev);
+      print("heading: %04x, %i\n", heading, (heading * 360) >> 16);
+    }
+    break;
+  case 4: // calibrate
+    lsm_readings++;
+    if (res == I2C_OK) {
+      if (ABS(lsm_last_mag[0] - mag[0]) < 32 &&
+          ABS(lsm_last_mag[1] - mag[1]) < 32 &&
+          ABS(lsm_last_mag[2] - mag[2]) < 32) {
+        lsm_still++;
+        if (lsm_still > 100) {
+          print("Calibration finished.\n");
+          print("%i < x < %i\n", lsm_mag_min[0], lsm_mag_max[0]);
+          print("%i < y < %i\n", lsm_mag_min[1], lsm_mag_max[1]);
+          print("%i < z < %i\n", lsm_mag_min[2], lsm_mag_max[2]);
+          lsm_op = -1;
+        }
+      } else {
+        lsm_still = 0;
+        int i;
+        for (i = 0; i < 3; i++) {
+          lsm_mag_min[i] = MIN(lsm_mag_min[i], mag[i]);
+          lsm_mag_max[i] = MAX(lsm_mag_max[i], mag[i]);
+        }
+      }
+      memcpy(lsm_last_mag, mag, sizeof(lsm_last_mag));
+    } else if (res == I2C_ERR_DEV_TIMEOUT) {
+      print("lsm calib error %i\n", res);
+      break;
+    }
+    if (lsm_op == 4) {
+      if ((lsm_readings & 0x3f) == 0 && lsm_readings > 0) {
+        print("%i, still:%i, ", lsm_readings, lsm_still);
+        print("%i < x < %i, ", lsm_mag_min[0], lsm_mag_max[0]);
+        print("%i < y < %i, ", lsm_mag_min[1], lsm_mag_max[1]);
+        print("%i < z < %i\n", lsm_mag_min[2], lsm_mag_max[2]);
+      }
+      SYS_hardsleep_ms(50);
+      (void)lsm_read_mag(&lsm_dev);
+    }
+    break;
+  }
+}
+
+static int f_lsm_open() {
+   lsm_open(&lsm_dev, _I2C_BUS(0), FALSE, lsm_cb);
+   lsm_op = 0;
+   int res = lsm_config_default(&lsm_dev);
+   if (res != I2C_OK) {
+     print("err: %i\n", res);
+   }
+   return 0;
+}
+
+static int f_lsm_readacc() {
+  lsm_op = 1;
+  int res = lsm_read_acc(&lsm_dev);
+  if (res != I2C_OK) {
+    print("err: %i\n", res);
+  }
+  return 0;
+}
+static int f_lsm_readmag() {
+  lsm_op = 2;
+  int res = lsm_read_mag(&lsm_dev);
+  if (res != I2C_OK) {
+    print("err: %i\n", res);
+  }
+  return 0;
+}
+static int f_lsm_read() {
+  lsm_op = 3;
+  int res = lsm_read_both(&lsm_dev);
+  if (res != I2C_OK) {
+    print("err: %i\n", res);
+  }
+  return 0;
+}
+static int f_lsm_calibrate() {
+  print("Move device around all axes slowly, put it to rest when finished\n");
+  lsm_op = 4;
+  lsm_still = 0;
+  lsm_readings = 0;
+  lsm_mag_min[0] = 0x7fff;
+  lsm_mag_min[1] = 0x7fff;
+  lsm_mag_min[2] = 0x7fff;
+  lsm_mag_max[0] = -0x7fff;
+  lsm_mag_max[1] = -0x7fff;
+  lsm_mag_max[2] = -0x7fff;
+  int res = lsm_read_mag(&lsm_dev);
+  if (res != I2C_OK) {
+    print("err: %i\n", res);
+  }
+  return 0;
+
+}
+static int f_lsm_close() {
+   lsm_close(&lsm_dev);
+   return 0;
+}
+
+
+static u8_t i2c_dev_reg = 0;
+static u8_t i2c_dev_val = 0;
+static i2c_dev i2c_device;
+static u8_t i2c_wr_data[2];
+static i2c_dev_sequence i2c_r_seqs[] = {
+    I2C_SEQ_TX(&i2c_dev_reg, 1),
+    I2C_SEQ_RX_STOP(&i2c_dev_val, 1)
+};
+static i2c_dev_sequence i2c_w_seqs[] = {
+    I2C_SEQ_TX_STOP(i2c_wr_data, 2),
+};
+
+static void i2c_test_cb(i2c_dev *dev, int result) {
+  print("i2c_dev_cb: reg %02x val %02x res:%i\n", i2c_dev_reg, i2c_dev_val, result);
+  I2C_DEV_close(&i2c_device);
+}
+
+static int f_i2c_read(int addr, int reg) {
+  I2C_DEV_init(&i2c_device, 100000, _I2C_BUS(0), addr);
+  I2C_DEV_set_callback(&i2c_device, i2c_test_cb);
+  I2C_DEV_open(&i2c_device);
+  i2c_dev_reg = reg;
+  I2C_DEV_sequence(&i2c_device, i2c_r_seqs, 2);
+  return 0;
+}
+
+static int f_i2c_write(int addr, int reg, int data) {
+  I2C_DEV_init(&i2c_device, 100000, _I2C_BUS(0), addr);
+  I2C_DEV_set_callback(&i2c_device, i2c_test_cb);
+  I2C_DEV_open(&i2c_device);
+  i2c_wr_data[0] = reg;
+  i2c_wr_data[1] = data;
+  i2c_dev_reg = reg;
+  i2c_dev_val = data;
+  I2C_DEV_sequence(&i2c_device, i2c_w_seqs, 1);
+  return 0;
+}
+
+static u8_t i2c_scan_addr;
+
+void i2c_scan_report_task(u32_t addr, void *res) {
+  if (addr == 0) {
+    print("\n    0  2  4  6  8  a  c  e");
+  }
+  if ((addr & 0x0f) == 0) {
+    print("\n%02x ", addr & 0xf0);
+  }
+
+  print("%s", (char *)res);
+
+  if (i2c_scan_addr < 254) {
+    i2c_scan_addr += 2;
+    I2C_query(_I2C_BUS(0), i2c_scan_addr);
+  } else {
+    print("\n");
+  }
+}
+
+static void i2c_scan_cb_irq(i2c_bus *bus, int res) {
+  task *report_scan_task = TASK_create(i2c_scan_report_task, 0);
+  TASK_run(report_scan_task, bus->addr & 0xfe, res == I2C_OK ? "UP " : ".. ");
+}
+
+static int f_i2c_scan(void) {
+  i2c_scan_addr = 0;
+  I2C_config(_I2C_BUS(0), 100000);
+  I2C_set_callback(_I2C_BUS(0), i2c_scan_cb_irq);
+  return I2C_query(_I2C_BUS(0), i2c_scan_addr);
+}
+#endif
+
+
+static int f_col(int col) {
+  print("\033[1;3%im", col & 7);
+  return 0;
+}
+
+static int f_hardfault(int a) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdiv-by-zero"
+  SCB->CCR |= SCB_CCR_DIV_0_TRP_Msk;
+  volatile int q = 3;
+  volatile int x = 0;
+  return q/x;
+#pragma GCC diagnostic pop
+}
+
+static int f_test_us(int high, int low, int times) {
+  if (_argc != 3) return -1;
+
+  //enter_critical();
+  while(times--) {
+    GPIO_set(GPIOA, GPIO_Pin_4, 0);
+    SYS_hardsleep_us(high);
+    GPIO_set(GPIOA, 0, GPIO_Pin_4);
+    SYS_hardsleep_us(low);
+  }
+  //exit_critical();
+
+  return 0;
+}
+
+static void cli_range_cb(u32_t t) {
+  print("range cb:%i\n", t);
+}
+
+static int f_range_init(void) {
+  RANGE_SENS_init(cli_range_cb);
+  return 0;
+}
+
+static int f_range(void) {
+  s32_t res;
+  res = RANGE_SENS_trigger();
+  if (res != RANGE_SENS_OK) {
+    print("err: %i\n", res);
+  }
+  return 0;
+}
+
+static task *servo_task;
+static bool servo_timer_started = FALSE;
+static task_timer servo_timer;
+static void servo_task_f(u32_t a, void *b) {
+  static bool s_dir = FALSE;
+  static int s_val = 0;
+  if (s_dir) {
+    s_val++;
+    if (s_val >= 200) {
+      s_val = 199;
+      s_dir = FALSE;
+    }
+  } else {
+    s_val--;
+    if (s_val <= 0) {
+      s_val = 0;
+      s_dir = TRUE;
+    }
+  }
+  TIM_OCInitTypeDef  TIM_OCInitStructure;
+  TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
+  TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+  TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
+  TIM_OCInitStructure.TIM_Pulse = 3277 + ((6554-3277)*s_val)/200;
+  TIM_OC4Init(TIM4, &TIM_OCInitStructure);
+}
+static int f_servo(int p) {
+  if (p == 9999) {
+    servo_task = TASK_create(servo_task_f, TASK_STATIC);
+    TASK_start_timer(servo_task, &servo_timer, 0,0,0,50,"servo_tim");
+    servo_timer_started = TRUE;
+    return 0;
+  }
+  if (servo_timer_started) {
+    TASK_free(servo_task);
+    TASK_stop_timer(&servo_timer);
+    servo_timer_started = FALSE;
+  }
+  p %= 100;
+  TIM_OCInitTypeDef  TIM_OCInitStructure;
+  TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
+  TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+  TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
+  TIM_OCInitStructure.TIM_Pulse = 3277 + ((6554-3277)*p)/99;
+  // 3277 ~= 1ms
+  // 4915 ~= 1.5ms
+  // 6554 ~= 2ms
+  TIM_OC4Init(TIM4, &TIM_OCInitStructure);
+  return 0;
+}
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void CLI_TASK_on_piped_output(u32_t len, void *p) {
+  while (UART_rx_available(cli_state.uart_pipe) > 0) {
+    UART_put_char(_UART(UARTSTDOUT), UART_get_char(cli_state.uart_pipe));
+  }
+}
+
+static void CLI_TASK_on_piped_input(u32_t len, void *p) {
+  u32_t rlen = UART_get_buf(_UART(UARTSTDIN), in, MIN(len, sizeof(in)));
+  int i = 0;
+  for (i = 0; i < rlen; i++) {
+    if (in[i] == '*') {
+      cli_state.uart_pipe_stars++;
+      if (cli_state.uart_pipe_stars > 2) {
+        f_udisconnect();
+        return;
+      }
+    } else {
+      cli_state.uart_pipe_stars = 0;
+    }
+  }
+  UART_put_buf(cli_state.uart_pipe, in, rlen);
+}
+
+void CLI_TASK_on_input(u32_t len, void *p) {
+  if (cli_state.uart_pipe != 0) {
+    CLI_TASK_on_piped_input(len, p);
+    return;
+  }
+  if (len > sizeof(in)) {
+    DBG(D_CLI, D_WARN, "CONS input overflow\n");
+    print(CLI_PROMPT);
+    return;
+  }
+  u32_t rlen = UART_get_buf(_UART(UARTSTDIN), in, MIN(len, sizeof(in)));
+  if (rlen != len) {
+    DBG(D_CLI, D_WARN, "CONS length mismatch\n");
+    print(CLI_PROMPT);
+    return;
+  }
+  cursor cursor;
+  strarg_init(&cursor, (char*)in, rlen);
+  strarg arg;
+  _argc = 0;
+  func fn = NULL;
+  int ix = 0;
+
+  // parse command and args
+  while (strarg_next(&cursor, &arg)) {
+    if (arg.type == INT) {
+      //DBG(D_CLI, D_DEBUG, "CONS arg %i:\tlen:%i\tint:%i\n",arg_c, arg.len, arg.val);
+    } else if (arg.type == STR) {
+      //DBG(D_CLI, D_DEBUG, "CONS arg %i:\tlen:%i\tstr:\"%s\"\n", arg_c, arg.len, arg.str);
+    }
+    if (_argc == 0) {
+      // first argument, look for command function
+      if (arg.type != STR) {
+        break;
+      } else {
+        while (c_tbl[ix].name != NULL) {
+          if (strcmp(arg.str, c_tbl[ix].name) == 0) {
+            fn = c_tbl[ix].fn;
+            break;
+          }
+          ix++;
+        }
+        if (fn == NULL) {
+          break;
+        }
+      }
+    } else {
+      // succeeding arguments¸ store them in global vector
+      if (_argc-1 >= 16) {
+        DBG(D_CLI, D_WARN, "CONS too many args\n");
+        fn = NULL;
+        break;
+      }
+      _args[_argc-1] = (void*)arg.val;
+    }
+    _argc++;
+  }
+
+  // execute command
+  if (fn) {
+    _argc--;
+    DBG(D_CLI, D_DEBUG, "CONS calling [%p] with %i args\n", fn, _argc);
+    int res = (int)_variadic_call(fn, _argc, _args);
+    if (res == -1) {
+      print("%s", c_tbl[ix].help);
+    } else {
+      print("OK\n");
+    }
+  } else {
+    print("unknown command - try help\n");
+  }
+  print(CLI_PROMPT);
+}
+
+void CLI_timer() {
+}
+
+void CLI_uart_check_char(void *a, u8_t c) {
+  if (c == '\n') {
+    task *t = TASK_create(CLI_TASK_on_input, 0);
+    TASK_run(t, UART_rx_available(_UART(UARTSTDIN)), NULL);
+  }
+}
+
+void CLI_uart_pipe_irq(void *a, u8_t c) {
+  task *t = TASK_create(CLI_TASK_on_piped_output, 0);
+  TASK_run(t, UART_rx_available(cli_state.uart_pipe), NULL);
+  if (cli_state.uart_pipe_via && cli_state.prev_uart_rx_f) {
+    cli_state.prev_uart_rx_f(cli_state.prev_uart_arg, c);
+  }
+}
+
+void CLI_init() {
+  memset(&cli_state, 0, sizeof(cli_state));
+  DBG(D_CLI, D_DEBUG, "CLI init\n");
+  UART_set_callback(_UART(UARTSTDIN), CLI_uart_check_char, NULL);
+  print("\n"APP_NAME"\n");
+  print("build     : %i\n", SYS_build_number());
+  print("build date: %i\n", SYS_build_date());
+  print("\ntype '?' or 'help' for list of commands\n\n");
+  print(CLI_PROMPT);
+}
+
+
+

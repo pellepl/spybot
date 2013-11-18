@@ -1,0 +1,6 @@
+reset init
+halt   
+stm_flash_erase LENGTH
+stm_flash_image BUILDFILE
+reset
+exit
