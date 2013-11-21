@@ -18,6 +18,8 @@
 #include "lsm303_driver.h"
 #include "range_sens_hcsr04_driver.h"
 
+#include "nrf905_impl.h"
+
 #define CLI_PROMPT "> "
 #define IS_STRING(s) ((u8_t*)(s) >= (u8_t*)in && (u8_t*)(s) < (u8_t*)in + sizeof(in))
 
@@ -85,6 +87,13 @@ static int f_range_init(void);
 static int f_range(void);
 static int f_servo(int p);
 
+static int f_radio_init(void);
+static int f_radio_read_conf(void);
+static int f_radio_set_conf(void);
+static int f_radio_rx(void);
+static int f_radio_tx_addr(void);
+static int f_radio_tx(void);
+
 void CLI_uart_pipe_irq(void *a, u8_t c);
 
 #define HELP_UART_DEFS "uart - 0,1,2,3 - 0 is COMM, 1 is DBG, 2 is SPL, 3 is BT\n"
@@ -147,6 +156,26 @@ static cmd c_tbl[] = {
     {.name = "servo",  .fn = (func)f_servo,
             .help = "Set PB9 servo, 0-99\n"
     },
+
+    {.name = "radio_init",  .fn = (func)f_radio_init,
+            .help = "Initialize radio\n"
+    },
+    {.name = "radio_rconf",  .fn = (func)f_radio_read_conf,
+            .help = "Read radio config\n"
+    },
+    {.name = "radio_conf",  .fn = (func)f_radio_set_conf,
+            .help = "Set radio config\n"
+    },
+    {.name = "radio_rx",  .fn = (func)f_radio_rx,
+            .help = "Put radio in rx\n"
+    },
+    {.name = "radio_set_addr",  .fn = (func)f_radio_tx_addr,
+            .help = "Radio set tx addr\n"
+    },
+    {.name = "radio_tx",  .fn = (func)f_radio_tx,
+            .help = "Radio tx a sequence\n"
+    },
+
 
 #ifdef CONFIG_I2C
     {.name = "i2c_r",     .fn = (func)f_i2c_read,
@@ -809,6 +838,38 @@ static int f_servo(int p) {
   TIM_OC4Init(TIM4, &TIM_OCInitStructure);
   return 0;
 }
+
+
+static int f_radio_init(void) {
+  NRF905_IMPL_init();
+  return 0;
+}
+
+static int f_radio_read_conf(void) {
+  NRF905_IMPL_read_conf();
+  return 0;
+}
+
+static int f_radio_set_conf(void) {
+  NRF905_IMPL_set_conf(NULL);
+  return 0;
+}
+
+static int f_radio_rx(void) {
+  NRF905_IMPL_rx();
+  return 0;
+}
+
+static int f_radio_tx_addr(void) {
+  NRF905_IMPL_set_addr();
+  return 0;
+}
+
+static int f_radio_tx(void) {
+  NRF905_IMPL_tx();
+  return 0;
+}
+
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////

@@ -15,59 +15,26 @@
 #define NRF905_ERR_BUSY                   -51
 #define NRF905_ERR_BAD_CONFIG             -52
 #define NRF905_ERR_ILLEGAL_STATE          -53
-
-#ifndef NRF905_DATA_READY_PORT
-#define NRF905_DATA_READY_PORT        PORTA
-#endif
-#ifndef NRF905_DATA_READY_PIN
-#define NRF905_DATA_READY_PIN         PIN0
-#endif
-
-#ifndef NRF905_CARRIER_DETECT_PORT
-#define NRF905_CARRIER_DETECT_PORT    PORTA
-#endif
-#ifndef NRF905_CARRIER_DETECT_PIN
-#define NRF905_CARRIER_DETECT_PIN     PIN1
-#endif
-
-#ifndef NRF905_PWR_PORT
-#define NRF905_PWR_PORT               PORTA
-#endif
-#ifndef NRF905_PWR_PIN
-#define NRF905_PWR_PIN                PIN10
-#endif
-
-#ifndef NRF905_CS_PORT
-#define NRF905_CS_PORT                PORTA
-#endif
-#ifndef NRF905_CS_PIN
-#define NRF905_CS_PIN                 PIN11
-#endif
-
-#ifndef NRF905_TRX_CE_PORT
-#define NRF905_TRX_CE_PORT            PORTA
-#endif
-#ifndef NRF905_TRX_CE_PIN
-#define NRF905_TRX_CE_PIN             PIN12
-#endif
-
-#ifndef NRF905_TX_EN_PORT
-#define NRF905_TX_EN_PORT             PORTB
-#endif
-#ifndef NRF905_TX_EN_PIN
-#define NRF905_TX_EN_PIN              PIN5
-#endif
-
-#ifndef NRF905_SPI_BUS
-#define NRF905_SPI_BUS                0
-#endif
-
 typedef enum {
+  // power down
   NRF905_POWERDOWN = 0,
+  // standby/ready-for-configuration
   NRF905_STANDBY,
+  // configuration ongoing
   NRF905_CONFIG,
+  // quick configuration ongoing
+  NRF905_QUICK_CONFIG,
+  // configuration readback ongoing
   NRF905_READ_CONFIG,
-  NRF905_RX,
+  // listens for packets, data-ready high when packet received
+  NRF905_RX_LISTEN,
+  // reading a receive packet
+  NRF905_RX_READ,
+  // setting tx address
+  NRF905_CONFIG_TX_ADDR,
+  // preparing for tx
+  NRF905_TX_PRIME,
+  // txing a packet, data-ready high when packet sent
   NRF905_TX,
 } nrf905_state;
 
@@ -128,7 +95,7 @@ typedef enum {
   NRF905_CFG_CRC_MODE_16BIT = 1,
 } nrf905_cfg_crc_mode;
 
-
+#if 0
 typedef struct {
   u16_t channel_freq : 9;
   nrf905_cfg_hfreq hfreq_pll : 1;
@@ -146,6 +113,25 @@ typedef struct {
   nrf905_cfg_crc crc_en : 1;
   nrf905_cfg_crc_mode crc_mode : 1;
 } __attribute__ (( packed )) nrf905_config;
+#else
+typedef struct {
+  u16_t channel_freq;
+  nrf905_cfg_hfreq hfreq_pll;
+  nrf905_cfg_pa_pwr pa_pwr;
+  nrf905_cfg_rx_reduced_power rx_reduced_power;
+  nrf905_cfg_auto_retransmit auto_retransmit;
+  nrf905_cfg_address_field_width rx_address_field_width;
+  nrf905_cfg_address_field_width tx_address_field_width;
+  u8_t rx_payload_width;
+  u8_t tx_payload_width;
+  u32_t rx_address;
+  nrf905_cfg_out_clk_freq out_clk_freq;
+  nrf905_cfg_out_clk_enable out_clk_enable;
+  nrf905_cfg_xtal_freq crystal_frequency;
+  nrf905_cfg_crc crc_en;
+  nrf905_cfg_crc_mode crc_mode;
+} nrf905_config;
+#endif
 
 #define NRF905_STATE_TRANS_POWDOW_STDBY_US    30000
 #define NRF905_STATE_TRANS_STDBY_RXTX_US      650
@@ -160,46 +146,129 @@ typedef struct {
 #define NRF905_SPI_R_RX_PAYLOAD         ( 0b00100100 )
 #define NRF905_SPI_CH_CONFIG(ch,pll,pa) ( (0b1000<<12) | ((pa&0x3)<<10) | ((pll&1)<<9) | (ch&0x1ff) )
 
-struct nrf905_s;
+#define NRF905_RX_PKT_BUFFER(nrf) ( (u8_t*)(&(nrf)->_buf[1]) )
+#define NRF905_RX_PKT_LEN(nrf) ( (nrf)->config.rx_payload_width )
 
-typedef void (*nrf905_cb)(struct nrf905_s *nrf, nrf905_state state, int res);
+typedef struct nrf905 nrf905;
 
-typedef struct nrf905_s {
-  volatile bool busy;
+/**
+ * State/result callback function.
+ * If state == NRF905_RX_READ and res == NRF905_OK a packet can be fetched using
+ * macros NRF905_RX_PKT_BUFFER and NRF905_RX_PKT_LEN.
+ */
+typedef void (*nrf905_cb)(nrf905 *nrf, nrf905_state state, int res);
+
+typedef struct nrf905 {
   nrf905_state state;
   nrf905_cb cb;
+  nrf905_config config;
   spi_dev *spi_dev;
+  u8_t _buf[34];
+  void *_scratch;
+
   hw_io_port pwr_port;
   hw_io_pin pwr_pin;
   hw_io_port trx_ce_port;
   hw_io_pin trx_ce_pin;
   hw_io_port tx_en_port;
   hw_io_pin tx_en_pin;
-  nrf905_config config;
-  u8_t _buf[16];
-  void *_scratch;
 } nrf905;
 
+/**
+ * Initiates the transceiver in powerdown mode. After this,
+ * NRF905_standby should be called; and then the transceiver should
+ * be setup using NRF905_config.
+ */
 void NRF905_init(nrf905 *nrf, spi_dev *spi_dev,
     nrf905_cb cb,
     hw_io_port pwr_port, hw_io_pin pwr_pin,
     hw_io_port trx_ce_port, hw_io_pin trx_ce_pin,
     hw_io_port tx_en_port, hw_io_pin tx_en_pin);
 
+/*
+ * This function must be called on high flanks of the DATA READY signal.
+ */
+void NRF905_signal_data_ready(nrf905 *nrf);
+
+/**
+ * Puts the transceiver in powerdown mode.  Can be called
+ * from standby mode.
+ * Synchronous.
+ * States: NRF905_POWERDOWN
+ */
 int NRF905_powerdown(nrf905 *nrf);
 
+/**
+ * Puts the transceiver in standby mode. Can be called
+ * from all modes.
+ * Synchronous.
+ * States: NRF905_STANDBY
+ */
 int NRF905_standby(nrf905 *nrf);
 
+/**
+ * Configures the transceiver.
+ * Can only be called from standby mode.
+ * Returns to standby mode after finished operation.
+ * Asynchronous.
+ * States: NRF905_CONFIG
+ */
 int NRF905_config(nrf905 *nrf, nrf905_config *cfg);
 
+/**
+ * Reads out transceivers configuration.
+ * Can only be called from standby mode.
+ * Returns to standby mode after finished operation.
+ * Asynchronous.
+ * States: NRF905_READ_CONFIG
+ */
 int NRF905_read_config(nrf905 *nrf, nrf905_config *cfg);
 
-int NRF905_config_channel(nrf905 *nrf, u16_t channel_freq);
+/**
+ * Configures the transceivers channel.
+ * Can only be called from standby mode.
+ * Returns to standby mode after finished operation.
+ * Asynchronous.
+ * States: NRF905_QUICK_CONFIG
+ */
+int NRF905_quick_config_channel(nrf905 *nrf, u16_t channel_freq);
 
-int NRF905_config_pa(nrf905 *nrf, nrf905_cfg_pa_pwr pa_pwr);
+/**
+ * Configures the transceivers PA.
+ * Can only be called from standby mode.
+ * Returns to standby mode after finished operation.
+ * Asynchronous.
+ * States: NRF905_QUICK_CONFIG
+ */
+int NRF905_quick_config_pa(nrf905 *nrf, nrf905_cfg_pa_pwr pa_pwr);
 
-int NRF905_config_rx_address(nrf905 *nrf, u32_t rx_address);
+/**
+ * Sets the address to tx to. Must be called prior to a transmit. The
+ * same tx address need not to be set proir to all transmits.
+ * Can only be called from standby mode.
+ * Returns to standby mode after finished operation.
+ * Asynchronous.
+ * States: NRF905_CONFIG_TX_ADDR
+ */
+int NRF905_config_tx_address(nrf905 *nrf, u8_t *addr);
 
-int NRF905_signal_data_ready(nrf905 *nrf);
+/**
+ * Transmits a packet.
+ * Can only be called from standby mode.
+ * Returns to standby mode after finished operation.
+ * Asynchronous.
+ * States: NRF905_TX_PRIME, NRF905_TX
+ */
+int NRF905_tx(nrf905 *nrf, u8_t *data, u8_t len);
+
+/**
+ * Puts the transceiver in rx mode. When one packet is received,
+ * standby mode is returned to.
+ * Can only be called from standby mode.
+ * Returns to standby mode after finished operation.
+ * Asynchronous.
+ * States: NRF905_RX_LISTEN, NRF905_RX_READ
+ */
+int NRF905_rx(nrf905 *nrf);
 
 #endif /* NRF905_DRIVER_H_ */

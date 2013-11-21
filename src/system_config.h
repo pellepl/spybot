@@ -69,8 +69,12 @@
 
 // make SPI driver use polling method, otherwise DMA requests are used
 // warning - polling method should only be used for debugging and may be
-// unstable. Do nod sent multitudes of data using this config
+// unstable. Do not sent multitudes of data using this config
 //#define CONFIG_SPI_POLL
+
+// on some stm32f1s it seems to be a bad idea closing down the SPI between
+// operations
+#define CONFIG_SPI_KEEP_RUNNING
 
 #ifdef CONFIG_SPI1
 
@@ -132,9 +136,57 @@
 #define I2C_MAX_ID                    1
 
 #endif
+
 /** ADC **/
 
 // TODO #define CONFIG_ADC
+
+
+/** RADIO **/
+
+#ifndef NRF905_DATA_READY_PORT
+#define NRF905_DATA_READY_PORT        PORTA
+#endif
+#ifndef NRF905_DATA_READY_PIN
+#define NRF905_DATA_READY_PIN         PIN0
+#endif
+
+#ifndef NRF905_CARRIER_DETECT_PORT
+#define NRF905_CARRIER_DETECT_PORT    PORTA
+#endif
+#ifndef NRF905_CARRIER_DETECT_PIN
+#define NRF905_CARRIER_DETECT_PIN     PIN1
+#endif
+
+#ifndef NRF905_PWR_PORT
+#define NRF905_PWR_PORT               PORTA
+#endif
+#ifndef NRF905_PWR_PIN
+#define NRF905_PWR_PIN                PIN10
+#endif
+
+#ifndef NRF905_CS_PORT
+#define NRF905_CS_PORT                PORTA
+#endif
+#ifndef NRF905_CS_PIN
+#define NRF905_CS_PIN                 PIN11
+#endif
+
+#ifndef NRF905_TRX_CE_PORT
+#define NRF905_TRX_CE_PORT            PORTA
+#endif
+#ifndef NRF905_TRX_CE_PIN
+#define NRF905_TRX_CE_PIN             PIN12
+#endif
+
+#ifndef NRF905_TX_EN_PORT
+#define NRF905_TX_EN_PORT             PORTB
+#endif
+#ifndef NRF905_TX_EN_PIN
+#define NRF905_TX_EN_PIN              PIN5
+#endif
+
+
 
 /****************************************************/
 /******** Application build time configuration ******/
@@ -169,6 +221,8 @@ typedef u16_t system_counter_type;
 
 
 /** DEBUG **/
+
+//#define DBG_RADIO
 
 // disable all asserts
 //#define ASSERT_OFF

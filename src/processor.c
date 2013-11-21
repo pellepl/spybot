@@ -41,7 +41,8 @@ static void RCC_config() {
 #ifdef CONFIG_SPI
 #ifdef CONFIG_SPI1
   /* Enable SPI1_MASTER clock and GPIO clock for SPI1_MASTER */
-  RCC_APB2PeriphClockCmd(SPI1_MASTER_GPIO_CLK | SPI1_MASTER_CLK, ENABLE);
+  RCC_APB2PeriphClockCmd(SPI1_MASTER_GPIO_CLK, ENABLE);
+  RCC_APB2PeriphClockCmd(SPI1_MASTER_CLK, ENABLE);
 
   /* Enable SPI1_MASTER DMA clock */
   RCC_AHBPeriphClockCmd(SPI1_MASTER_DMA_CLK, ENABLE);
@@ -314,15 +315,6 @@ static void SPI_config() {
   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
   GPIO_Init(SPI1_MASTER_GPIO, &GPIO_InitStructure);
-
-  /* Configure SPI1_MASTER pins: NSS, SCK and MOSI */
-  // TODO
-  /*
-  GPIO_InitStructure.GPIO_Pin = SPI_FLASH_GPIO_PIN;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-  GPIO_Init(SPI_FLASH_GPIO_PORT, &GPIO_InitStructure);
-*/
 
   /* SPI1_MASTER configuration */
   SPI_InitStructure.SPI_Direction = SPI_Direction_2Lines_FullDuplex;
