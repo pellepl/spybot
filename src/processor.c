@@ -68,7 +68,8 @@ static void RCC_config() {
 #endif
 
   // spybot cvideo
-  RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1, ENABLE);
+  RCC_APB1PeriphClockCmd(RCC_APB1Periph_SPI2, ENABLE);
+  RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
 }
 
 static void NVIC_config(void)
@@ -161,11 +162,9 @@ static void NVIC_config(void)
   NVIC_SetPriority(EXTI2_IRQn, NVIC_EncodePriority(prioGrp, 0, 3));
   NVIC_SetPriority(EXTI3_IRQn, NVIC_EncodePriority(prioGrp, 0, 3));
   NVIC_SetPriority(EXTI4_IRQn, NVIC_EncodePriority(prioGrp, 0, 3));
+
   NVIC_SetPriority(EXTI9_5_IRQn, NVIC_EncodePriority(prioGrp, 0, 0));   // rover cvideo vsync
   NVIC_SetPriority(EXTI15_10_IRQn, NVIC_EncodePriority(prioGrp, 0, 1)); // rover cvideo hsync
-
-  // rover tim trigger
-  NVIC_SetPriority(TIM1_UP_IRQn, NVIC_EncodePriority(prioGrp, 0, 2));
 }
 
 static void UART1_config() {
@@ -562,14 +561,48 @@ static void RANGE_SENS_config() {
 }
 
 static void CVIDEO_config() {
-  TIM_TimeBaseInitTypeDef  TIM_TimeBaseStructure;
-  TIM_TimeBaseStructure.TIM_Period = 0;
-  TIM_TimeBaseStructure.TIM_Prescaler = 1;
-  TIM_TimeBaseStructure.TIM_ClockDivision = 0;
-  TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
-  TIM_TimeBaseInit(TIM1, &TIM_TimeBaseStructure);
-  TIM_PrescalerConfig(TIM1, 1, TIM_PSCReloadMode_Immediate);
+  // config spi & dma
+  SPI_InitTypeDef  SPI_InitStructure;
+  DMA_InitTypeDef  DMA_InitStructure;
 
+  /* SPI2_MASTER configuration */
+  SPI_InitStructure.SPI_Direction = SPI_Direction_1Line_Tx;
+  SPI_InitStructure.SPI_Mode = SPI_Mode_Master;
+  SPI_InitStructure.SPI_DataSize = SPI_DataSize_8b;
+  SPI_InitStructure.SPI_CPOL = SPI_CPOL_High;
+  SPI_InitStructure.SPI_CPHA = SPI_CPHA_1Edge;
+  SPI_InitStructure.SPI_NSS = SPI_NSS_Soft;
+  SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_16; // APB2/16
+  SPI_InitStructure.SPI_FirstBit = SPI_FirstBit_MSB;
+  SPI_InitStructure.SPI_CRCPolynomial = 7;
+  SPI_Init(SPI2, &SPI_InitStructure);
+
+  // SPI1_BASE(APB2PERIPH_BASE(PERIPH_BASE(0x40000000) + 0x00010000) + 3000)
+  // DataRegister offset = 0x0c = SPI1_BASE + 0x0c
+  DMA_InitStructure.DMA_PeripheralBaseAddr = (uint32_t)(SPI2_BASE + 0x0c);
+  DMA_InitStructure.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
+  DMA_InitStructure.DMA_MemoryInc = DMA_MemoryInc_Enable;
+  DMA_InitStructure.DMA_PeripheralDataSize = DMA_PeripheralDataSize_Byte;
+  DMA_InitStructure.DMA_MemoryDataSize = DMA_MemoryDataSize_Byte;
+  DMA_InitStructure.DMA_Mode = DMA_Mode_Normal;
+  DMA_InitStructure.DMA_Priority = DMA_Priority_VeryHigh;
+  DMA_InitStructure.DMA_M2M = DMA_M2M_Disable;
+
+  /* Configure SPI DMA tx */
+  DMA_DeInit(DMA1_Channel5);
+  DMA_InitStructure.DMA_DIR = DMA_DIR_PeripheralDST;
+  DMA_InitStructure.DMA_BufferSize = 0;
+  DMA_Init(DMA1_Channel5, &DMA_InitStructure);
+
+  // Do not enable DMA SPI TX channel transfer complete interrupt,
+  // always use tx/rx transfers and only await DMA RX finished irq
+  DMA_ITConfig(DMA1_Channel5, DMA_IT_TE, DISABLE); //ENABLE);
+
+  /* Enable SPI_MASTER DMA Tx request */
+  SPI_I2S_DMACmd(SPI2, SPI_I2S_DMAReq_Tx , ENABLE);
+
+
+  // config io
   gpio_config(PORTB, PIN15, CLK_50MHZ, OUT, AF0, PUSHPULL, NOPULL);
   gpio_disable(PORTB, PIN15);
 
