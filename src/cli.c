@@ -20,6 +20,8 @@
 
 #include "nrf905_impl.h"
 
+#include "cvideo.h"
+
 #define CLI_PROMPT "> "
 #define IS_STRING(s) ((u8_t*)(s) >= (u8_t*)in && (u8_t*)(s) < (u8_t*)in + sizeof(in))
 
@@ -93,6 +95,9 @@ static int f_radio_set_conf(void);
 static int f_radio_rx(void);
 static int f_radio_tx_addr(void);
 static int f_radio_tx(void);
+
+static int f_cvideo_init(void);
+static int f_cvideo_dump(void);
 
 void CLI_uart_pipe_irq(void *a, u8_t c);
 
@@ -174,6 +179,13 @@ static cmd c_tbl[] = {
     },
     {.name = "radio_tx",  .fn = (func)f_radio_tx,
             .help = "Radio tx a sequence\n"
+    },
+
+    {.name = "video_init",  .fn = (func)f_cvideo_init,
+            .help = "Initializes cvideo\n"
+    },
+    {.name = "video_dump",  .fn = (func)f_cvideo_dump,
+            .help = "Dumps cvideo block info\n"
     },
 
 
@@ -870,6 +882,15 @@ static int f_radio_tx(void) {
   return 0;
 }
 
+static int f_cvideo_init(void) {
+  CVIDEO_init();
+  return 0;
+}
+
+static int f_cvideo_dump(void) {
+  CVIDEO_dump();
+  return 0;
+}
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////

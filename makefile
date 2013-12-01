@@ -99,6 +99,7 @@ CFILES 		+= timer.c
 CFILES 		+= range_sens_hcsr04_driver.c
 CFILES		+= nrf905_driver.c
 CFILES		+= nrf905_impl.c
+CFILES		+= cvideo.c
 
 # comm files
 include ../generic/comm/files.mk

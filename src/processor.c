@@ -66,6 +66,9 @@ static void RCC_config() {
   RCC_ADCCLKConfig(RCC_PCLK2_Div2);
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);
 #endif
+
+  // spybot cvideo
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1, ENABLE);
 }
 
 static void NVIC_config(void)
@@ -85,7 +88,7 @@ static void NVIC_config(void)
   NVIC_SetPriority(PendSV_IRQn, NVIC_EncodePriority(prioGrp, 7, 1));
 
   // Config & enable TIM interrupt
-  NVIC_SetPriority(STM32_SYSTEM_TIMER_IRQn, NVIC_EncodePriority(prioGrp, 0, 0));
+  NVIC_SetPriority(STM32_SYSTEM_TIMER_IRQn, NVIC_EncodePriority(prioGrp, 1, 0));
   NVIC_EnableIRQ(STM32_SYSTEM_TIMER_IRQn);
 
   // Config & enable uarts interrupt
@@ -151,6 +154,18 @@ static void NVIC_config(void)
   // range sensor
   NVIC_SetPriority(TIM3_IRQn, NVIC_EncodePriority(prioGrp, 2, 0));
   NVIC_EnableIRQ(TIM3_IRQn);
+
+  // extis
+  NVIC_SetPriority(EXTI0_IRQn, NVIC_EncodePriority(prioGrp, 0, 3));
+  NVIC_SetPriority(EXTI1_IRQn, NVIC_EncodePriority(prioGrp, 0, 3));
+  NVIC_SetPriority(EXTI2_IRQn, NVIC_EncodePriority(prioGrp, 0, 3));
+  NVIC_SetPriority(EXTI3_IRQn, NVIC_EncodePriority(prioGrp, 0, 3));
+  NVIC_SetPriority(EXTI4_IRQn, NVIC_EncodePriority(prioGrp, 0, 3));
+  NVIC_SetPriority(EXTI9_5_IRQn, NVIC_EncodePriority(prioGrp, 0, 0));   // rover cvideo vsync
+  NVIC_SetPriority(EXTI15_10_IRQn, NVIC_EncodePriority(prioGrp, 0, 1)); // rover cvideo hsync
+
+  // rover tim trigger
+  NVIC_SetPriority(TIM1_UP_IRQn, NVIC_EncodePriority(prioGrp, 0, 2));
 }
 
 static void UART1_config() {
@@ -546,9 +561,25 @@ static void SERVO_config() {
 static void RANGE_SENS_config() {
 }
 
+static void CVIDEO_config() {
+  TIM_TimeBaseInitTypeDef  TIM_TimeBaseStructure;
+  TIM_TimeBaseStructure.TIM_Period = 0;
+  TIM_TimeBaseStructure.TIM_Prescaler = 1;
+  TIM_TimeBaseStructure.TIM_ClockDivision = 0;
+  TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+  TIM_TimeBaseInit(TIM1, &TIM_TimeBaseStructure);
+  TIM_PrescalerConfig(TIM1, 1, TIM_PSCReloadMode_Immediate);
+
+  gpio_config(PORTB, PIN15, CLK_50MHZ, OUT, AF0, PUSHPULL, NOPULL);
+  gpio_disable(PORTB, PIN15);
+
+  gpio_config(PORTB, PIN8, CLK_50MHZ, IN, AF0, OPENDRAIN, NOPULL);
+  gpio_config(PORTB, PIN14, CLK_50MHZ, IN, AF0, OPENDRAIN, NOPULL);
+  gpio_interrupt_mask_disable(PORTB, PIN14);
+  gpio_interrupt_mask_disable(PORTB, PIN8);
+}
 
 // ifc
-
 
 void PROC_base_init() {
   RCC_config();
@@ -571,5 +602,6 @@ void PROC_periph_init() {
 
   SERVO_config();
   RANGE_SENS_config();
+  CVIDEO_config();
 }
 

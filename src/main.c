@@ -98,7 +98,7 @@ int main(void) {
 
 #ifdef DBG_RADIO
   dbg_radio_task = TASK_create(dbg_radio_task_func, TASK_STATIC);
-  TASK_start_timer(dbg_radio_task, &dbg_radio_timer, 0,0,0,500,"radio");
+  TASK_start_timer(dbg_radio_task, &dbg_radio_timer, 0,0,0,1000,"radio");
 #endif
 
   while (1) {
