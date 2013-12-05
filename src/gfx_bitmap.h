@@ -1,0 +1,36 @@
+/*
+ * gfx_bitmap.h
+ *
+ *  Created on: Dec 2, 2013
+ *      Author: petera
+ */
+
+#ifndef GFX_BITMAP_H_
+#define GFX_BITMAP_H_
+
+#include "system.h"
+
+typedef struct {
+  u16_t width;
+  u16_t height;
+  u16_t hscan;
+  u8_t *gram;
+} gcontext;
+
+typedef enum {
+  COL_RESET = 0,
+  COL_SET,
+  COL_MIX,
+  COL_OVER
+} gcolor;
+
+void GFX_put_pixel(gcontext *ctx, s16_t x, s16_t y, gcolor col);
+void GFX_fill(gcontext *ctx, s16_t x, s16_t y, u16_t width, u16_t height, gcolor col);
+void GFX_print(gcontext *ctx, u8_t *s, u8_t cx, u8_t cy, gcolor col);
+void GFX_draw_string(gcontext *ctx, u8_t *s, s16_t x, s16_t y, gcolor col);
+void GFX_draw_line(gcontext *ctx, s16_t x1, s16_t y1, s16_t x2, s16_t y2, gcolor col);
+void GFX_draw_horizontal_line(gcontext *ctx, s16_t x1, s16_t x2, s16_t y, gcolor col);
+void GFX_draw_vertical_line(gcontext *ctx, s16_t x, s16_t y1, s16_t y2, gcolor col);
+
+
+#endif /* GFX_BITMAP_H_ */

@@ -21,6 +21,8 @@
 #include "nrf905_impl.h"
 
 #include "cvideo.h"
+#include "gfx_bitmap.h"
+#include "trig_q.h"
 
 #define CLI_PROMPT "> "
 #define IS_STRING(s) ((u8_t*)(s) >= (u8_t*)in && (u8_t*)(s) < (u8_t*)in + sizeof(in))
@@ -98,6 +100,9 @@ static int f_radio_tx(void);
 
 static int f_cvideo_init(void);
 static int f_cvideo_dump(void);
+static int f_gfx_fill(int x, int y, int w, int h, int c);
+static int f_gfx_test(void);
+static int f_gfx_str(int x, int y, u8_t *str);
 
 void CLI_uart_pipe_irq(void *a, u8_t c);
 
@@ -186,6 +191,15 @@ static cmd c_tbl[] = {
     },
     {.name = "video_dump",  .fn = (func)f_cvideo_dump,
             .help = "Dumps cvideo block info\n"
+    },
+    {.name = "gfill",  .fn = (func)f_gfx_fill,
+            .help = "Paints a rectangle to cvideo (x,y,w,h,c)\n"
+    },
+    {.name = "gstr",  .fn = (func)f_gfx_str,
+            .help = "Paints text to cvideo (x,y,str)\n"
+    },
+    {.name = "gtest",  .fn = (func)f_gfx_test,
+            .help = "Paint test\n"
     },
 
 
@@ -882,13 +896,61 @@ static int f_radio_tx(void) {
   return 0;
 }
 
+extern gcontext gctx;
+
 static int f_cvideo_init(void) {
   CVIDEO_init();
+  CVIDEO_init_gcontext(&gctx);
   return 0;
 }
 
 static int f_cvideo_dump(void) {
   CVIDEO_dump();
+  return 0;
+}
+
+static int f_gfx_fill(int x, int y, int w, int h, int c) {
+  if (_argc < 5) return -1;
+  GFX_fill(&gctx, x, y, w, h, c);
+  return 0;
+}
+
+static int f_gfx_str(int x, int y, u8_t *str) {
+  if (_argc < 3) return -1;
+  GFX_print(&gctx, str, x, y, COL_OVER);
+  return 0;
+}
+
+static task_timer gtimer;
+static task *gtask = NULL;
+static s32_t gang = 0;
+static void gtask_f(u32_t a, void *b) {
+  s16_t x = gctx.width/2;
+  s16_t y = gctx.height/2;
+  s32_t dx = (cos_table(gang)*50) >> 15;
+  s32_t dy = (sin_table(gang)*40) >> 15;
+  GFX_draw_line(&gctx, x, y, x+dx, y+dy, COL_RESET);
+
+  gang += 3;
+
+  dx = (cos_table(gang)*50) >> 15;
+  dy = (sin_table(gang)*40) >> 15;
+  GFX_draw_line(&gctx, x, y, x+dx, y+dy, COL_SET);
+  u8_t i[16];
+  memset(i, 0, 16);
+  sprint(i, "%i", gang);
+  GFX_print(&gctx, i, 28 - strlen(i), 8, COL_OVER);
+  memset(i, 0, 16);
+  sprint(i, "%08X", gang);
+  GFX_print(&gctx, i, 28 - strlen(i), 9, COL_OVER);
+}
+
+static int f_gfx_test(void) {
+  if (gtask) {
+    TASK_free(gtask);
+  }
+  gtask = TASK_create(gtask_f, TASK_STATIC);
+  TASK_start_timer(gtask, &gtimer, 0,0, 0, 10, "gtest");
   return 0;
 }
 

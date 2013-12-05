@@ -183,61 +183,13 @@ static void UART1_config() {
   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
   GPIO_Init(UART1_GPIO_PORT, &GPIO_InitStructure);
-
-  USART_InitStructure.USART_BaudRate = UART1_SPEED;
-  USART_InitStructure.USART_WordLength = USART_WordLength_8b;
-  USART_InitStructure.USART_StopBits = USART_StopBits_1;
-  USART_InitStructure.USART_Parity = USART_Parity_No ;
-  USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
-  USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
-
-  /* Configure the USART1 */
-  USART_Init(USART1, &USART_InitStructure);
-
-  /* Enable USART1 interrupt */
-  USART_ITConfig(USART1, USART_IT_TC, DISABLE);
-  USART_ITConfig(USART1, USART_IT_TXE, DISABLE);
-  USART_ITConfig(USART1, USART_IT_RXNE, ENABLE);
-
-  /* Enable the USART1 */
-  USART_Cmd(USART1, ENABLE);
 #endif
 }
 
 static void UART2_config() {
 #ifdef CONFIG_UART2
-  USART_InitTypeDef USART_InitStructure;
-  GPIO_InitTypeDef GPIO_InitStructure;
-
-  /* Configure USART Rx as input floating */
-  GPIO_InitStructure.GPIO_Pin = UART2_GPIO_RX;
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-  GPIO_Init(UART2_GPIO_PORT, &GPIO_InitStructure);
-
-  /* Configure USART Tx as alternate function push-pull */
-  GPIO_InitStructure.GPIO_Pin = UART2_GPIO_TX;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
-  GPIO_Init(UART2_GPIO_PORT, &GPIO_InitStructure);
-
-  USART_InitStructure.USART_BaudRate = UART2_SPEED;
-  USART_InitStructure.USART_WordLength = USART_WordLength_8b;
-  USART_InitStructure.USART_StopBits = USART_StopBits_1;
-  USART_InitStructure.USART_Parity = USART_Parity_No ;
-  USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
-  USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
-
-  /* Configure the USART */
-  USART_Init(USART2, &USART_InitStructure);
-
-  /* Enable USART interrupt */
-  USART_ITConfig(USART2, USART_IT_TC, DISABLE);
-  USART_ITConfig(USART2, USART_IT_TXE, DISABLE);
-  USART_ITConfig(USART2, USART_IT_RXNE, ENABLE);
-
-  /* Enable the USART */
-  USART_Cmd(USART2, ENABLE);
+  gpio_config(PORTA, PIN2, CLK_50MHZ, AF, AF0, PUSHPULL, NOPULL);
+  gpio_config(PORTA, PIN3, CLK_50MHZ, IN, AF0, OPENDRAIN, NOPULL);
 #endif
 }
 
@@ -258,24 +210,6 @@ static void UART3_config() {
   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
   GPIO_Init(UART3_GPIO_PORT, &GPIO_InitStructure);
-
-  USART_InitStructure.USART_BaudRate = UART3_SPEED;
-  USART_InitStructure.USART_WordLength = USART_WordLength_8b;
-  USART_InitStructure.USART_StopBits = USART_StopBits_1;
-  USART_InitStructure.USART_Parity = USART_Parity_No ;
-  USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
-  USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
-
-  /* Configure the USART */
-  USART_Init(USART3, &USART_InitStructure);
-
-  /* Enable USART interrupt */
-  USART_ITConfig(USART3, USART_IT_TC, DISABLE);
-  USART_ITConfig(USART3, USART_IT_TXE, DISABLE);
-  USART_ITConfig(USART3, USART_IT_RXNE, ENABLE);
-
-  /* Enable the USART */
-  USART_Cmd(USART3, ENABLE);
 #endif
 }
 
@@ -295,24 +229,6 @@ static void UART4_config() {
   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
   GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
   GPIO_Init(UART4_GPIO_PORT, &GPIO_InitStructure);
-
-  USART_InitStructure.USART_BaudRate = UART4_SPEED;
-  USART_InitStructure.USART_WordLength = USART_WordLength_8b;
-  USART_InitStructure.USART_StopBits = USART_StopBits_1;
-  USART_InitStructure.USART_Parity = USART_Parity_No ;
-  USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
-  USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
-
-  /* Configure the USART */
-  USART_Init(UART4, &USART_InitStructure);
-
-  /* Enable USART interrupt */
-  USART_ITConfig(UART4, USART_IT_TC, DISABLE);
-  USART_ITConfig(UART4, USART_IT_TXE, DISABLE);
-  USART_ITConfig(UART4, USART_IT_RXNE, ENABLE);
-
-  /* Enable the USART */
-  USART_Cmd(UART4, ENABLE);
 #endif
 }
 
@@ -573,7 +489,7 @@ static void CVIDEO_config() {
   SPI_InitStructure.SPI_CPHA = SPI_CPHA_1Edge;
   SPI_InitStructure.SPI_NSS = SPI_NSS_Soft;
   SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_16; // APB2/16
-  SPI_InitStructure.SPI_FirstBit = SPI_FirstBit_LSB;
+  SPI_InitStructure.SPI_FirstBit = SPI_FirstBit_MSB;
   SPI_InitStructure.SPI_CRCPolynomial = 7;
   SPI_Init(SPI2, &SPI_InitStructure);
 

@@ -10,6 +10,7 @@
 #include "linker_symaccess.h"
 #include "i2c_driver.h"
 #include "spi_driver.h"
+#include "cvideo.h"
 
 #ifdef DBG_KERNEL_TASK_BLINKY
 task_timer dbg_blinky_task_timer;
@@ -51,6 +52,9 @@ static void dbg_radio_task_func(u32_t i, void *p) {
   _dbg_radio_state++;
 }
 #endif
+
+// todo move
+gcontext gctx;
 
 // main entry from bootstrap
 
@@ -100,6 +104,11 @@ int main(void) {
   dbg_radio_task = TASK_create(dbg_radio_task_func, TASK_STATIC);
   TASK_start_timer(dbg_radio_task, &dbg_radio_timer, 0,0,0,1000,"radio");
 #endif
+
+  // todo move
+  CVIDEO_init();
+  CVIDEO_init_gcontext(&gctx);
+
 
   while (1) {
     while (TASK_tick());

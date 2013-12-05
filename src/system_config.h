@@ -219,6 +219,9 @@ typedef u16_t system_counter_type;
 #define IOSTD        0
 #define IODBG        IOSTD
 
+/** MATH **/
+#define CONFIG_TRIGQ_TABLE
+
 
 /** DEBUG **/
 
