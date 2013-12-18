@@ -12,9 +12,9 @@
 #include "spi_dev.h"
 
 #define NRF905_OK                         0
-#define NRF905_ERR_BUSY                   -51
-#define NRF905_ERR_BAD_CONFIG             -52
-#define NRF905_ERR_ILLEGAL_STATE          -53
+#define NRF905_ERR_BUSY                   -4000
+#define NRF905_ERR_BAD_CONFIG             -4001
+#define NRF905_ERR_ILLEGAL_STATE          -4002
 
 typedef enum {
   // power down
