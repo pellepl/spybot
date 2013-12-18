@@ -37,6 +37,10 @@ typedef enum {
   NRF905_TX_PRIME,
   // txing a packet, data-ready high when packet sent
   NRF905_TX,
+  // preparing for tx carrier
+  NRF905_TX_PRIME_CARRIER,
+  // txing carrier
+  NRF905_TX_CARRIER,
 } nrf905_state;
 
 typedef enum {
@@ -271,6 +275,15 @@ int NRF905_tx(nrf905 *nrf, u8_t *data, u8_t len);
  * States: NRF905_RX_LISTEN, NRF905_RX_READ
  */
 int NRF905_rx(nrf905 *nrf);
+
+/**
+ * Transmits a carrier.
+ * Can only be called from standby mode.
+ * Exited when returning to standby mode.
+ * Asynchronous.
+ * States: NRF905_TX_CARRIER
+ */
+int NRF905_tx_carrier(nrf905 *nrf);
 
 /**
  * Returns current state of the nrf905 driver.

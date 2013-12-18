@@ -23,6 +23,7 @@ int NRF905_IMPL_set_conf(nrf905_config *c);
 int NRF905_IMPL_set_addr(u8_t *addr);
 int NRF905_IMPL_rx(void);
 int NRF905_IMPL_tx(u8_t *data, u8_t len);
+int NRF905_IMPL_carrier(void);
 bool NRF905_IMPL_lbt_check_rts(u32_t ms);
 void NRF905_IMPL_return_to_rx_after_tx(bool set);
 

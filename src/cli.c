@@ -107,6 +107,7 @@ static int f_gfx_str(int x, int y, char *str);
 
 static int f_comrad_init(void);
 static int f_comrad_tx(char *str, int ack);
+static int f_comrad_carrier(void);
 
 void CLI_uart_pipe_irq(void *a, u8_t c);
 
@@ -255,6 +256,9 @@ static cmd c_tbl[] = {
     {.name = "comrad_tx", .fn = (func)f_comrad_tx,
         .help = "Transmit packet\n" \
             "comrad_tx <data> <ack>\n"
+    },
+    {.name = "comrad_carrier", .fn = (func)f_comrad_carrier,
+        .help = "Transmit carrier\n"
     },
 
 
@@ -790,6 +794,14 @@ static int f_comrad_tx(char *str, int ack) {
   } else {
     print("seq:%03x\n",res);
 
+  }
+  return 0;
+}
+
+static int f_comrad_carrier(void) {
+  int res = NRF905_IMPL_carrier();
+  if (res < NRF905_OK) {
+    print("err:%i\n",res);
   }
   return 0;
 }

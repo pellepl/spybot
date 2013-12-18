@@ -156,7 +156,7 @@ int NRF905_IMPL_set_conf(nrf905_config *c) {
   nrf905_config spybot_conf;
   if (c == NULL) {
     spybot_conf.auto_retransmit = NRF905_CFG_AUTO_RETRAN_OFF;
-    spybot_conf.channel_freq = 128;
+    spybot_conf.channel_freq = 128; // 435.227MHz
     spybot_conf.crc_en = NRF905_CFG_CRC_ON;
     spybot_conf.crc_mode = NRF905_CFG_CRC_MODE_16BIT;
     spybot_conf.crystal_frequency = NRF905_CFG_XTAL_FREQ_16MHZ;
@@ -223,6 +223,21 @@ int NRF905_IMPL_tx(u8_t *data, u8_t len) {
   NRF905_standby(&radio.nrf);
   res = NRF905_tx(&radio.nrf, data, len);
   if (res != NRF905_OK) DBG(D_RADIO, D_WARN, "nrf tx %i\n", res);
+  return res;
+}
+
+int NRF905_IMPL_carrier(void) {
+  int res = NRF905_OK;
+  nrf905_state st = NRF905_get_state(&radio.nrf);
+  if (st == NRF905_CONFIG || st == NRF905_QUICK_CONFIG ||
+      st == NRF905_CONFIG_TX_ADDR || st == NRF905_TX_PRIME ||
+      st == NRF905_TX || st == NRF905_RX_READ) {
+    return NRF905_ERR_BUSY;
+  }
+
+  NRF905_standby(&radio.nrf);
+  res = NRF905_tx_carrier(&radio.nrf);
+  if (res != NRF905_OK) DBG(D_RADIO, D_WARN, "nrf carrier %i\n", res);
   return res;
 }
 

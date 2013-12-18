@@ -68,6 +68,12 @@ static void nrf905_spi_dev_cb(spi_dev *d, int res) {
     GPIO_set(nrf->trx_ce_port, nrf->trx_ce_pin, 0);
     break;
   }
+  case NRF905_TX_PRIME_CARRIER: {
+    nrf->state = NRF905_TX_CARRIER;
+    // data_ready signal when packet sent, carrier continues
+    GPIO_set(nrf->trx_ce_port, nrf->trx_ce_pin, 0);
+    break;
+  }
   case NRF905_RX_READ: {
     NRF905_standby(nrf);
     if (nrf->cb) {
@@ -325,6 +331,32 @@ int NRF905_rx(nrf905 *nrf) {
 
   return NRF905_OK;
 }
+
+int NRF905_tx_carrier(nrf905 *nrf) {
+  if (nrf->state != NRF905_STANDBY) {
+    return NRF905_ERR_ILLEGAL_STATE;
+  }
+
+  nrf->state = NRF905_TX_PRIME_CARRIER;
+  u8_t *b = nrf->_buf;
+
+  GPIO_set(nrf->tx_en_port, nrf->tx_en_pin, 0);
+
+  b[0] = NRF905_SPI_W_TX_PAYLOAD;
+
+#ifndef CONFIG_SPI_KEEP_RUNNING
+  SPI_DEV_open(nrf->spi_dev);
+#endif
+  int res = SPI_DEV_txrx(nrf->spi_dev, &b[0], 2, 0, 0);
+  if (res != SPI_OK) {
+    NRF905_standby(nrf);
+#ifndef CONFIG_SPI_KEEP_RUNNING
+    SPI_DEV_close(nrf->spi_dev);
+#endif
+  }
+  return res;
+}
+
 
 void NRF905_signal_data_ready(nrf905 *nrf) {
   switch (nrf->state) {
