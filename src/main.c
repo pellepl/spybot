@@ -79,7 +79,13 @@ int main(void) {
 
   TASK_init();
 
+#ifdef CONFIG_SPI
   SPI_init();
+#endif
+
+#ifdef CONFIG_I2C
+  I2C_init();
+#endif
 
   CLI_init();
 
@@ -126,7 +132,7 @@ void assert_failed(uint8_t* file, uint32_t line) {
 
 // user hardfault handler
 
-#if USER_HARDFAULT
+#ifdef USER_HARDFAULT
 
 void **HARDFAULT_PSP;
 //register void *stack_pointer asm("sp");

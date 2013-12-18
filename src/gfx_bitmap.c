@@ -240,7 +240,14 @@ void GFX_draw_line(gcontext *ctx, s16_t x1, s16_t y1, s16_t x2, s16_t y2, gcolor
   }
 }
 
-void GFX_print(gcontext *ctx, u8_t *str, u8_t cx, u8_t cy, gcolor c) {
+void GFX_rect(gcontext *ctx, s16_t x, s16_t y, s16_t w, s16_t h, gcolor col) {
+  GFX_draw_horizontal_line(ctx, x, x+w, y, col);
+  GFX_draw_horizontal_line(ctx, x, x+w, y+h, col);
+  GFX_draw_vertical_line(ctx, x, y, y+h, col);
+  GFX_draw_vertical_line(ctx, x+w, y, y+h+1, col);
+}
+
+void GFX_print(gcontext *ctx, char *str, u8_t cx, u8_t cy, gcolor c) {
   u8_t ch;
   u8_t cw = ctx->width/8;
   if (cy*8+8 > ctx->height) {

@@ -14,6 +14,7 @@
 #include "spi_driver.h"
 #include "i2c_driver.h"
 #include "i2c_dev.h"
+#include "comm_radio.h"
 
 #include "lsm303_driver.h"
 #include "range_sens_hcsr04_driver.h"
@@ -21,8 +22,8 @@
 #include "nrf905_impl.h"
 
 #include "cvideo.h"
-#include "gfx_bitmap.h"
-#include "trig_q.h"
+
+#include "hud.h"
 
 #define CLI_PROMPT "> "
 #define IS_STRING(s) ((u8_t*)(s) >= (u8_t*)in && (u8_t*)(s) < (u8_t*)in + sizeof(in))
@@ -102,12 +103,14 @@ static int f_cvideo_init(void);
 static int f_cvideo_dump(void);
 static int f_gfx_fill(int x, int y, int w, int h, int c);
 static int f_gfx_test(void);
-static int f_gfx_str(int x, int y, u8_t *str);
+static int f_gfx_str(int x, int y, char *str);
+
+static int f_comrad_init(void);
+static int f_comrad_tx(char *str, int ack);
 
 void CLI_uart_pipe_irq(void *a, u8_t c);
 
 #define HELP_UART_DEFS "uart - 0,1,2,3 - 0 is COMM, 1 is DBG, 2 is SPL, 3 is BT\n"
-
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -245,6 +248,15 @@ static cmd c_tbl[] = {
         .help = "Test func\n"
     },
 #endif
+
+    {.name = "comrad_init", .fn = (func)f_comrad_init,
+        .help = "Initiates comm radio stack\n"
+    },
+    {.name = "comrad_tx", .fn = (func)f_comrad_tx,
+        .help = "Transmit packet\n" \
+            "comrad_tx <data> <ack>\n"
+    },
+
 
     {.name = "dbg",   .fn = (func)f_dbg,
         .help = "Set debug filter and level\n"\
@@ -759,11 +771,28 @@ static void i2c_scan_cb_irq(i2c_bus *bus, int res) {
 
 static int f_i2c_scan(void) {
   i2c_scan_addr = 0;
-  I2C_config(_I2C_BUS(0), 100000);
+  I2C_config(_I2C_BUS(0), 100);
   I2C_set_callback(_I2C_BUS(0), i2c_scan_cb_irq);
   return I2C_query(_I2C_BUS(0), i2c_scan_addr);
 }
 #endif
+
+static int f_comrad_init(void) {
+  COMRAD_init();
+  return 0;
+}
+
+static int f_comrad_tx(char *str, int ack) {
+  if (_argc < 2) return -1;
+  int res = COMRAD_send((u8_t*)str, strlen(str), ack);
+  if (res < R_COMM_OK) {
+    print("err:%i\n",res);
+  } else {
+    print("seq:%03x\n",res);
+
+  }
+  return 0;
+}
 
 
 static int f_col(int col) {
@@ -867,7 +896,7 @@ static int f_servo(int p) {
 
 
 static int f_radio_init(void) {
-  NRF905_IMPL_init();
+  NRF905_IMPL_init(NULL, NULL, NULL);
   return 0;
 }
 
@@ -887,12 +916,12 @@ static int f_radio_rx(void) {
 }
 
 static int f_radio_tx_addr(void) {
-  NRF905_IMPL_set_addr();
+  NRF905_IMPL_set_addr((u8_t[4]){0x63, 0x1c, 0x51, 0x2d});
   return 0;
 }
 
 static int f_radio_tx(void) {
-  NRF905_IMPL_tx();
+  NRF905_IMPL_tx((u8_t*)"hello world", 11);
   return 0;
 }
 
@@ -915,7 +944,7 @@ static int f_gfx_fill(int x, int y, int w, int h, int c) {
   return 0;
 }
 
-static int f_gfx_str(int x, int y, u8_t *str) {
+static int f_gfx_str(int x, int y, char *str) {
   if (_argc < 3) return -1;
   GFX_print(&gctx, str, x, y, COL_OVER);
   return 0;
@@ -923,34 +952,31 @@ static int f_gfx_str(int x, int y, u8_t *str) {
 
 static task_timer gtimer;
 static task *gtask = NULL;
-static s32_t gang = 0;
 static void gtask_f(u32_t a, void *b) {
-  s16_t x = gctx.width/2;
-  s16_t y = gctx.height/2;
-  s32_t dx = (cos_table(gang)*50) >> 15;
-  s32_t dy = (sin_table(gang)*40) >> 15;
-  GFX_draw_line(&gctx, x, y, x+dx, y+dy, COL_RESET);
+  HUD_paint(&gctx, &lsm_dev);
+  lsm_read_both(&lsm_dev);
+}
 
-  gang += 3;
-
-  dx = (cos_table(gang)*50) >> 15;
-  dy = (sin_table(gang)*40) >> 15;
-  GFX_draw_line(&gctx, x, y, x+dx, y+dy, COL_SET);
-  u8_t i[16];
-  memset(i, 0, 16);
-  sprint(i, "%i", gang);
-  GFX_print(&gctx, i, 28 - strlen(i), 8, COL_OVER);
-  memset(i, 0, 16);
-  sprint(i, "%08X", gang);
-  GFX_print(&gctx, i, 28 - strlen(i), 9, COL_OVER);
+static void f_gfx_test_lsm_cb(lsm303_dev *dev, int res) {
+  if (res != I2C_OK) {
+    print("lsm error %i\n", res);
+    I2C_config(_I2C_BUS(0), 100000);
+  }
 }
 
 static int f_gfx_test(void) {
   if (gtask) {
     TASK_free(gtask);
   }
+
+  I2C_config(_I2C_BUS(0), 100000);
+
+  lsm_open(&lsm_dev, _I2C_BUS(0), FALSE, f_gfx_test_lsm_cb);
+  lsm_config_default(&lsm_dev);
+  lsm_set_lowpass(&lsm_dev, 50, 50);
+
   gtask = TASK_create(gtask_f, TASK_STATIC);
-  TASK_start_timer(gtask, &gtimer, 0,0, 0, 10, "gtest");
+  TASK_start_timer(gtask, &gtimer, 0,0, 0, 50, "gtest");
   return 0;
 }
 
@@ -1076,6 +1102,7 @@ void CLI_uart_pipe_irq(void *a, u8_t c) {
 void CLI_init() {
   memset(&cli_state, 0, sizeof(cli_state));
   DBG(D_CLI, D_DEBUG, "CLI init\n");
+  SYS_dbg_mask_set(0);
   UART_set_callback(_UART(UARTSTDIN), CLI_uart_check_char, NULL);
   print("\n"APP_NAME"\n");
   print("build     : %i\n", SYS_build_number());

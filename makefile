@@ -96,12 +96,17 @@ CFILES 		+= main.c
 CFILES 		+= processor.c
 CFILES 		+= cli.c
 CFILES 		+= timer.c
-CFILES 		+= range_sens_hcsr04_driver.c
 CFILES		+= nrf905_driver.c
 CFILES		+= nrf905_impl.c
+
+#rover files
+CFILES 		+= range_sens_hcsr04_driver.c
+
+#controller files
 CFILES		+= cvideo.c
 CFILES		+= gfx_bitmap.c
 CFILES		+= font_spybot.c
+CFILES		+= hud.c
 
 # comm files
 include ../generic/comm/files.mk

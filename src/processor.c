@@ -59,7 +59,6 @@ static void RCC_config() {
 
 #ifdef CONFIG_I2C
   RCC_APB1PeriphClockCmd(I2C1_CLK, ENABLE);
-  RCC_APB2PeriphClockCmd(I2C1_GPIO_CLK, ENABLE);
 #endif
 
 #ifdef CONFIG_ADC
@@ -132,10 +131,10 @@ static void NVIC_config(void)
 #endif
 
 #ifdef CONFIG_I2C
-  NVIC_SetPriority(I2C1_EV_IRQn, NVIC_EncodePriority(prioGrp, 1, 1));
-  NVIC_EnableIRQ(I2C1_EV_IRQn);
-  NVIC_SetPriority(I2C1_ER_IRQn, NVIC_EncodePriority(prioGrp, 1, 1));
-  NVIC_EnableIRQ(I2C1_ER_IRQn);
+  NVIC_SetPriority(I2C2_EV_IRQn, NVIC_EncodePriority(prioGrp, 1, 1));
+  NVIC_EnableIRQ(I2C2_EV_IRQn);
+  NVIC_SetPriority(I2C2_ER_IRQn, NVIC_EncodePriority(prioGrp, 1, 1));
+  NVIC_EnableIRQ(I2C2_ER_IRQn);
 #endif
 
 #if OS_DBG_MON
@@ -407,28 +406,16 @@ static void ADC_config() {
 
 static void I2C_config() {
 #ifdef CONFIG_I2C
-  GPIO_InitTypeDef GPIO_InitStruct;
-
-  GPIO_InitStruct.GPIO_Pin = I2C1_SCL_GPIO_PIN | I2C1_SDA_GPIO_PIN;
-  GPIO_InitStruct.GPIO_Mode = GPIO_Mode_AF_OD;
-  GPIO_InitStruct.GPIO_Speed = GPIO_Speed_50MHz;
-  GPIO_Init(I2C1_GPIO_PORT, &GPIO_InitStruct);
-  //GPIO_PinRemapConfig(GPIO_Remap_I2C1, ENABLE);
-
+  gpio_config(PORTB, PIN10, CLK_50MHZ, AF, AF0, OPENDRAIN, NOPULL);
+  gpio_config(PORTB, PIN11, CLK_50MHZ, AF, AF0, OPENDRAIN, NOPULL);
 #endif
 }
 
 static void SERVO_config() {
-
-
-
-  GPIO_InitTypeDef GPIO_InitStruct;
-  GPIO_InitStruct.GPIO_Pin = GPIO_Pin_6 | GPIO_Pin_7 | GPIO_Pin_8 | GPIO_Pin_9;
-  GPIO_InitStruct.GPIO_Mode = GPIO_Mode_AF_PP;
-  GPIO_InitStruct.GPIO_Speed = GPIO_Speed_50MHz;
-  GPIO_Init(GPIOB, &GPIO_InitStruct);
-  //GPIO_PinRemapConfig(GPIO_Remap_TIM4, ENABLE);
-
+  gpio_config(PORTB, PIN6, CLK_50MHZ, AF, AF0, PUSHPULL, NOPULL);
+  gpio_config(PORTB, PIN7, CLK_50MHZ, AF, AF0, PUSHPULL, NOPULL);
+  gpio_config(PORTB, PIN8, CLK_50MHZ, AF, AF0, PUSHPULL, NOPULL);
+  gpio_config(PORTB, PIN9, CLK_50MHZ, AF, AF0, PUSHPULL, NOPULL);
 
   // 0xffff => 20ms = 1/50
   // 1/(50*65535) = 1/(72000000/x) => x = 72000000/(50*65535) => 22

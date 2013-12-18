@@ -124,13 +124,7 @@
 
 #ifdef CONFIG_I2C
 
-#define I2C1_GPIO_CLK                 RCC_APB2Periph_GPIOB
 #define I2C1_CLK                      RCC_APB1Periph_I2C2
-#define I2C1_GPIO_PORT                GPIOB
-#define I2C1_SCL_GPIO_PIN_SOURCE      GPIO_PinSource10
-#define I2C1_SDA_GPIO_PIN_SOURCE      GPIO_PinSource11
-#define I2C1_SCL_GPIO_PIN             GPIO_Pin_10
-#define I2C1_SDA_GPIO_PIN             GPIO_Pin_11
 #define I2C1_PORT                     I2C2
 
 #define I2C_MAX_ID                    1
