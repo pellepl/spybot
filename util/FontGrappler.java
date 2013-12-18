@@ -34,7 +34,7 @@ public class FontGrappler {
     out(" * font size: " + cw + "x" + ch + "\n");
     out(" */\n\n");
     
-    out("unsigned char font_" + new File(file).getName().toLowerCase().replace('.', '_') + "[][" + ch + "] = {\n");
+    out("unsigned const char const font_" + new File(file).getName().toLowerCase().replace('.', '_') + "[][" + ch + "] = {\n");
     
     
     int c_ix = 0;
