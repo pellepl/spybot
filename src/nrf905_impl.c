@@ -10,24 +10,47 @@
 #include "gpio.h"
 #include "miniutils.h"
 
-static nrf905 nrf;
-static spi_dev nrf_spi_dev;
-static nrf905_config config;
+static struct {
+  nrf905 nrf;
+  nrf905_rx rx_cb;
+  nrf905_tx tx_cb;
+  nrf905_err err_cb;
+  bool return_to_rx_after_tx;
+  spi_dev spi_dev;
+  nrf905_config config;
+  bool carrier_on;
+  time last_carrier;
+} radio;
 
 static void nrf_impl_cb(nrf905 *nrf, nrf905_state state, int res) {
-  print("NRF cb state:%i res:%i\n", state, res);
-  if (res != NRF905_OK) return;
+  DBG(D_RADIO, D_WARN, "nrf cb state:%i res:%i\n", state, res);
+  if (res != NRF905_OK) {
+    if (radio.err_cb) {
+      radio.err_cb(state, res);
+    }
+    return;
+  }
   switch (state) {
   case NRF905_RX_READ:
-    print("NRF got packet\n");
-    printbuf(IOSTD, NRF905_RX_PKT_BUFFER(nrf), 16);
-    NRF905_rx(nrf);
+    DBG(D_RADIO, D_DEBUG, "nrf got packet\n");
+    if (radio.rx_cb) {
+      radio.rx_cb(NRF905_RX_PKT_BUFFER(nrf), NRF905_RX_PKT_LEN(nrf));
+    }
     break;
   case NRF905_TX:
-    print("NRF sent packet\n");
+    DBG(D_RADIO, D_DEBUG, "nrf sent packet\n");
+    if (radio.return_to_rx_after_tx) {
+      int res2 = NRF905_rx(nrf);
+      if (res2 == NRF905_OK) {
+        radio.last_carrier = SYS_get_time_ms();
+      }
+    }
+    if (radio.tx_cb) {
+      radio.tx_cb(res);
+    }
     break;
   case NRF905_READ_CONFIG:
-    print(
+    DBG(D_RADIO, D_INFO,
         "auto retransmit: %i\n"
         "channel:         %i\n"
         "crc enable:      %i\n"
@@ -44,21 +67,21 @@ static void nrf_impl_cb(nrf905 *nrf, nrf905_state state, int res) {
         "tx addr width:   %i\n"
         "tx payload len:  %i\n"
         ,
-        config.auto_retransmit,
-        config.channel_freq,
-        config.crc_en,
-        config.crc_mode,
-        config.crystal_frequency,
-        config.hfreq_pll,
-        config.out_clk_enable,
-        config.out_clk_freq,
-        config.pa_pwr,
-        config.rx_address,
-        config.rx_address_field_width,
-        config.rx_payload_width,
-        config.rx_reduced_power,
-        config.tx_address_field_width,
-        config.tx_payload_width);
+        radio.config.auto_retransmit,
+        radio.config.channel_freq,
+        radio.config.crc_en,
+        radio.config.crc_mode,
+        radio.config.crystal_frequency,
+        radio.config.hfreq_pll,
+        radio.config.out_clk_enable,
+        radio.config.out_clk_freq,
+        radio.config.pa_pwr,
+        radio.config.rx_address,
+        radio.config.rx_address_field_width,
+        radio.config.rx_payload_width,
+        radio.config.rx_reduced_power,
+        radio.config.tx_address_field_width,
+        radio.config.tx_payload_width);
     break;
   default:
     break;
@@ -67,27 +90,37 @@ static void nrf_impl_cb(nrf905 *nrf, nrf905_state state, int res) {
 
 static void nrf_impl_data_ready_irq(gpio_pin pin) {
   if (pin == NRF905_DATA_READY_PIN) {
-    NRF905_signal_data_ready(&nrf);
+    NRF905_signal_data_ready(&radio.nrf);
   }
 }
 
 static void nrf_impl_carrier_detect_irq(gpio_pin pin) {
   if (pin == NRF905_CARRIER_DETECT_PIN) {
     bool cd = gpio_get(NRF905_CARRIER_DETECT_PORT, NRF905_CARRIER_DETECT_PIN);
-    print("radio carrier %s\n", cd ? "UP" : "DOWN");
+    DBG(D_RADIO, D_DEBUG, "nrf carrier %s\n", cd ? "UP" : "DOWN");
+    radio.carrier_on = cd;
+    if (!cd) {
+      radio.last_carrier = SYS_get_time_ms();
+    }
   }
 }
 
-void NRF905_IMPL_init(void) {
+void NRF905_IMPL_init(nrf905_rx rx_cb, nrf905_tx tx_cb, nrf905_err err_cb) {
+  memset(&radio, 0, sizeof(radio));
+
+  radio.rx_cb = rx_cb;
+  radio.tx_cb = tx_cb;
+  radio.err_cb = err_cb;
+
   SPI_DEV_init(
-      &nrf_spi_dev,
+      &radio.spi_dev,
       SPIDEV_CONFIG_SPEED_9M | SPIDEV_CONFIG_CPHA_1E | SPIDEV_CONFIG_CPOL_LO | SPIDEV_CONFIG_FBIT_MSB,
       _SPI_BUS(0),
       gpio_get_hw_port(NRF905_CS_PORT), gpio_get_hw_pin(NRF905_CS_PIN),
       SPI_CONF_IRQ_DRIVEN | SPI_CONF_IRQ_CALLBACK
       );
 
-  NRF905_init(&nrf, &nrf_spi_dev,
+  NRF905_init(&radio.nrf, &radio.spi_dev,
       nrf_impl_cb,
       gpio_get_hw_port(NRF905_PWR_PORT), gpio_get_hw_pin(NRF905_PWR_PIN),
       gpio_get_hw_port(NRF905_TRX_CE_PORT), gpio_get_hw_pin(NRF905_TRX_CE_PIN),
@@ -109,17 +142,17 @@ void NRF905_IMPL_init(void) {
   gpio_interrupt_mask_enable(NRF905_CARRIER_DETECT_PORT, NRF905_CARRIER_DETECT_PIN, TRUE);
   gpio_interrupt_mask_enable(NRF905_DATA_READY_PORT, NRF905_DATA_READY_PIN, TRUE);
 
-  NRF905_standby(&nrf);
+  NRF905_standby(&radio.nrf);
 
 }
 
 void NRF905_IMPL_read_conf(void) {
-  NRF905_standby(&nrf);
-  int res = NRF905_read_config(&nrf, &config);
-  print("nrf read conf %i\n", res);
+  NRF905_standby(&radio.nrf);
+  int res = NRF905_read_config(&radio.nrf, &radio.config);
+  if (res != NRF905_OK) DBG(D_RADIO, D_WARN, "nrf read conf %i\n", res);
 }
 
-void NRF905_IMPL_set_conf(nrf905_config *c) {
+int NRF905_IMPL_set_conf(nrf905_config *c) {
   nrf905_config spybot_conf;
   if (c == NULL) {
     spybot_conf.auto_retransmit = NRF905_CFG_AUTO_RETRAN_OFF;
@@ -130,7 +163,7 @@ void NRF905_IMPL_set_conf(nrf905_config *c) {
     spybot_conf.hfreq_pll = NRF905_CFG_HFREQ_433;
     spybot_conf.out_clk_enable = NRF905_CFG_OUT_CLK_OFF;
     spybot_conf.out_clk_freq = NRF905_CFG_OUT_CLK_FREQ_1MHZ;
-    spybot_conf.pa_pwr= NRF905_CFG_PA_PWR_10;
+    spybot_conf.pa_pwr= NRF905_CFG_PA_PWR_6;
 #ifdef DBG_RADIO
     spybot_conf.rx_address = 0x9ce3aed2;
 #else
@@ -145,30 +178,67 @@ void NRF905_IMPL_set_conf(nrf905_config *c) {
     c = &spybot_conf;
   }
 
-  NRF905_standby(&nrf);
-  int res = NRF905_config(&nrf, c);
-  print("nrf config %i\n", res);
+  NRF905_standby(&radio.nrf);
+  int res = NRF905_config(&radio.nrf, c);
+  if (res != NRF905_OK) DBG(D_RADIO, D_WARN, "nrf config %i\n", res);
+  return res;
 }
 
-void NRF905_IMPL_set_addr(void) {
-  u8_t addr[4] = {0x63, 0x1c, 0x51, 0x2d};
-
-  int res = NRF905_config_tx_address(&nrf, addr);
-  print("nrf set addr %i\n", res);
+int NRF905_IMPL_set_addr(u8_t *addr) {
+  int res = NRF905_config_tx_address(&radio.nrf, addr);
+  if (res != NRF905_OK) DBG(D_RADIO, D_WARN, "nrf set addr %i\n", res);
+  return res;
 }
 
-void NRF905_IMPL_rx(void) {
-  NRF905_standby(&nrf);
-  int res = NRF905_rx(&nrf);
-  print("nrf rx %i\n", res);
+int NRF905_IMPL_rx(void) {
+  int res = NRF905_OK;
+  nrf905_state st = NRF905_get_state(&radio.nrf);
+  if (st == NRF905_CONFIG || st == NRF905_QUICK_CONFIG ||
+      st == NRF905_CONFIG_TX_ADDR || st == NRF905_TX_PRIME ||
+      st == NRF905_TX) {
+    return NRF905_ERR_BUSY;
+  }
+
+  if (st != NRF905_RX_LISTEN && st != NRF905_RX_READ) {
+    NRF905_standby(&radio.nrf);
+    res = NRF905_rx(&radio.nrf);
+    if (res == NRF905_OK) {
+      radio.last_carrier = SYS_get_time_ms();
+    }
+    if (res != NRF905_OK) DBG(D_RADIO, D_WARN, "nrf rx %i\n", res);
+  }
+
+  return res;
 }
 
-void NRF905_IMPL_tx(void) {
-  static u8_t pkt = 0;
-  NRF905_standby(&nrf);
-  u8_t pattern[16] = {0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80,
-                      0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01, 0xef };
-  pattern[0] = pkt++;
-  int res = NRF905_tx(&nrf, pattern, 16);
-  print("nrf tx %i\n", res);
+int NRF905_IMPL_tx(u8_t *data, u8_t len) {
+  int res = NRF905_OK;
+  nrf905_state st = NRF905_get_state(&radio.nrf);
+  if (st == NRF905_CONFIG || st == NRF905_QUICK_CONFIG ||
+      st == NRF905_CONFIG_TX_ADDR || st == NRF905_TX_PRIME ||
+      st == NRF905_TX || st == NRF905_RX_READ) {
+    return NRF905_ERR_BUSY;
+  }
+
+  NRF905_standby(&radio.nrf);
+  res = NRF905_tx(&radio.nrf, data, len);
+  if (res != NRF905_OK) DBG(D_RADIO, D_WARN, "nrf tx %i\n", res);
+  return res;
+}
+
+bool NRF905_IMPL_lbt_check_rts(u32_t ms) {
+  nrf905_state st = NRF905_get_state(&radio.nrf);
+//  print("lbt: st %i [%i] carrier:%s delta:%i [>%i]\n",
+//      st, NRF905_RX_LISTEN,
+//          radio.carrier_on ? "UP" : "DOWN",
+//              SYS_get_time_ms() - radio.last_carrier,
+//              ms);
+  if (st != NRF905_RX_LISTEN || radio.carrier_on) {
+    return FALSE;
+  }
+  return SYS_get_time_ms() - radio.last_carrier >= ms;
+}
+
+void NRF905_IMPL_return_to_rx_after_tx(bool set) {
+  radio.return_to_rx_after_tx = set;
 }

@@ -15,6 +15,7 @@
 #define NRF905_ERR_BUSY                   -51
 #define NRF905_ERR_BAD_CONFIG             -52
 #define NRF905_ERR_ILLEGAL_STATE          -53
+
 typedef enum {
   // power down
   NRF905_POWERDOWN = 0,
@@ -200,7 +201,7 @@ int NRF905_powerdown(nrf905 *nrf);
 
 /**
  * Puts the transceiver in standby mode. Can be called
- * from all modes.
+ * from all modes. Will abort anything ongoing.
  * Synchronous.
  * States: NRF905_STANDBY
  */
@@ -270,5 +271,10 @@ int NRF905_tx(nrf905 *nrf, u8_t *data, u8_t len);
  * States: NRF905_RX_LISTEN, NRF905_RX_READ
  */
 int NRF905_rx(nrf905 *nrf);
+
+/**
+ * Returns current state of the nrf905 driver.
+ */
+nrf905_state NRF905_get_state(nrf905 *nrf);
 
 #endif /* NRF905_DRIVER_H_ */

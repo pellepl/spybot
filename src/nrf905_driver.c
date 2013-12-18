@@ -178,7 +178,6 @@ int NRF905_quick_config_channel(nrf905 *nrf, u16_t channel_freq) {
   }
   nrf->state = NRF905_QUICK_CONFIG;
   u8_t *b = nrf->_buf;
-
   u16_t d = NRF905_SPI_CH_CONFIG(channel_freq, nrf->config.hfreq_pll, nrf->config.pa_pwr);
   b[0] = (d>>8) & 0xff;
   b[1] = d & 0xff;
@@ -389,4 +388,8 @@ void NRF905_init(nrf905 *nrf, spi_dev *spi_dev,
   SPI_DEV_open(spi_dev);
 #endif
 
+}
+
+nrf905_state NRF905_get_state(nrf905 *nrf) {
+  return nrf->state;
 }

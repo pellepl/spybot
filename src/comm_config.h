@@ -8,8 +8,8 @@
 #ifndef COMM_CONFIG_H_
 #define COMM_CONFIG_H_
 
-#include "miniutils.h"
 #include "system.h"
+#include "miniutils.h"
 
 /* Number of consecutive phy timeouts before reporting to user, set to 0 to avoid tmo reports */
 #define COMM_MAX_CONSEQ_TMO         0
@@ -18,9 +18,13 @@
 /* Maximum pending acks to keep track of (both for rx and tx) */
 #define COMM_MAX_PENDING            4
 /* maximum number of times to resend an unacked pkt before reporting error to user */
-#define COMM_MAX_RESENDS            5
-/* comm_time value to wait before resending an unacked pkt */
-#define COMM_RESEND_TICK            200
+#define COMM_MAX_RESENDS            10
+/* comm_time constant value to wait before resending an unacked pkt */
+#define COMM_RESEND_TICK(resends)   ((resends < 5) ? 60 : 100)
+/* comm_time added value to wait before resending, random */
+#define COMM_RESEND_TICK_RANDOM     (rand_next() & 0x3f)
+/* comm_time added value to wait before resending when tx error is R_COMM_PHY_TRY_LATER */
+#define COMM_RESEND_TICK_LATER      (-20)
 /* Disable to let everyone listen to everyone, enable to have directed communication */
 #define COMM_USER_DIFFERENTIATION   1
 /* If 1 acks are sent directly after rxing, if 0 acks are sent in tick call */
@@ -43,7 +47,7 @@ typedef time comm_time;
 #define COMM_DBG 0
 #if COMM_DBG
 #define COMM_PHY_DBG(x, ...)   print("COMM_PHY:"x"\n", ##__VA_ARGS__)
-#define COMM_LNK_DBG(x, ...)   /*do {print("%i ", comm->nwk.addr);print("COMM_LNK:"x"\n", ##__VA_ARGS__);}while(0)*/
+#define COMM_LNK_DBG(x, ...)   print("COMM_LNK:"x"\n", ##__VA_ARGS__)
 #define COMM_NWK_DBG(x, ...)   print("COMM_NWK:"x"\n", ##__VA_ARGS__)
 #define COMM_TRA_DBG(x, ...)   print("COMM_TRA:"x"\n", ##__VA_ARGS__)
 #else
@@ -51,7 +55,6 @@ typedef time comm_time;
 #define COMM_LNK_DBG(x, ...)
 #define COMM_NWK_DBG(x, ...)
 #define COMM_TRA_DBG(x, ...)
-//#define COMM_TRA_DBG(x, ...)   print("COMM_TRA:"x"\n", ##__VA_ARGS__)
 #endif
 
 #endif /* COMM_CONFIG_H_ */
