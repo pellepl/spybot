@@ -198,6 +198,11 @@ typedef u16_t system_counter_type;
 // os ticker cpu clock div
 #define SYS_OS_TICK_DIV       8
 
+/** ARCH **/
+#define CONFIG_ARCH_CRITICAL_DISABLE_IRQ __set_BASEPRI(0x04)
+
+#define CONFIG_ARCH_CRITICAL_ENABLE_IRQ __set_BASEPRI(0x00)
+
 /** UART **/
 
 #define UARTSTDIN       0
@@ -215,6 +220,10 @@ typedef u16_t system_counter_type;
 
 /** MATH **/
 #define CONFIG_TRIGQ_TABLE
+
+/** TASK KERNEL **/
+#define CONFIG_TASK_POOL 32
+//#define CONFIG_TASK_NONCRITICAL_TIMER
 
 
 /** DEBUG **/
