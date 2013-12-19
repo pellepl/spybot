@@ -107,6 +107,7 @@ CFILES 		+= range_sens_hcsr04_driver.c
 CFILES		+= cvideo.c
 CFILES		+= gfx_bitmap.c
 CFILES		+= font_spybot.c
+CFILES		+= gfx_img_modesty.c
 CFILES		+= hud.c
 
 # comm files

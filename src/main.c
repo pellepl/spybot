@@ -11,6 +11,7 @@
 #include "i2c_driver.h"
 #include "spi_driver.h"
 #include "cvideo.h"
+#include "gfx_bitmap.h"
 
 #ifdef DBG_KERNEL_TASK_BLINKY
 task_timer dbg_blinky_task_timer;
@@ -59,7 +60,6 @@ gcontext gctx;
 // main entry from bootstrap
 
 int main(void) {
-  s32_t res;
   enter_critical();
   PROC_base_init();
   SYS_init();
@@ -112,8 +112,11 @@ int main(void) {
 #endif
 
   // todo move
+extern unsigned const char const img_modbla_car_bmp[14400/8];
   CVIDEO_init();
   CVIDEO_init_gcontext(&gctx);
+  CVIDEO_set_effect(79);
+  GFX_draw_image(&gctx, img_modbla_car_bmp, 7, 8, 120/8, 120);
 
 
   while (1) {

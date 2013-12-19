@@ -20,14 +20,14 @@ static struct {
 } hud;
 
 const s16_t const base_plane_vecs[8][3] = {
-    { 16,  0,-16}, //0
+    { 15,  0,-16}, //0
     {-16,  0,-16}, //1
-    {-16,  0, 16}, //2
-    { 16,  0, 16}, //3
+    {-16,  0, 15}, //2
+    { 15,  0, 15}, //3
     {-16,  0, 0},  //4
-    { 16,  0, 0},  //5
+    { 15,  0, 0},  //5
     {  0,  0,-16}, //6
-    {  0,  0, 16}, //7
+    {  0,  0, 15}, //7
 };
 
 
@@ -81,22 +81,22 @@ static void vecs_clear_reset(gcontext *ctx) {
 
 void HUD_paint(gcontext *ctx, lsm303_dev *lsm_dev) {
   s16_t x = ctx->width/2;
-  s16_t y = ctx->height/2;
-  s32_t dx = (cos_table(hud.heading_ang)*50) >> 15;
-  s32_t dy = (sin_table(hud.heading_ang)*40) >> 15;
+  s16_t y = 110;
+  s32_t dx = (cos_table(hud.heading_ang)*17) >> 15;
+  s32_t dy = (sin_table(hud.heading_ang)*14) >> 15;
   GFX_draw_line(ctx, x, y, x+dx, y+dy, COL_RESET);
 
   u16_t heading_raw = lsm_get_heading(lsm_dev);
   s16_t *acc = lsm_get_acc_reading(lsm_dev);
   hud.heading_ang = (heading_raw >> (16-9)) - (PI_TRIG_T / 4);
 
-  dx = (cos_table(hud.heading_ang)*50) >> 15;
-  dy = (sin_table(hud.heading_ang)*40) >> 15;
+  dx = (cos_table(hud.heading_ang)*17) >> 15;
+  dy = (sin_table(hud.heading_ang)*14) >> 15;
   GFX_draw_line(ctx, x, y, x+dx, y+dy, COL_SET);
   char txt[16];
   memset(txt, 0, 16);
   sprint(txt, "DIR:%4i%c", (heading_raw * 360) >> 16, 186);
-  GFX_print(ctx, txt, 28 - strlen(txt), 8, COL_OVER);
+  GFX_print(ctx, txt, 28 - strlen(txt), 12, COL_OVER);
 
   // accelerometer
   s16_t ax,ay,az;
@@ -114,7 +114,7 @@ void HUD_paint(gcontext *ctx, lsm303_dev *lsm_dev) {
   {
     memset(txt, 0, 16);
     sprint(txt, "ACC:%4i ", ad>>(15-14));
-    GFX_print(ctx, txt, 28 - strlen(txt), 10, COL_OVER);
+    GFX_print(ctx, txt, 28 - strlen(txt), 13, COL_OVER);
 
     s32_t axzn = _sqrt(axn*axn + azn*azn);
     s32_t ayzn = _sqrt(ayn*ayn + azn*azn);
@@ -130,8 +130,8 @@ void HUD_paint(gcontext *ctx, lsm303_dev *lsm_dev) {
 
 #define _H 32
 #define _W 40
-#define _X 33
-#define _Y 9
+#define _X 17
+#define _Y 99
 
     int i;
     for (i = 0; i < 8; i++) {
@@ -147,8 +147,8 @@ void HUD_paint(gcontext *ctx, lsm303_dev *lsm_dev) {
 #undef _X
 #undef _Y
 #define _W 32
-#define _X 16
-#define _Y 30
+#define _X 0
+#define _Y 120
       GFX_rect(ctx, _X, _Y, _W, 2, COL_SET);
       GFX_draw_horizontal_line(ctx, _X+1, _X+1+_W-1, _Y+1, COL_RESET);
       GFX_draw_horizontal_line(ctx,
@@ -161,8 +161,8 @@ void HUD_paint(gcontext *ctx, lsm303_dev *lsm_dev) {
 #undef _Y
 
 #define _H 24
-#define _X 48
-#define _Y 6
+#define _X 32
+#define _Y 96
       GFX_rect(ctx, _X, _Y, 2, _H, COL_SET);
       GFX_draw_vertical_line(ctx, _X+1, _Y+1, _Y+1+_H-1, COL_RESET);
       GFX_draw_vertical_line(ctx,
@@ -174,6 +174,17 @@ void HUD_paint(gcontext *ctx, lsm303_dev *lsm_dev) {
 
   }
 
+  if ((SYS_get_time_ms() / 500) & 1) {
+    GFX_print(ctx, " ", 27, 16, COL_OVER);
+  } else {
+    GFX_print(ctx, "\n", 27, 16, COL_OVER);
+  }
+}
 
-
+void HUD_init(gcontext *ctx) {
+  char txt[28];
+  memset(txt,0,28);
+  GFX_fill(ctx, 0, 0, ctx->width, ctx->height, COL_RESET);
+  sprint(txt, "%s build:%i", APP_NAME, SYS_build_number());
+  GFX_print(ctx, txt, 0, 16, COL_OVER);
 }

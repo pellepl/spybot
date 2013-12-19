@@ -98,16 +98,23 @@ static int f_radio_set_conf(void);
 static int f_radio_rx(void);
 static int f_radio_tx_addr(void);
 static int f_radio_tx(void);
+static int f_radio_carrier(void);
+static int f_radio_channel(u16_t channel);
+static int f_radio_pa(u8_t pa);
+
 
 static int f_cvideo_init(void);
 static int f_cvideo_dump(void);
+static int f_cvideo_voffset(int i);
+static int f_cvideo_vscroll(int i);
+static int f_cvideo_effect(int i);
+
 static int f_gfx_fill(int x, int y, int w, int h, int c);
 static int f_gfx_test(void);
 static int f_gfx_str(int x, int y, char *str);
 
 static int f_comrad_init(void);
 static int f_comrad_tx(char *str, int ack);
-static int f_comrad_carrier(void);
 
 void CLI_uart_pipe_irq(void *a, u8_t c);
 
@@ -189,6 +196,16 @@ static cmd c_tbl[] = {
     {.name = "radio_tx",  .fn = (func)f_radio_tx,
             .help = "Radio tx a sequence\n"
     },
+    {.name = "radio_carrier", .fn = (func)f_radio_carrier,
+        .help = "Transmit carrier\n"
+    },
+    {.name = "radio_channel", .fn = (func)f_radio_channel,
+        .help = "Set radio channel freq <0-511>\n"
+    },
+    {.name = "radio_pa", .fn = (func)f_radio_pa,
+        .help = "Set radio PA <0-3>\n"
+    },
+
 
     {.name = "video_init",  .fn = (func)f_cvideo_init,
             .help = "Initializes cvideo\n"
@@ -196,6 +213,17 @@ static cmd c_tbl[] = {
     {.name = "video_dump",  .fn = (func)f_cvideo_dump,
             .help = "Dumps cvideo block info\n"
     },
+    {.name = "video_offs",  .fn = (func)f_cvideo_voffset,
+            .help = "Sets vertical gram offset\n"
+    },
+    {.name = "video_scroll",  .fn = (func)f_cvideo_vscroll,
+            .help = "Sets vertical scroll\n"
+    },
+    {.name = "video_effect",  .fn = (func)f_cvideo_effect,
+            .help = "Sets effect\n"
+    },
+
+
     {.name = "gfill",  .fn = (func)f_gfx_fill,
             .help = "Paints a rectangle to cvideo (x,y,w,h,c)\n"
     },
@@ -256,9 +284,6 @@ static cmd c_tbl[] = {
     {.name = "comrad_tx", .fn = (func)f_comrad_tx,
         .help = "Transmit packet\n" \
             "comrad_tx <data> <ack>\n"
-    },
-    {.name = "comrad_carrier", .fn = (func)f_comrad_carrier,
-        .help = "Transmit carrier\n"
     },
 
 
@@ -798,8 +823,26 @@ static int f_comrad_tx(char *str, int ack) {
   return 0;
 }
 
-static int f_comrad_carrier(void) {
+static int f_radio_carrier(void) {
   int res = NRF905_IMPL_carrier();
+  if (res < NRF905_OK) {
+    print("err:%i\n",res);
+  }
+  return 0;
+}
+
+static int f_radio_channel(u16_t channel) {
+  if (_argc < 1) return -1;
+  int res = NRF905_IMPL_conf_channel(channel, TRUE);
+  if (res < NRF905_OK) {
+    print("err:%i\n",res);
+  }
+  return 0;
+}
+
+static int f_radio_pa(u8_t pa) {
+  if (_argc < 1) return -1;
+  int res = NRF905_IMPL_conf_pa(pa, TRUE);
   if (res < NRF905_OK) {
     print("err:%i\n",res);
   }
@@ -908,7 +951,7 @@ static int f_servo(int p) {
 
 
 static int f_radio_init(void) {
-  NRF905_IMPL_init(NULL, NULL, NULL);
+  NRF905_IMPL_init(NULL, NULL, NULL, NULL);
   return 0;
 }
 
@@ -918,7 +961,7 @@ static int f_radio_read_conf(void) {
 }
 
 static int f_radio_set_conf(void) {
-  NRF905_IMPL_set_conf(NULL);
+  NRF905_IMPL_conf(NULL, TRUE);
   return 0;
 }
 
@@ -928,7 +971,7 @@ static int f_radio_rx(void) {
 }
 
 static int f_radio_tx_addr(void) {
-  NRF905_IMPL_set_addr((u8_t[4]){0x63, 0x1c, 0x51, 0x2d});
+  NRF905_IMPL_conf_tx_addr((u8_t[4]){0x63, 0x1c, 0x51, 0x2d}, TRUE);
   return 0;
 }
 
@@ -947,6 +990,24 @@ static int f_cvideo_init(void) {
 
 static int f_cvideo_dump(void) {
   CVIDEO_dump();
+  return 0;
+}
+
+static int f_cvideo_voffset(int i) {
+  if (_argc < 1) return -1;
+  CVIDEO_set_v_offset(i);
+  return 0;
+}
+
+static int f_cvideo_vscroll(int i) {
+  if (_argc < 1) return -1;
+  CVIDEO_set_v_scroll(i);
+  return 0;
+}
+
+static int f_cvideo_effect(int i) {
+  if (_argc < 1) return -1;
+  CVIDEO_set_effect(i);
   return 0;
 }
 
@@ -977,6 +1038,7 @@ static void f_gfx_test_lsm_cb(lsm303_dev *dev, int res) {
 }
 
 static int f_gfx_test(void) {
+  HUD_init(&gctx);
   if (gtask) {
     TASK_free(gtask);
   }
