@@ -216,6 +216,10 @@ typedef u16_t system_counter_type;
 /** MATH **/
 #define CONFIG_TRIGQ_TABLE
 
+/** TASK KERNEL **/
+#define CONFIG_TASK_POOL 32
+#define CONFIG_TASK_NONCRITICAL_TIMER
+
 
 /** DEBUG **/
 
