@@ -71,17 +71,17 @@ static struct _sta {
   task_timer timer;
   bool cc_high;
   u32_t wraps;
-}  _sta;
+}  hcsr;
 
 static void range_sens_disable(void) {
   TIM_Cmd(_HCSR04_TIMER, DISABLE);
   TIM_ITConfig(_HCSR04_TIMER, _HCSR04_CC_CH_L | _HCSR04_CC_CH_H | TIM_IT_Update, DISABLE);
   TIM_ClearITPendingBit(_HCSR04_TIMER, _HCSR04_CC_CH_L | _HCSR04_CC_CH_H | TIM_IT_Update);
-  _sta.cc_high = FALSE;
+  hcsr.cc_high = FALSE;
 }
 
 static void range_sens_enable(void) {
-  _sta.cc_high = FALSE;
+  hcsr.cc_high = FALSE;
   TIM_ClearITPendingBit(_HCSR04_TIMER, _HCSR04_CC_CH_L | _HCSR04_CC_CH_H | TIM_IT_Update);
   TIM_ITConfig(_HCSR04_TIMER, _HCSR04_CC_CH_L | _HCSR04_CC_CH_H | TIM_IT_Update, ENABLE);
   TIM_Cmd(_HCSR04_TIMER, ENABLE);
@@ -92,34 +92,34 @@ static void range_sens_trig_tmo(u32_t arg, void *argp) {
   range_sens_disable();
   exit_critical();
 
-  _sta.busy = FALSE;
-  if (_sta.cb_fn) {
-    _sta.cb_fn((u32_t)~0);
+  hcsr.busy = FALSE;
+  if (hcsr.cb_fn) {
+    hcsr.cb_fn((u32_t)~0);
   }
 }
 
 static void range_sens_trig_echo(u32_t delta, void *argp) {
-  _sta.cb_fn(delta);
+  hcsr.cb_fn(delta);
 }
 
 static void range_sens_irq(void) {
   // got high flank
   if(TIM_GetITStatus(_HCSR04_TIMER, _HCSR04_CC_CH_H) == SET) {
     TIM_ClearITPendingBit(_HCSR04_TIMER, _HCSR04_CC_CH_H);
-    _sta.cc_high = TRUE;
-    _sta.wraps = 0;
+    hcsr.cc_high = TRUE;
+    hcsr.wraps = 0;
   }
   // got timer counter wrap interrupt
   if(TIM_GetITStatus(_HCSR04_TIMER, TIM_IT_Update) == SET) {
     TIM_ClearITPendingBit(_HCSR04_TIMER, TIM_IT_Update);
-    if (_sta.cc_high) {
-      _sta.wraps++;
+    if (hcsr.cc_high) {
+      hcsr.wraps++;
     }
   }
   // got low flank
   if(TIM_GetITStatus(_HCSR04_TIMER, _HCSR04_CC_CH_L) == SET) {
     TIM_ClearITPendingBit(_HCSR04_TIMER, _HCSR04_CC_CH_L);
-    if (_sta.cc_high) {
+    if (hcsr.cc_high) {
       u32_t cch =
 #if HCSR04_PULS_TIMCH_H == 1
       TIM_GetCapture1(_HCSR04_TIMER);
@@ -141,10 +141,10 @@ static void range_sens_irq(void) {
       TIM_GetCapture4(_HCSR04_TIMER);
 #endif
       range_sens_disable();
-      TASK_stop_timer(&_sta.timer);
-      u32_t delta = ccl-cch+_sta.wraps*0x10000;
-      if (_sta.busy && _sta.cb_fn) {
-        _sta.busy = FALSE;
+      TASK_stop_timer(&hcsr.timer);
+      u32_t delta = ccl-cch+hcsr.wraps*0x10000;
+      if (hcsr.busy && hcsr.cb_fn) {
+        hcsr.busy = FALSE;
         // call back in task context
         task *t = TASK_create(range_sens_trig_echo, 0);
         ASSERT(t);
@@ -155,9 +155,9 @@ static void range_sens_irq(void) {
 }
 
 void RANGE_SENS_init(range_sens_cb_fn cb_fn) {
-  memset(&_sta, 0, sizeof(struct _sta));
+  memset(&hcsr, 0, sizeof(struct _sta));
 
-  _sta.cb_fn = cb_fn;
+  hcsr.cb_fn = cb_fn;
 
 #if HCSR04_PULS_TIM == 1
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1, ENABLE);
@@ -188,16 +188,16 @@ void RANGE_SENS_init(range_sens_cb_fn cb_fn) {
 }
 
 s32_t RANGE_SENS_trigger(void) {
-  if (_sta.busy) {
+  if (hcsr.busy) {
     return ERR_RANGE_SENS_BUSY;
   }
 
-  _sta.busy = TRUE;
+  hcsr.busy = TRUE;
 
   // start timeout timer
   task *t = TASK_create(range_sens_trig_tmo, 0);
   ASSERT(t);
-  TASK_start_timer(t, &_sta.timer, 0, 0, 60, 0, "hcsr04");
+  TASK_start_timer(t, &hcsr.timer, 0, 0, 60, 0, "hcsr04");
 
   // enable flank sense and timer
   range_sens_enable();
