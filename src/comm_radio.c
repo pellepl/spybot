@@ -67,8 +67,9 @@ static void comrad_com_tick_task_f(u32_t arg, void *arg_p);
 //
 
 static void comrad_rad_rx(u8_t *data, u8_t len);
+static void comrad_rad_tx(int res);
+static void comrad_rad_cfg(int res);
 static void comrad_rad_err(nrf905_state state, int res);
-
 
 //
 // comm radio api
@@ -97,9 +98,9 @@ void COMRAD_init(void) {
     COMM_CONF_SKIP_PREAMPLE | COMM_CONF_SKIP_CRC,
     1,                    // this address
     0,                    // comm_phy_rx_char - called via radio irq
-    0, //COMRAD_tx_char,         // comm_phy_tx_char
-    0, //COMRAD_tx_buf,          // comm_phy_tx_buf
-    comrad_com_tx_flush,             // comm_phy_tx_flush
+    0, //COMRAD_tx_char,          // comm_phy_tx_char
+    0, //COMRAD_tx_buf,           // comm_phy_tx_buf
+    comrad_com_tx_flush,          // comm_phy_tx_flush
     comrad_com_get_tick_count,    // comm_app_get_time
     comrad_com_rx_pkt,            // comm_app_user_rx
     comrad_com_ack_pkt,           // comm_app_user_ack
@@ -116,20 +117,20 @@ void COMRAD_init(void) {
   // set new upcall to invoke old upcall via task instead
   comrad.stack.nwk.up_rx_f = comrad_com_nwk_rx;
 
+  // start comm stack ticker
   comrad.comm_tick_task = TASK_create(comrad_com_tick_task_f, TASK_STATIC);
-
   TASK_start_timer(comrad.comm_tick_task, &comrad.comm_tick_timer, 0, 0, 0, 7, "comm_tick");
 
   //
   // radio setup
   //
-  NRF905_IMPL_init(comrad_rad_rx, NULL, comrad_rad_err);
-  NRF905_IMPL_return_to_rx_after_tx(TRUE);
-  res = NRF905_IMPL_set_conf(NULL);
+  // callbacks
+  NRF905_IMPL_init(comrad_rad_rx, comrad_rad_tx, comrad_rad_cfg, comrad_rad_err);
+  res = NRF905_IMPL_conf(NULL, TRUE);
   if (res != NRF905_OK) {
     DBG(D_COMM, D_WARN, "COMRAD init config failed %i\n", res);
   }
-  SYS_hardsleep_ms(1000);
+  SYS_hardsleep_ms(1000); // ugly wait for conf to finish - todo
   res = NRF905_IMPL_rx();
   if (res != NRF905_OK) {
     DBG(D_COMM, D_WARN, "COMRAD init rx failed %i\n", res);
@@ -153,6 +154,18 @@ static void comrad_rad_rx(u8_t *data, u8_t len) {
       return;
     }
   }
+}
+
+static void comrad_rad_tx(int res) {
+  // goto rx after tx
+  int res2 = NRF905_IMPL_rx();
+  if (res2 != NRF905_OK) DBG(D_COMM, D_WARN, "COMRAD rx after tx: err %i\n", res);
+}
+
+static void comrad_rad_cfg(int res) {
+  // goto rx after config
+  int res2 = NRF905_IMPL_rx();
+  if (res2 != NRF905_OK) DBG(D_COMM, D_WARN, "COMRAD rx after cfg: err %i\n", res);
 }
 
 static void comrad_rad_err(nrf905_state state, int res) {

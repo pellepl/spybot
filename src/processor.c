@@ -156,11 +156,11 @@ static void NVIC_config(void)
   NVIC_EnableIRQ(TIM3_IRQn);
 
   // extis
-  NVIC_SetPriority(EXTI0_IRQn, NVIC_EncodePriority(prioGrp, 0, 3));
-  NVIC_SetPriority(EXTI1_IRQn, NVIC_EncodePriority(prioGrp, 0, 3));
-  NVIC_SetPriority(EXTI2_IRQn, NVIC_EncodePriority(prioGrp, 0, 3));
-  NVIC_SetPriority(EXTI3_IRQn, NVIC_EncodePriority(prioGrp, 0, 3));
-  NVIC_SetPriority(EXTI4_IRQn, NVIC_EncodePriority(prioGrp, 0, 3));
+  NVIC_SetPriority(EXTI0_IRQn, NVIC_EncodePriority(prioGrp, 1, 0)); // radio data ready
+  NVIC_SetPriority(EXTI1_IRQn, NVIC_EncodePriority(prioGrp, 1, 0)); // radio carrier detect
+  NVIC_SetPriority(EXTI2_IRQn, NVIC_EncodePriority(prioGrp, 1, 0));
+  NVIC_SetPriority(EXTI3_IRQn, NVIC_EncodePriority(prioGrp, 1, 0));
+  NVIC_SetPriority(EXTI4_IRQn, NVIC_EncodePriority(prioGrp, 1, 0));
 
   NVIC_SetPriority(EXTI9_5_IRQn, NVIC_EncodePriority(prioGrp, 0, 0));   // rover cvideo vsync
   NVIC_SetPriority(EXTI15_10_IRQn, NVIC_EncodePriority(prioGrp, 0, 1)); // rover cvideo hsync

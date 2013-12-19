@@ -14,8 +14,8 @@ static struct {
   nrf905 nrf;
   nrf905_rx rx_cb;
   nrf905_tx tx_cb;
+  nrf905_cfg cfg_cb;
   nrf905_err err_cb;
-  bool return_to_rx_after_tx;
   spi_dev spi_dev;
   nrf905_config config;
   bool carrier_on;
@@ -25,6 +25,12 @@ static struct {
 static void nrf_impl_cb(nrf905 *nrf, nrf905_state state, int res) {
   DBG(D_RADIO, D_WARN, "nrf cb state:%i res:%i\n", state, res);
   if (res != NRF905_OK) {
+    if ((state == NRF905_TX_PRIME || state == NRF905_TX) && radio.tx_cb) {
+      radio.tx_cb(res);
+    }
+    if ((state == NRF905_CONFIG || state == NRF905_QUICK_CONFIG ||  state == NRF905_CONFIG_TX_ADDR) && radio.cfg_cb) {
+      radio.cfg_cb(res);
+    }
     if (radio.err_cb) {
       radio.err_cb(state, res);
     }
@@ -39,14 +45,16 @@ static void nrf_impl_cb(nrf905 *nrf, nrf905_state state, int res) {
     break;
   case NRF905_TX:
     DBG(D_RADIO, D_DEBUG, "nrf sent packet\n");
-    if (radio.return_to_rx_after_tx) {
-      int res2 = NRF905_rx(nrf);
-      if (res2 == NRF905_OK) {
-        radio.last_carrier = SYS_get_time_ms();
-      }
-    }
     if (radio.tx_cb) {
       radio.tx_cb(res);
+    }
+    break;
+  case NRF905_CONFIG:
+  case NRF905_QUICK_CONFIG:
+  case NRF905_CONFIG_TX_ADDR:
+    DBG(D_RADIO, D_DEBUG, "nrf configged\n");
+    if (radio.cfg_cb) {
+      radio.cfg_cb(res);
     }
     break;
   case NRF905_READ_CONFIG:
@@ -105,11 +113,12 @@ static void nrf_impl_carrier_detect_irq(gpio_pin pin) {
   }
 }
 
-void NRF905_IMPL_init(nrf905_rx rx_cb, nrf905_tx tx_cb, nrf905_err err_cb) {
+void NRF905_IMPL_init(nrf905_rx rx_cb, nrf905_tx tx_cb, nrf905_cfg cfg_cb, nrf905_err err_cb) {
   memset(&radio, 0, sizeof(radio));
 
   radio.rx_cb = rx_cb;
   radio.tx_cb = tx_cb;
+  radio.cfg_cb = cfg_cb;
   radio.err_cb = err_cb;
 
   SPI_DEV_init(
@@ -152,7 +161,7 @@ void NRF905_IMPL_read_conf(void) {
   if (res != NRF905_OK) DBG(D_RADIO, D_WARN, "nrf read conf %i\n", res);
 }
 
-int NRF905_IMPL_set_conf(nrf905_config *c) {
+int NRF905_IMPL_conf(nrf905_config *c, bool force) {
   nrf905_config spybot_conf;
   if (c == NULL) {
     spybot_conf.auto_retransmit = NRF905_CFG_AUTO_RETRAN_OFF;
@@ -178,15 +187,38 @@ int NRF905_IMPL_set_conf(nrf905_config *c) {
     c = &spybot_conf;
   }
 
-  NRF905_standby(&radio.nrf);
+  if (force && NRF905_get_state(&radio.nrf) != NRF905_STANDBY) {
+    (void)NRF905_standby(&radio.nrf);
+  }
   int res = NRF905_config(&radio.nrf, c);
   if (res != NRF905_OK) DBG(D_RADIO, D_WARN, "nrf config %i\n", res);
   return res;
 }
 
-int NRF905_IMPL_set_addr(u8_t *addr) {
+int NRF905_IMPL_conf_tx_addr(u8_t *addr, bool force) {
+  if (force && NRF905_get_state(&radio.nrf) != NRF905_STANDBY) {
+    (void)NRF905_standby(&radio.nrf);
+  }
   int res = NRF905_config_tx_address(&radio.nrf, addr);
   if (res != NRF905_OK) DBG(D_RADIO, D_WARN, "nrf set addr %i\n", res);
+  return res;
+}
+
+int NRF905_IMPL_conf_channel(u16_t channel_freq, bool force) {
+  if (force && NRF905_get_state(&radio.nrf) != NRF905_STANDBY) {
+    (void)NRF905_standby(&radio.nrf);
+  }
+  int res = NRF905_quick_config_channel(&radio.nrf, channel_freq);
+  if (res != NRF905_OK) DBG(D_RADIO, D_WARN, "nrf set channel %i\n", res);
+  return res;
+}
+
+int NRF905_IMPL_conf_pa(nrf905_cfg_pa_pwr pa, bool force) {
+  if (force && NRF905_get_state(&radio.nrf) != NRF905_STANDBY) {
+    (void)NRF905_standby(&radio.nrf);
+  }
+  int res = NRF905_quick_config_pa(&radio.nrf, pa);
+  if (res != NRF905_OK) DBG(D_RADIO, D_WARN, "nrf set PA %i\n", res);
   return res;
 }
 
@@ -254,6 +286,3 @@ bool NRF905_IMPL_lbt_check_rts(u32_t ms) {
   return SYS_get_time_ms() - radio.last_carrier >= ms;
 }
 
-void NRF905_IMPL_return_to_rx_after_tx(bool set) {
-  radio.return_to_rx_after_tx = set;
-}

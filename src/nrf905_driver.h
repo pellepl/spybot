@@ -249,7 +249,7 @@ int NRF905_quick_config_pa(nrf905 *nrf, nrf905_cfg_pa_pwr pa_pwr);
 
 /**
  * Sets the address to tx to. Must be called prior to a transmit. The
- * same tx address need not to be set proir to all transmits.
+ * same tx address need not to be set prior to all transmits.
  * Can only be called from standby mode.
  * Returns to standby mode after finished operation.
  * Asynchronous.
