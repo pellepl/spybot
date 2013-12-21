@@ -81,7 +81,7 @@ static void NVIC_config(void)
   NVIC_SetPriorityGrouping(prioGrp);
 
 
-  // Config systick interrupt, highest
+  // Config systick interrupt
   NVIC_SetPriority(SysTick_IRQn, NVIC_EncodePriority(prioGrp, 1, 1));
 
   // Config pendsv interrupt, lowest
@@ -92,21 +92,9 @@ static void NVIC_config(void)
   NVIC_EnableIRQ(STM32_SYSTEM_TIMER_IRQn);
 
   // Config & enable uarts interrupt
-#ifdef CONFIG_UART1
-  NVIC_SetPriority(USART1_IRQn, NVIC_EncodePriority(prioGrp, 2, 0));
-  NVIC_EnableIRQ(USART1_IRQn);
-#endif
 #ifdef CONFIG_UART2
   NVIC_SetPriority(USART2_IRQn, NVIC_EncodePriority(prioGrp, 2, 0));
   NVIC_EnableIRQ(USART2_IRQn);
-#endif
-#ifdef CONFIG_UART3
-  NVIC_SetPriority(USART3_IRQn, NVIC_EncodePriority(prioGrp, 2, 1));
-  NVIC_EnableIRQ(USART3_IRQn);
-#endif
-#ifdef CONFIG_UART4
-  NVIC_SetPriority(UART4_IRQn, NVIC_EncodePriority(prioGrp, 2, 1));
-  NVIC_EnableIRQ(UART4_IRQn);
 #endif
 
 #ifdef CONFIG_SPI
@@ -117,17 +105,6 @@ static void NVIC_config(void)
   NVIC_SetPriority(SPI1_MASTER_Tx_IRQ_Channel, NVIC_EncodePriority(prioGrp, 3, 1));
   NVIC_EnableIRQ(SPI1_MASTER_Tx_IRQ_Channel);
 #endif
-#ifdef CONFIG_SPI2
-  NVIC_SetPriority(SPI2_MASTER_Rx_IRQ_Channel, NVIC_EncodePriority(prioGrp, 3, 0));
-  NVIC_EnableIRQ(SPI2_MASTER_Rx_IRQ_Channel);
-  NVIC_SetPriority(SPI2_MASTER_Tx_IRQ_Channel, NVIC_EncodePriority(prioGrp, 3, 1));
-  NVIC_EnableIRQ(SPI2_MASTER_Tx_IRQ_Channel);
-#endif
-#ifdef CONFIG_ETHSPI
-  // Config & enable the enc28j60 rx interrupt
-  NVIC_SetPriority(SPI_ETH_INT_EXTI_IRQn, NVIC_EncodePriority(prioGrp, 4, 0));
-  NVIC_EnableIRQ(SPI_ETH_INT_EXTI_IRQn);
-#endif
 #endif
 
 #ifdef CONFIG_I2C
@@ -135,20 +112,6 @@ static void NVIC_config(void)
   NVIC_EnableIRQ(I2C2_EV_IRQn);
   NVIC_SetPriority(I2C2_ER_IRQn, NVIC_EncodePriority(prioGrp, 1, 1));
   NVIC_EnableIRQ(I2C2_ER_IRQn);
-#endif
-
-#if OS_DBG_MON
-  // Config & enable the dump button interrupt
-  NVIC_SetPriority(OS_DUMP_IRQ_EXTI_IRQn, NVIC_EncodePriority(prioGrp, 6, 0));
-  NVIC_EnableIRQ(OS_DUMP_IRQ_EXTI_IRQn);
-#endif
-
-#ifdef CONFIG_USB_CDC
-  NVIC_SetPriority(USB_LP_CAN1_RX0_IRQn, NVIC_EncodePriority(prioGrp, 3, 0));
-  NVIC_EnableIRQ(USB_LP_CAN1_RX0_IRQn);
-
-  NVIC_SetPriority(USBWakeUp_IRQn, NVIC_EncodePriority(prioGrp, 2, 0));
-  NVIC_EnableIRQ(USBWakeUp_IRQn);
 #endif
 
   // range sensor
@@ -166,71 +129,12 @@ static void NVIC_config(void)
   NVIC_SetPriority(EXTI15_10_IRQn, NVIC_EncodePriority(prioGrp, 0, 1)); // rover cvideo hsync
 }
 
-static void UART1_config() {
-#ifdef CONFIG_UART1
-  USART_InitTypeDef USART_InitStructure;
-  GPIO_InitTypeDef GPIO_InitStructure;
-
-  /* Configure USART1 Rx as input floating */
-  GPIO_InitStructure.GPIO_Pin = UART1_GPIO_RX;
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-  GPIO_Init(UART1_GPIO_PORT, &GPIO_InitStructure);
-
-  /* Configure USART1 Tx as alternate function push-pull */
-  GPIO_InitStructure.GPIO_Pin = UART1_GPIO_TX;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
-  GPIO_Init(UART1_GPIO_PORT, &GPIO_InitStructure);
-#endif
-}
-
 static void UART2_config() {
 #ifdef CONFIG_UART2
   gpio_config(PORTA, PIN2, CLK_50MHZ, AF, AF0, PUSHPULL, NOPULL);
   gpio_config(PORTA, PIN3, CLK_50MHZ, IN, AF0, OPENDRAIN, NOPULL);
 #endif
 }
-
-static void UART3_config() {
-#ifdef CONFIG_UART3
-  USART_InitTypeDef USART_InitStructure;
-  GPIO_InitTypeDef GPIO_InitStructure;
-
-  /* Configure USART Rx as input floating */
-  GPIO_InitStructure.GPIO_Pin = UART3_GPIO_RX;
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-  GPIO_Init(UART3_GPIO_PORT, &GPIO_InitStructure);
-  GPIO_PinRemapConfig(GPIO_FullRemap_USART3, ENABLE);
-
-  /* Configure USART Tx as alternate function push-pull */
-  GPIO_InitStructure.GPIO_Pin = UART3_GPIO_TX;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
-  GPIO_Init(UART3_GPIO_PORT, &GPIO_InitStructure);
-#endif
-}
-
-static void UART4_config() {
-#ifdef CONFIG_UART4
-  USART_InitTypeDef USART_InitStructure;
-  GPIO_InitTypeDef GPIO_InitStructure;
-
-  /* Configure USART Rx as input floating */
-  GPIO_InitStructure.GPIO_Pin = UART4_GPIO_RX;
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-  GPIO_Init(UART4_GPIO_PORT, &GPIO_InitStructure);
-
-  /* Configure USART Tx as alternate function push-pull */
-  GPIO_InitStructure.GPIO_Pin = UART4_GPIO_TX;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
-  GPIO_Init(UART4_GPIO_PORT, &GPIO_InitStructure);
-#endif
-}
-
 static void SPI_config() {
 #ifdef CONFIG_SPI
   GPIO_InitTypeDef GPIO_InitStructure;
@@ -353,20 +257,6 @@ static void SPI_config() {
 }
 static void LED_config() {
 #ifdef CONFIG_LED
-  GPIO_InitTypeDef GPIO_InitStructure;
-#ifdef HW_DEBUG
-
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-  GPIO_InitStructure.GPIO_Pin = LED1_GPIO;
-  GPIO_Init(LED12_GPIO_PORT, &GPIO_InitStructure);
-  GPIO_InitStructure.GPIO_Pin = LED2_GPIO;
-  GPIO_Init(LED12_GPIO_PORT, &GPIO_InitStructure);
-  GPIO_InitStructure.GPIO_Pin = LED3_GPIO;
-  GPIO_Init(LED34_GPIO_PORT, &GPIO_InitStructure);
-  GPIO_InitStructure.GPIO_Pin = LED4_GPIO;
-  GPIO_Init(LED34_GPIO_PORT, &GPIO_InitStructure);
-#endif
 #endif
 }
 
@@ -480,8 +370,7 @@ static void CVIDEO_config() {
   SPI_InitStructure.SPI_CRCPolynomial = 7;
   SPI_Init(SPI2, &SPI_InitStructure);
 
-  // SPI1_BASE(APB2PERIPH_BASE(PERIPH_BASE(0x40000000) + 0x00010000) + 3000)
-  // DataRegister offset = 0x0c = SPI1_BASE + 0x0c
+  // DataRegister offset = 0x0c = SPI2_BASE + 0x0c
   DMA_InitStructure.DMA_PeripheralBaseAddr = (uint32_t)(SPI2_BASE + 0x0c);
   DMA_InitStructure.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
   DMA_InitStructure.DMA_MemoryInc = DMA_MemoryInc_Enable;
@@ -491,25 +380,25 @@ static void CVIDEO_config() {
   DMA_InitStructure.DMA_Priority = DMA_Priority_VeryHigh;
   DMA_InitStructure.DMA_M2M = DMA_M2M_Disable;
 
-  /* Configure SPI DMA tx */
+  // Configure SPI DMA tx
   DMA_DeInit(DMA1_Channel5);
   DMA_InitStructure.DMA_DIR = DMA_DIR_PeripheralDST;
   DMA_InitStructure.DMA_BufferSize = 0;
   DMA_Init(DMA1_Channel5, &DMA_InitStructure);
 
-  // Do not enable DMA SPI TX channel transfer complete interrupt,
-  // always use tx/rx transfers and only await DMA RX finished irq
-  DMA_ITConfig(DMA1_Channel5, DMA_IT_TE, DISABLE); //ENABLE);
+  DMA_ITConfig(DMA1_Channel5, DMA_IT_TE, DISABLE);
 
   /* Enable SPI_MASTER DMA Tx request */
   SPI_I2S_DMACmd(SPI2, SPI_I2S_DMAReq_Tx , ENABLE);
 
 
   // config io
+  // B15 video overlay (spi mosi)
   gpio_config(PORTB, PIN15, CLK_50MHZ, OUT, AF0, PUSHPULL, NOPULL);
   gpio_disable(PORTB, PIN15);
-
+  // B8 vsync
   gpio_config(PORTB, PIN8, CLK_50MHZ, IN, AF0, OPENDRAIN, NOPULL);
+  // B14 hsync
   gpio_config(PORTB, PIN14, CLK_50MHZ, IN, AF0, OPENDRAIN, NOPULL);
   gpio_interrupt_mask_disable(PORTB, PIN14);
   gpio_interrupt_mask_disable(PORTB, PIN8);
@@ -526,10 +415,7 @@ void PROC_periph_init() {
   DBGMCU_Config(STM32_SYSTEM_TIMER_DBGMCU, ENABLE);
   gpio_init();
 
-  UART1_config();
   UART2_config();
-  UART3_config();
-  UART4_config();
   LED_config();
   SPI_config();
   TIM_config();

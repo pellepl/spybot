@@ -90,17 +90,17 @@ static void cvideo_hsync_irq(gpio_pin pin) {
     DMA1_Channel5->CCR &= (u16_t)(~DMA_CCR1_EN);
     DMA1_Channel5->CNDTR = CVID_HSCANLINE_BYTE_LEN;
     u32_t scanline = vid.cur_hsync - CVID_MIN_HSCANLINE;
-    {
-      s16_t sc = scanline;
-      if (vid.effect > 64) {
-        sc = (sc & 0xffe0) + (32 - (sc & 0x1f));
-      } else if (vid.effect > 32) {
-        sc = (sc & 0xfff0) + (16 - (sc & 0x0f));
-      }
-      s16_t fx_d1 = sc;
-      s16_t fx_d2 = fx_d1+(CVID_HSCANLINES/4);
-      s16_t fx_u1 = CVID_HSCANLINES - sc;
-      s16_t fx_u2 = fx_u1+(CVID_HSCANLINES/4);
+    s16_t sc = scanline;
+    if (vid.effect > 64) {
+      sc = (sc & 0xffe0) + (32 - (sc & 0x1f));
+    } else if (vid.effect > 32) {
+      sc = (sc & 0xfff0) + (16 - (sc & 0x0f));
+    }
+    s16_t fx_d1 = sc;
+    s16_t fx_d2 = fx_d1+(CVID_HSCANLINES/4);
+    s16_t fx_u1 = CVID_HSCANLINES - sc;
+    s16_t fx_u2 = fx_u1+(CVID_HSCANLINES/4);
+    if (vid.effect) {
       switch (vid.effect&0x1f) {
       case 0:
         break;

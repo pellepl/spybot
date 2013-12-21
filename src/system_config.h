@@ -199,8 +199,7 @@ typedef u16_t system_counter_type;
 #define SYS_OS_TICK_DIV       8
 
 /** ARCH **/
-#define CONFIG_ARCH_CRITICAL_DISABLE_IRQ __set_BASEPRI(0x04)
-
+#define CONFIG_ARCH_CRITICAL_DISABLE_IRQ __set_BASEPRI(0x02)
 #define CONFIG_ARCH_CRITICAL_ENABLE_IRQ __set_BASEPRI(0x00)
 
 /** UART **/

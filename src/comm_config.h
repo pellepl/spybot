@@ -44,6 +44,8 @@ typedef time comm_time;
 #define COMM_MEMSET(d, n, l) memset((d), (n), (l))
 #define COMM_MEMCPY(d, s, l) memcpy((d), (s), (l))
 
+#define COMM_STATS
+
 #define COMM_DBG 0
 #if COMM_DBG
 #define COMM_PHY_DBG(x, ...)   print("COMM_PHY:"x"\n", ##__VA_ARGS__)

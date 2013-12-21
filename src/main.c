@@ -12,6 +12,7 @@
 #include "spi_driver.h"
 #include "cvideo.h"
 #include "gfx_bitmap.h"
+#include "hud.h"
 
 #ifdef DBG_KERNEL_TASK_BLINKY
 task_timer dbg_blinky_task_timer;
@@ -112,12 +113,13 @@ int main(void) {
 #endif
 
   // todo move
-extern unsigned const char const img_modbla_car_bmp[14400/8];
+  extern unsigned const char const img_modbla_car_bmp[14400/8];
   CVIDEO_init();
   CVIDEO_init_gcontext(&gctx);
   CVIDEO_set_effect(79);
   GFX_draw_image(&gctx, img_modbla_car_bmp, 7, 8, 120/8, 120);
 
+  HUD_init(&gctx);
 
   while (1) {
     while (TASK_tick());

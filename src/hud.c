@@ -9,8 +9,14 @@
 #include "gfx_bitmap.h"
 #include "trig_q.h"
 #include "miniutils.h"
+#include "cvideo.h"
 
 static struct {
+  gcontext *ctx;
+  hud_state state;
+  hud_state cstate;
+  u8_t dbg_cy;
+  u8_t dbg_cx;
   s32_t heading_ang;
   s32_t xplane_cos;
   s32_t xplane_sin;
@@ -77,9 +83,26 @@ static void vecs_clear_reset(gcontext *ctx) {
   memcpy(hud.vecs, base_plane_vecs, sizeof(base_plane_vecs));
 }
 
+static void hud_paint_dbg(void) {
+  if (hud.cstate != hud.state) {
+    CVIDEO_set_v_offset(((hud.dbg_cy+1) * 8));
+  }
+  if ((SYS_get_time_ms() / 500) & 1) {
+    GFX_printn(hud.ctx, " ", 1, hud.dbg_cx, hud.dbg_cy, COL_OVER);
+  } else {
+    GFX_printn(hud.ctx, "\037", 1, hud.dbg_cx, hud.dbg_cy, COL_OVER);
+  }
+}
 
+static void hud_paint_main(gcontext *ctx, lsm303_dev *lsm_dev) {
+  if (hud.cstate != hud.state) {
+    char txt[28];
+    memset(txt,0,28);
+    GFX_fill(ctx, 0, 0, ctx->width, ctx->height, COL_RESET);
+    sprint(txt, "%s build:%i", APP_NAME, SYS_build_number());
+    GFX_printn(ctx, txt,0,  0, 16, COL_OVER);
+  }
 
-void HUD_paint(gcontext *ctx, lsm303_dev *lsm_dev) {
   s16_t x = ctx->width/2;
   s16_t y = 110;
   s32_t dx = (cos_table(hud.heading_ang)*17) >> 15;
@@ -96,7 +119,7 @@ void HUD_paint(gcontext *ctx, lsm303_dev *lsm_dev) {
   char txt[16];
   memset(txt, 0, 16);
   sprint(txt, "DIR:%4i%c", (heading_raw * 360) >> 16, 186);
-  GFX_print(ctx, txt, 28 - strlen(txt), 12, COL_OVER);
+  GFX_printn(ctx, txt, 0, 28 - strlen(txt), 12, COL_OVER);
 
   // accelerometer
   s16_t ax,ay,az;
@@ -114,7 +137,7 @@ void HUD_paint(gcontext *ctx, lsm303_dev *lsm_dev) {
   {
     memset(txt, 0, 16);
     sprint(txt, "ACC:%4i ", ad>>(15-14));
-    GFX_print(ctx, txt, 28 - strlen(txt), 13, COL_OVER);
+    GFX_printn(ctx, txt, 0, 28 - strlen(txt), 13, COL_OVER);
 
     s32_t axzn = _sqrt(axn*axn + azn*azn);
     s32_t ayzn = _sqrt(ayn*ayn + azn*azn);
@@ -175,16 +198,68 @@ void HUD_paint(gcontext *ctx, lsm303_dev *lsm_dev) {
   }
 
   if ((SYS_get_time_ms() / 500) & 1) {
-    GFX_print(ctx, " ", 27, 16, COL_OVER);
+    GFX_printn(ctx, " ", 0, 27, 16, COL_OVER);
   } else {
-    GFX_print(ctx, "\n", 27, 16, COL_OVER);
+    GFX_printn(ctx, "\001",0, 27, 16, COL_OVER);
   }
 }
 
+void HUD_state(hud_state state) {
+  if (hud.state != state) {
+    CVIDEO_set_v_offset(0);
+    GFX_fill(hud.ctx, 0, 0, hud.ctx->width, hud.ctx->height, COL_RESET);
+    hud.state = state;
+    hud.dbg_cx = 0;
+    hud.dbg_cy = 0;
+    CVIDEO_set_effect(79);
+  }
+}
+
+void HUD_paint(lsm303_dev *lsm_dev) {
+  if (hud.state == HUD_MAIN) {
+    hud_paint_main(hud.ctx, lsm_dev);
+  } else if (hud.state == HUD_DBG) {
+    hud_paint_dbg();
+  }
+  hud.cstate = hud.state;
+}
+
 void HUD_init(gcontext *ctx) {
-  char txt[28];
-  memset(txt,0,28);
-  GFX_fill(ctx, 0, 0, ctx->width, ctx->height, COL_RESET);
-  sprint(txt, "%s build:%i", APP_NAME, SYS_build_number());
-  GFX_print(ctx, txt, 0, 16, COL_OVER);
+  memset(&hud, 0, sizeof(hud));
+  hud.ctx = ctx;
+}
+
+void HUD_dbg_print(char *str) {
+  if (hud.state != HUD_DBG) {
+    HUD_state(HUD_DBG);
+  }
+
+  int len = strlen(str);
+  while (len > 0) {
+    const char *nl = strchr(str, '\n');
+    int rem = (hud.ctx->width / 8) - hud.dbg_cx;
+    int rlen = MIN(rem, len);
+    if (nl) {
+      rlen = MIN(nl - str, rlen);
+    }
+    if (hud.dbg_cx == 0) {
+      GFX_fill(hud.ctx, 0, hud.dbg_cy * 8, hud.ctx->width, 8, COL_RESET);
+    }
+    GFX_printn(hud.ctx, str, rlen, hud.dbg_cx, hud.dbg_cy, COL_OVER);
+    if (nl) {
+      rlen++;
+    }
+    str += rlen;
+    len -= rlen;
+    hud.dbg_cx += rlen;
+    if (hud.dbg_cx >= hud.ctx->width/8 || nl) {
+      hud.dbg_cx = 0;
+      hud.dbg_cy++;
+      CVIDEO_set_v_offset(((hud.dbg_cy+1) * 8));
+      if (hud.dbg_cy >= 17) {
+        hud.dbg_cy = 0;
+      }
+      GFX_fill(hud.ctx, 0, hud.dbg_cy * 8, hud.ctx->width, 8, COL_RESET);
+    }
+  }
 }
