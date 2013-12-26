@@ -224,6 +224,9 @@ typedef u16_t system_counter_type;
 #define CONFIG_TASK_POOL 32
 //#define CONFIG_TASK_NONCRITICAL_TIMER
 
+/** APP **/
+//#define CONFIG_SPLASH
+
 
 /** DEBUG **/
 

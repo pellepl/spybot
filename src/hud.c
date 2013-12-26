@@ -7,8 +7,11 @@
 
 #include "hud.h"
 #include "gfx_bitmap.h"
+#include "gfx_3d.h"
 #include "trig_q.h"
 #include "miniutils.h"
+#include "cvideo.h"
+#include "rover_3d.h"
 #include "cvideo.h"
 
 static struct {
@@ -22,10 +25,10 @@ static struct {
   s32_t xplane_sin;
   s32_t yplane_cos;
   s32_t yplane_sin;
-  s16_t vecs[8][3];
+  s16_t plane_pts[8][3];
 } hud;
 
-const s16_t const base_plane_vecs[8][3] = {
+const s16_t const base_plane_pts[8][3] = {
     { 15,  0,-16}, //0
     {-16,  0,-16}, //1
     {-16,  0, 15}, //2
@@ -36,51 +39,18 @@ const s16_t const base_plane_vecs[8][3] = {
     {  0,  0, 15}, //7
 };
 
-
-static void project_3d(s16_t *vec, s16_t magx, s16_t magy, s16_t offsx, s16_t offsy) {
-  vec[0] = (((s32_t)magx*(vec[0] << 16) / (vec[2]+64)) >> 16) + offsx;
-  vec[1] = (((s32_t)magy*((vec[1]+16) << 16) / (vec[2]+64)) >> 16) + offsy;
+static void hud_plane_draw(gcontext *ctx, gcolor col) {
+  GFX_draw_line(ctx, hud.plane_pts[2][0], hud.plane_pts[2][1], hud.plane_pts[4][0], hud.plane_pts[4][1], col);
+  GFX_draw_line(ctx, hud.plane_pts[3][0], hud.plane_pts[3][1], hud.plane_pts[5][0], hud.plane_pts[5][1], col);
+  GFX_draw_line(ctx, hud.plane_pts[4][0], hud.plane_pts[4][1], hud.plane_pts[6][0], hud.plane_pts[6][1], col);
+  GFX_draw_line(ctx, hud.plane_pts[5][0], hud.plane_pts[5][1], hud.plane_pts[6][0], hud.plane_pts[6][1], col);
+  GFX_draw_line(ctx, hud.plane_pts[2][0], hud.plane_pts[2][1], hud.plane_pts[3][0], hud.plane_pts[3][1], col);
+  GFX_draw_line(ctx, hud.plane_pts[4][0], hud.plane_pts[4][1], hud.plane_pts[5][0], hud.plane_pts[5][1], col);
+  GFX_draw_line(ctx, hud.plane_pts[6][0], hud.plane_pts[6][1], hud.plane_pts[7][0], hud.plane_pts[7][1], col);
 }
 
-static void rotate_x_3d(s16_t *v, s32_t cos, s32_t sin) {
-  //s32_t x = 1   * v[0]  +  0   * v[1]   +  0   * v[2];
-  s32_t y = 0   * v[0]  +  cos * v[1]   -  sin * v[2];
-  s32_t z = 0   * v[0]  +  sin * v[1]   +  cos * v[2];
-  //v[0] = (x >> 15);
-  v[1] = (y >> 15);
-  v[2] = (z >> 15);
-}
-
-
-static void rotate_z_3d(s16_t *v, s32_t cos, s32_t sin) {
-  s32_t x = cos * v[0]  -  sin * v[1]   +  0   * v[2];
-  s32_t y = sin * v[0]  +  cos * v[1]   +  0   * v[2];
-  //s32_t z = 0   * v[0]  +  0   * v[1]   +  1   * v[2];
-  v[0] = (x >> 15);
-  v[1] = (y >> 15);
-  //v[2] = (z >> 15);
-}
-
-static void vecs_draw(gcontext *ctx, gcolor col) {
-//  GFX_draw_line(ctx, hud.vecs[0][0], hud.vecs[0][1], hud.vecs[1][0], hud.vecs[1][1], col);
-//  GFX_draw_line(ctx, hud.vecs[1][0], hud.vecs[1][1], hud.vecs[2][0], hud.vecs[2][1], col);
-//  GFX_draw_line(ctx, hud.vecs[2][0], hud.vecs[2][1], hud.vecs[3][0], hud.vecs[3][1], col);
-//  GFX_draw_line(ctx, hud.vecs[3][0], hud.vecs[3][1], hud.vecs[0][0], hud.vecs[0][1], col);
-//  GFX_draw_line(ctx, hud.vecs[4][0], hud.vecs[4][1], hud.vecs[5][0], hud.vecs[5][1], col);
-//  GFX_draw_line(ctx, hud.vecs[6][0], hud.vecs[6][1], hud.vecs[7][0], hud.vecs[7][1], col);
-
-  GFX_draw_line(ctx, hud.vecs[2][0], hud.vecs[2][1], hud.vecs[4][0], hud.vecs[4][1], col);
-  GFX_draw_line(ctx, hud.vecs[3][0], hud.vecs[3][1], hud.vecs[5][0], hud.vecs[5][1], col);
-  GFX_draw_line(ctx, hud.vecs[4][0], hud.vecs[4][1], hud.vecs[6][0], hud.vecs[6][1], col);
-  GFX_draw_line(ctx, hud.vecs[5][0], hud.vecs[5][1], hud.vecs[6][0], hud.vecs[6][1], col);
-  GFX_draw_line(ctx, hud.vecs[2][0], hud.vecs[2][1], hud.vecs[3][0], hud.vecs[3][1], col);
-  GFX_draw_line(ctx, hud.vecs[4][0], hud.vecs[4][1], hud.vecs[5][0], hud.vecs[5][1], col);
-  GFX_draw_line(ctx, hud.vecs[6][0], hud.vecs[6][1], hud.vecs[7][0], hud.vecs[7][1], col);
-}
-
-static void vecs_clear_reset(gcontext *ctx) {
-  vecs_draw(ctx, COL_RESET);
-  memcpy(hud.vecs, base_plane_vecs, sizeof(base_plane_vecs));
+static void hud_plane_reset(gcontext *ctx) {
+  memcpy(hud.plane_pts, base_plane_pts, sizeof(base_plane_pts));
 }
 
 static void hud_paint_dbg(void) {
@@ -95,13 +65,10 @@ static void hud_paint_dbg(void) {
 }
 
 static void hud_paint_main(gcontext *ctx, lsm303_dev *lsm_dev) {
-  if (hud.cstate != hud.state) {
-    char txt[28];
-    memset(txt,0,28);
-    GFX_fill(ctx, 0, 0, ctx->width, ctx->height, COL_RESET);
-    sprint(txt, "%s build:%i", APP_NAME, SYS_build_number());
-    GFX_printn(ctx, txt,0,  0, 16, COL_OVER);
-  }
+  char txt[28];
+  memset(txt,0,28);
+  sprint(txt, "%s build:%i", APP_NAME, SYS_build_number());
+  GFX_printn(ctx, txt,0,  0, 16, COL_OVER);
 
   s16_t x = ctx->width/2;
   s16_t y = 110;
@@ -116,7 +83,7 @@ static void hud_paint_main(gcontext *ctx, lsm303_dev *lsm_dev) {
   dx = (cos_table(hud.heading_ang)*17) >> 15;
   dy = (sin_table(hud.heading_ang)*14) >> 15;
   GFX_draw_line(ctx, x, y, x+dx, y+dy, COL_SET);
-  char txt[16];
+
   memset(txt, 0, 16);
   sprint(txt, "DIR:%4i%c", (heading_raw * 360) >> 16, 186);
   GFX_printn(ctx, txt, 0, 28 - strlen(txt), 12, COL_OVER);
@@ -149,7 +116,7 @@ static void hud_paint_main(gcontext *ctx, lsm303_dev *lsm_dev) {
 
   // accelerometer plane
   {
-    vecs_clear_reset(ctx);
+    hud_plane_reset(ctx);
 
 #define _H 32
 #define _W 40
@@ -158,11 +125,11 @@ static void hud_paint_main(gcontext *ctx, lsm303_dev *lsm_dev) {
 
     int i;
     for (i = 0; i < 8; i++) {
-      rotate_x_3d(&hud.vecs[i][0], -hud.xplane_cos, hud.xplane_sin);
-      rotate_z_3d(&hud.vecs[i][0], hud.yplane_cos, -hud.yplane_sin);
-      project_3d(&hud.vecs[i][0], _W, _H, _X, _Y);
+      GFX_rotate_x_3d(&hud.plane_pts[i][0], -hud.xplane_cos, hud.xplane_sin);
+      GFX_rotate_z_3d(&hud.plane_pts[i][0], hud.yplane_cos, -hud.yplane_sin);
+      GFX_project_3d(&hud.plane_pts[i][0], _W, _H, _X, _Y);
     }
-    vecs_draw(ctx, COL_SET);
+    hud_plane_draw(ctx, COL_SET);
 
     // accelerometer bars
 #undef _W
@@ -202,10 +169,17 @@ static void hud_paint_main(gcontext *ctx, lsm303_dev *lsm_dev) {
   } else {
     GFX_printn(ctx, "\001",0, 27, 16, COL_OVER);
   }
+
+  ROVER_paint(ctx); // TODO
 }
 
 void HUD_state(hud_state state) {
   if (hud.state != state) {
+    if (state == HUD_MAIN) {
+      CVIDEO_gram_double_buffer(TRUE);
+    } else {
+      CVIDEO_gram_double_buffer(FALSE);
+    }
     CVIDEO_set_v_offset(0);
     GFX_fill(hud.ctx, 0, 0, hud.ctx->width, hud.ctx->height, COL_RESET);
     hud.state = state;
@@ -213,15 +187,6 @@ void HUD_state(hud_state state) {
     hud.dbg_cy = 0;
     CVIDEO_set_effect(79);
   }
-}
-
-void HUD_paint(lsm303_dev *lsm_dev) {
-  if (hud.state == HUD_MAIN) {
-    hud_paint_main(hud.ctx, lsm_dev);
-  } else if (hud.state == HUD_DBG) {
-    hud_paint_dbg();
-  }
-  hud.cstate = hud.state;
 }
 
 void HUD_init(gcontext *ctx) {
@@ -262,4 +227,18 @@ void HUD_dbg_print(char *str) {
       GFX_fill(hud.ctx, 0, hud.dbg_cy * 8, hud.ctx->width, 8, COL_RESET);
     }
   }
+}
+
+void HUD_paint(lsm303_dev *lsm_dev) {
+  if (hud.state == HUD_MAIN) {
+    GFX_fill(hud.ctx, 0, 0, hud.ctx->width, hud.ctx->height, COL_RESET);
+    hud_paint_main(hud.ctx, lsm_dev);
+  } else if (hud.state == HUD_DBG) {
+    hud_paint_dbg();
+  }
+  CVIDEO_gram_switch();
+  hud.cstate = hud.state;
+}
+
+void HUD_vbl(void) {
 }

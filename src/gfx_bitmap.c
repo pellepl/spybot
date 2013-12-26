@@ -20,6 +20,12 @@ static u8_t snippet[8] = {
     0b11111111,
 };
 
+#define INSIDE 0
+#define LEFT   1
+#define RIGHT  2
+#define BOTTOM 4
+#define TOP    8
+
 static inline void _gfx_draw_horizontal_line(gcontext *ctx, s16_t x, s16_t w, s16_t y, gcolor c) {
   if (w == 0) return;
   if ((x & 0xfff8) == ((x+w) & 0xfff8)) {
@@ -181,13 +187,77 @@ static inline void _gfx_draw_vertical_line(gcontext *ctx, s16_t y, s16_t h, s16_
   }
 }
 
+static u8_t gfx_clip_code(gcontext *ctx, s16_t x, s16_t y) {
+  u8_t code;
+
+  code = INSIDE;
+  if (x < 0) {
+    code |= LEFT;
+  } else if (x >= ctx->width) {
+    code |= RIGHT;
+  }
+  if (y < 0) {
+    code |= BOTTOM;
+  } else if (y >= ctx->height) {
+    code |= TOP;
+  }
+
+  return code;
+}
+
 void GFX_draw_line(gcontext *ctx, s16_t x1, s16_t y1, s16_t x2, s16_t y2, gcolor col) {
-  // todo: clipping
-  u16_t dx = ABS(x2 - x1);
-  u16_t dy = ABS(y2 - y1);
+  s16_t dx = x2 - x1;
+  s16_t dy = y2 - y1;
+  s32_t fkx = (dx << 8) / (dy == 0 ? 1 : dy);
+  s32_t fky = (dy << 8) / (dx == 0 ? 1 : dx);
+
+  { // cohen sutherland clipping
+    u8_t clip1 = gfx_clip_code(ctx, x1, y1);
+    u8_t clip2 = gfx_clip_code(ctx, x2, y2);
+    bool accept = FALSE;
+    while (1) {
+      if (!(clip1 | clip2)) {
+        accept = TRUE;
+        break;
+      } else if (clip1 & clip2) {
+        break;
+      } else {
+        s16_t x = 0, y = 0;
+        u8_t clip = clip1 ? clip1 : clip2;
+        if (clip & TOP) {
+          x = x1 + (((ctx->height-1 - y1) * fkx) >> 8);
+          y = ctx->height-1;
+        } else if (clip & BOTTOM) {
+          x = x1 + (((0 - y1) * fkx) >> 8);
+          y = 0;
+        } else if (clip & RIGHT) {
+          y = y1 + (((ctx->width-1 - x1) * fky) >> 8);
+          x = ctx->width-1;
+        } else if (clip & LEFT) {
+          y = y1 + (((0 - x1) * fky) >> 8);
+          x = 0;
+        }
+        if (clip == clip1) {
+          x1 = x;
+          y1 = y;
+          clip1 = gfx_clip_code(ctx, x1, y1);
+        } else {
+          x2 = x;
+          y2 = y;
+          clip2 = gfx_clip_code(ctx, x2, y2);
+        }
+      }
+    }
+    if (!accept) return;
+  }
+
+  dx = ABS(dx);
+  dy = ABS(dy);
+  fkx = ABS(fkx);
+  fky = ABS(fky);
+
   if (dx >= dy) {
     // non-steep
-    u32_t fk = (dx << 8) / (1+dy);
     u32_t fx1, fx2;
     s16_t ys, yd;
     if (x1 < x2) {
@@ -205,7 +275,7 @@ void GFX_draw_line(gcontext *ctx, s16_t x1, s16_t y1, s16_t x2, s16_t y2, gcolor
     fx2 += 0x7f;
     u32_t ox = fx1>>8;
     while (fx1 < fx2) {
-      fx1 += fk;
+      fx1 += fkx;
       if (fx1 > fx2) fx1 = fx2;
       _gfx_draw_horizontal_line(ctx, ox, (fx1 >> 8) - ox, ys, col);
       ys += yd;
@@ -213,7 +283,6 @@ void GFX_draw_line(gcontext *ctx, s16_t x1, s16_t y1, s16_t x2, s16_t y2, gcolor
     }
   } else {
     // steep
-    u32_t fk = (dy << 8) / (1+dx);
     u32_t fy1, fy2;
     s16_t xs, xd;
     if (y1 < y2) {
@@ -231,7 +300,7 @@ void GFX_draw_line(gcontext *ctx, s16_t x1, s16_t y1, s16_t x2, s16_t y2, gcolor
     fy2 += 0x7f;
     u32_t oy = fy1>>8;
     while (fy1 < fy2) {
-      fy1 += fk;
+      fy1 += fky;
       if (fy1 > fy2) fy1 = fy2;
       _gfx_draw_vertical_line(ctx, oy, (fy1 >> 8) - oy, xs, col);
       xs += xd;
@@ -332,8 +401,8 @@ void GFX_fill(gcontext *ctx, s16_t x, s16_t y, u16_t w, u16_t h, gcolor c) {
   if (x + w >= ctx->width) {
     w = ctx->width - x - 1;
   }
-  if (y + h >= ctx->height) {
-    h = ctx->height - y - 1;
+  if (y + h > ctx->height) {
+    h = ctx->height - y;
   }
 
   if (h == 0 || w == 0) return;

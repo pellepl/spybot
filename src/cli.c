@@ -104,7 +104,6 @@ static int f_radio_pa(u8_t pa);
 
 
 static int f_cvideo_init(void);
-static int f_cvideo_dump(void);
 static int f_cvideo_voffset(int i);
 static int f_cvideo_vscroll(int i);
 static int f_cvideo_effect(int i);
@@ -115,6 +114,7 @@ static int f_gfx_str(int x, int y, char *str);
 
 static int f_hud_dbg(char *s);
 static int f_hud_state(int state);
+static int f_hud_view(int x, int y, int z, int ax, int ay, int az);
 
 static int f_comrad_init(void);
 static int f_comrad_tx(char *str, int ack);
@@ -213,9 +213,6 @@ static cmd c_tbl[] = {
     {.name = "video_init",  .fn = (func)f_cvideo_init,
             .help = "Initializes cvideo\n"
     },
-    {.name = "video_dump",  .fn = (func)f_cvideo_dump,
-            .help = "Dumps cvideo block info\n"
-    },
     {.name = "video_offs",  .fn = (func)f_cvideo_voffset,
             .help = "Sets vertical gram offset\n"
     },
@@ -243,7 +240,9 @@ static cmd c_tbl[] = {
     {.name = "hud_state",  .fn = (func)f_hud_state,
             .help = "Change hud state\n"
     },
-
+    {.name = "hud_view",  .fn = (func)f_hud_view,
+            .help = "Change hud rover view (x,y,z,ax,ay,az)\n"
+    },
 
 
 #ifdef CONFIG_I2C
@@ -994,13 +993,8 @@ static int f_radio_tx(void) {
 extern gcontext gctx;
 
 static int f_cvideo_init(void) {
-  CVIDEO_init();
+  CVIDEO_init(HUD_vbl);
   CVIDEO_init_gcontext(&gctx);
-  return 0;
-}
-
-static int f_cvideo_dump(void) {
-  CVIDEO_dump();
   return 0;
 }
 
@@ -1036,6 +1030,7 @@ static int f_gfx_str(int x, int y, char *str) {
 
 static task_timer gtimer;
 static task *gtask = NULL;
+
 static void gtask_f(u32_t a, void *b) {
   HUD_paint(&lsm_dev);
   lsm_read_both(&lsm_dev);
@@ -1077,6 +1072,14 @@ static int f_hud_state(int state) {
     return -1;
   }
   HUD_state(state);
+  return 0;
+}
+
+static int f_hud_view(int x, int y, int z, int ax, int ay, int az) {
+  if (_argc < 6) {
+    return -1;
+  }
+  ROVER_view(x,y,z,ax,ay,az);
   return 0;
 }
 

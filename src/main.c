@@ -113,11 +113,15 @@ int main(void) {
 #endif
 
   // todo move
+#ifdef CONFIG_SPLASH
   extern unsigned const char const img_modbla_car_bmp[14400/8];
-  CVIDEO_init();
+#endif
+  CVIDEO_init(HUD_vbl);
   CVIDEO_init_gcontext(&gctx);
   CVIDEO_set_effect(79);
+#ifdef CONFIG_SPLASH
   GFX_draw_image(&gctx, img_modbla_car_bmp, 7, 8, 120/8, 120);
+#endif
 
   HUD_init(&gctx);
 

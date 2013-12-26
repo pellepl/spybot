@@ -106,9 +106,11 @@ CFILES 		+= range_sens_hcsr04_driver.c
 #controller files
 CFILES		+= cvideo.c
 CFILES		+= gfx_bitmap.c
-CFILES		+= font_spybot.c
+CFILES		+= gfx_3d.c
 CFILES		+= gfx_img_modesty.c
+CFILES		+= font_spybot.c
 CFILES		+= hud.c
+CFILES		+= rover_3d.c
 
 # comm files
 include ../generic/comm/files.mk

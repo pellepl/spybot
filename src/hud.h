@@ -23,5 +23,6 @@ void HUD_init(gcontext *ctx);
 void HUD_paint(lsm303_dev *lsm);
 void HUD_dbg_print(char *str);
 void HUD_state(hud_state state);
+void HUD_vbl(void);
 
 #endif /* HUD_H_ */
