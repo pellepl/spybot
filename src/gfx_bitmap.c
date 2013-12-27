@@ -9,7 +9,7 @@
 
 extern unsigned char font_spybotfont_png[][8];
 
-static u8_t snippet[8] = {
+static const u8_t const snippet[8] = {
     0b10000000,
     0b11000000,
     0b11100000,
@@ -18,6 +18,25 @@ static u8_t snippet[8] = {
     0b11111100,
     0b11111110,
     0b11111111,
+};
+
+static const u8_t const morton_nibble[16] = {
+    0b00000000,
+    0b00000011,
+    0b00001100,
+    0b00001111,
+    0b00110000,
+    0b00110011,
+    0b00111100,
+    0b00111111,
+    0b11000000,
+    0b11000011,
+    0b11001100,
+    0b11001111,
+    0b11110000,
+    0b11110011,
+    0b11111100,
+    0b11111111
 };
 
 #define INSIDE 0
@@ -316,7 +335,7 @@ void GFX_rect(gcontext *ctx, s16_t x, s16_t y, s16_t w, s16_t h, gcolor col) {
   GFX_draw_vertical_line(ctx, x+w, y, y+h+1, col);
 }
 
-void GFX_printn(gcontext *ctx, char *str, int len, u8_t cx, u8_t cy, gcolor c) {
+void GFX_printn(gcontext *ctx, const char *str, int len, u8_t cx, u8_t cy, gcolor c) {
   u8_t ch;
   u8_t cw = ctx->width/8;
   if (cy*8+8 > ctx->height) {
@@ -333,27 +352,21 @@ void GFX_printn(gcontext *ctx, char *str, int len, u8_t cx, u8_t cy, gcolor c) {
       case COL_SET:
         for (y = 0; y < 8; y++) {
           u8_t g = font_spybotfont_png[ch][y];
-          if (g) {
-            *ga |= g;
-          }
+          *ga |= g;
           ga += ctx->hscan;
         }
         break;
       case COL_RESET:
         for (y = 0; y < 8; y++) {
           u8_t g = font_spybotfont_png[ch][y];
-          if (g) {
-            *ga &= ~g;
-          }
+          *ga &= ~g;
           ga += ctx->hscan;
         }
         break;
       case COL_MIX:
         for (y = 0; y < 8; y++) {
           u8_t g = font_spybotfont_png[ch][y];
-          if (g) {
-            *ga ^= g;
-          }
+          *ga ^= g;
           ga += ctx->hscan;
         }
         break;
@@ -369,6 +382,80 @@ void GFX_printn(gcontext *ctx, char *str, int len, u8_t cx, u8_t cy, gcolor c) {
       str++;
     }
     cx++;
+  }
+}
+
+void GFX_printn_big(gcontext *ctx, const char *str, int len, u8_t cx, u8_t cy, gcolor c) {
+  u8_t ch;
+  u8_t cw = ctx->width/8;
+  if (cy*8+16 > ctx->height) {
+    return;
+  }
+
+  if (len) len++;
+
+  while (cx < cw-1 && (ch = *str++) != 0 && (len == 0 || --len > 0)) {
+    if (cx >= 0) {
+      u8_t y;
+      u8_t *ga = ctx->gram + cx + (cy*8*ctx->hscan);
+      switch (c) {
+      case COL_SET:
+        for (y = 0; y < 8; y++) {
+          u8_t g = font_spybotfont_png[ch][y];
+          u8_t g1 = morton_nibble[(g&0xf0)>>4];
+          u8_t g2 = morton_nibble[g&0x0f];
+          *ga++ |= g1;
+          *ga |= g2;
+          ga += ctx->hscan-1;
+          *ga++ |= g1;
+          *ga |= g2;
+          ga += ctx->hscan-1;
+        }
+        break;
+      case COL_RESET:
+        for (y = 0; y < 8; y++) {
+          u8_t g = font_spybotfont_png[ch][y];
+          u8_t g1 = morton_nibble[(g&0xf0)>>4];
+          u8_t g2 = morton_nibble[g&0x0f];
+          *ga++ &= ~g1;
+          *ga &= ~g2;
+          ga += ctx->hscan-1;
+          *ga++ &= ~g1;
+          *ga &= ~g2;
+          ga += ctx->hscan-1;
+        }
+        break;
+      case COL_MIX:
+        for (y = 0; y < 8; y++) {
+          u8_t g = font_spybotfont_png[ch][y];
+          u8_t g1 = morton_nibble[(g&0xf0)>>4];
+          u8_t g2 = morton_nibble[g&0x0f];
+          *ga++ ^= g1;
+          *ga ^= g2;
+          ga += ctx->hscan-1;
+          *ga++ ^= g1;
+          *ga ^= g2;
+          ga += ctx->hscan-1;
+        }
+        break;
+      case COL_OVER:
+        for (y = 0; y < 8; y++) {
+          u8_t g = font_spybotfont_png[ch][y];
+          u8_t g1 = morton_nibble[(g&0xf0)>>4];
+          u8_t g2 = morton_nibble[g&0x0f];
+          *ga++ = g1;
+          *ga = g2;
+          ga += ctx->hscan-1;
+          *ga++ = g1;
+          *ga = g2;
+          ga += ctx->hscan-1;
+        }
+        break;
+      }
+    } else {
+      str++;
+    }
+    cx += 2;
   }
 }
 

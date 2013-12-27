@@ -13,6 +13,7 @@
 #include "cvideo.h"
 #include "gfx_bitmap.h"
 #include "hud.h"
+#include "lsm303_driver.h"
 
 #ifdef DBG_KERNEL_TASK_BLINKY
 task_timer dbg_blinky_task_timer;
@@ -57,6 +58,7 @@ static void dbg_radio_task_func(u32_t i, void *p) {
 
 // todo move
 gcontext gctx;
+lsm303_dev lsm_dev;
 
 // main entry from bootstrap
 
@@ -123,7 +125,7 @@ int main(void) {
   GFX_draw_image(&gctx, img_modbla_car_bmp, 7, 8, 120/8, 120);
 #endif
 
-  HUD_init(&gctx);
+  HUD_init(&gctx, &lsm_dev);
 
   while (1) {
     while (TASK_tick());

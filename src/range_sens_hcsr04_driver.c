@@ -204,7 +204,7 @@ s32_t RANGE_SENS_trigger(void) {
 
   // give trigger pulse
   gpio_enable(HCSR04_TRIG_PORT, HCSR04_TRIG_PIN);
-  SYS_hardsleep_us(10);
+  SYS_hardsleep_us(10); // todo busyloop on timer value instead
   gpio_disable(HCSR04_TRIG_PORT, HCSR04_TRIG_PIN);
 
   return RANGE_SENS_OK;

@@ -19,11 +19,10 @@ STARTUP = startup_stm32f10x_md.s
 sourcedir = src
 builddir = build
 
-basetoolsdir = /home/petera/toolchain/arm-elf-tools-4.8.2
+#basetoolsdir = /home/petera/toolchain/arm-elf-tools-4.8.2
 #basetoolsdir = /home/petera/toolchain/gcc/arm-elf-tools-4.8.1
 #basetoolsdir = /home/petera/toolchain/gcc/arm-elf-tools-4.7.1
-#basetoolsdir = /usr/local/gcc/arm-elf-tools-4.6.3
-#/home/petera/toolchain/gcc/arm-elf-tools-4.6.2
+basetoolsdir = /usr/local/gcc/arm-elf-tools-4.8.2
 #codir = ${basetoolsdir}/lib/gcc/arm-none-eabi/4.8.1/
 
 hfile = ${sourcedir}/config_header.h
@@ -34,6 +33,12 @@ stmcmsisdir = ${stmlibdir}/CMSIS/CM3/DeviceSupport/ST/STM32F10x
 stmcmsisdircore = ${stmlibdir}/CMSIS/CM3/CoreSupport
 
 tools = ${basetoolsdir}/bin
+
+#gensysdir = ../generic/system
+#comm = ../generic/comm
+gensysdir = ../generic/generic_embedded
+comm = ../comm
+
 
 CPATH =
 SPATH =
@@ -110,10 +115,13 @@ CFILES		+= gfx_3d.c
 CFILES		+= gfx_img_modesty.c
 CFILES		+= font_spybot.c
 CFILES		+= hud.c
+CFILES		+= hud_main.c
+CFILES		+= hud_conf.c
+CFILES		+= hud_dbg.c
 CFILES		+= rover_3d.c
 
 # comm files
-include ../generic/comm/files.mk
+include ${comm}/files.mk
 
 # stm32 lib files
 SPATH	+= ${stmdriverdir}/src ${stmcmsisdir} ${stmcmsisdir}/startup/gcc_ride7

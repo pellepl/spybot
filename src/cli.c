@@ -15,15 +15,17 @@
 #include "i2c_driver.h"
 #include "i2c_dev.h"
 #include "comm_radio.h"
-
 #include "lsm303_driver.h"
 #include "range_sens_hcsr04_driver.h"
-
 #include "nrf905_impl.h"
-
 #include "cvideo.h"
-
 #include "hud.h"
+
+//#define VIDEO_DBG
+//#define I2C_DBG
+//#define RADIO_DBG
+#define GFX_DBG
+
 
 #define CLI_PROMPT "> "
 #define IS_STRING(s) ((u8_t*)(s) >= (u8_t*)in && (u8_t*)(s) < (u8_t*)in + sizeof(in))
@@ -39,9 +41,6 @@ typedef struct cmd_s {
 struct {
   uart_rx_callback prev_uart_rx_f;
   void *prev_uart_arg;
-  uart *uart_pipe;
-  u8_t uart_pipe_stars;
-  char uart_pipe_via;
 } cli_state;
 
 static u8_t in[256];
@@ -51,10 +50,7 @@ static void *_args[16];
 
 static int f_uwrite(int uart, char* data);
 static int f_uread(int uart, int numchars);
-static int f_uconnect(int uart);
 static int f_uconf(int uart, int speed);
-
-static int f_test_us(int high, int low, int times);
 
 static int f_rand();
 
@@ -67,9 +63,11 @@ static int f_assert();
 static int f_dbg();
 
 #ifdef CONFIG_I2C
+#ifdef I2C_DBG
 static int f_i2c_read(int addr, int reg);
 static int f_i2c_write(int addr, int reg, int data);
 static int f_i2c_scan(void);
+#endif // I2C_DBG
 #ifdef CONFIG_LSM303
 static int f_lsm_open();
 static int f_lsm_readacc();
@@ -77,7 +75,7 @@ static int f_lsm_readmag();
 static int f_lsm_read();
 static int f_lsm_calibrate();
 static int f_lsm_close();
-#endif
+#endif // CONFIG_LSM303
 #endif
 
 #ifdef CONFIG_ADC
@@ -88,10 +86,11 @@ static int f_col(int col);
 static int f_hardfault(int a);
 
 static int f_range_init(void);
-
 static int f_range(void);
+
 static int f_servo(int p);
 
+#ifdef RADIO_DBG
 static int f_radio_init(void);
 static int f_radio_read_conf(void);
 static int f_radio_set_conf(void);
@@ -101,16 +100,20 @@ static int f_radio_tx(void);
 static int f_radio_carrier(void);
 static int f_radio_channel(u16_t channel);
 static int f_radio_pa(u8_t pa);
+#endif
 
-
+#ifdef VIDEO_DBG
 static int f_cvideo_init(void);
 static int f_cvideo_voffset(int i);
 static int f_cvideo_vscroll(int i);
 static int f_cvideo_effect(int i);
+#endif
 
+#ifdef GFX_DBG
 static int f_gfx_fill(int x, int y, int w, int h, int c);
 static int f_gfx_test(void);
 static int f_gfx_str(int x, int y, char *str);
+#endif
 
 static int f_hud_dbg(char *s);
 static int f_hud_state(int state);
@@ -118,8 +121,6 @@ static int f_hud_view(int x, int y, int z, int ax, int ay, int az);
 
 static int f_comrad_init(void);
 static int f_comrad_tx(char *str, int ack);
-
-void CLI_uart_pipe_irq(void *a, u8_t c);
 
 #define HELP_UART_DEFS "uart - 0,1,2,3 - 0 is COMM, 1 is DBG, 2 is SPL, 3 is BT\n"
 
@@ -149,24 +150,11 @@ static cmd c_tbl[] = {
         "numchars - number of chars to read, if omitted uart is drained\n"\
         "ex: uread 2 10\n"
     },
-    {.name = "uconnect",  .fn = (func)f_uconnect,
-        .help = "Connects to another uart\n"\
-        "uconnect <uart> (-via)\n"\
-        HELP_UART_DEFS \
-        "-via - vias data to original channel\n"\
-        "Once connected, enter '***' to disconnect\n"\
-        "ex: uconnect 2\n"
-    },
     {.name = "uconf",  .fn = (func)f_uconf,
         .help = "Configure uart\n"\
         "uconf <uart> <speed>\n"\
         HELP_UART_DEFS \
         "ex: uconf 2 9600\n"
-    },
-
-    {.name = "test_us",  .fn = (func)f_test_us,
-            .help = "Flips PA4 on given times\n"\
-                "test_us <uptime> <downtime> <times>\n"
     },
 
     {.name = "range_init",  .fn = (func)f_range_init,
@@ -181,6 +169,7 @@ static cmd c_tbl[] = {
             .help = "Set PB9 servo, 0-99\n"
     },
 
+#ifdef RADIO_DBG
     {.name = "radio_init",  .fn = (func)f_radio_init,
             .help = "Initialize radio\n"
     },
@@ -208,8 +197,9 @@ static cmd c_tbl[] = {
     {.name = "radio_pa", .fn = (func)f_radio_pa,
         .help = "Set radio PA <0-3>\n"
     },
+#endif //RADIO_DBG
 
-
+#ifdef VIDEO_DBG
     {.name = "video_init",  .fn = (func)f_cvideo_init,
             .help = "Initializes cvideo\n"
     },
@@ -222,8 +212,9 @@ static cmd c_tbl[] = {
     {.name = "video_effect",  .fn = (func)f_cvideo_effect,
             .help = "Sets effect\n"
     },
+#endif
 
-
+#ifdef GFX_DBG
     {.name = "gfill",  .fn = (func)f_gfx_fill,
             .help = "Paints a rectangle to cvideo (x,y,w,h,c)\n"
     },
@@ -233,6 +224,7 @@ static cmd c_tbl[] = {
     {.name = "gtest",  .fn = (func)f_gfx_test,
             .help = "Paint test\n"
     },
+#endif
 
     {.name = "hud_dbg",  .fn = (func)f_hud_dbg,
             .help = "Print string on hud screen\n"
@@ -246,6 +238,7 @@ static cmd c_tbl[] = {
 
 
 #ifdef CONFIG_I2C
+#ifdef I2C_DBG
     {.name = "i2c_r",     .fn = (func)f_i2c_read,
         .help = "i2c read reg\n"
     },
@@ -255,6 +248,7 @@ static cmd c_tbl[] = {
     {.name = "i2c_scan",     .fn = (func)f_i2c_scan,
         .help = "scans i2c bus for all addresses\n"
     },
+#endif
 
     {.name = "lsm_open",     .fn = (func)f_lsm_open,
         .help = "setups and configures lsm303 device\n"
@@ -509,52 +503,6 @@ static int f_uconf(int uart, int speed) {
   return 0;
 }
 
-static int f_uconnect(int uart) {
-  if (_argc < 1) {
-    return -1;
-  }
-  if (IS_STRING(uart) || uart < 0 || uart >= CONFIG_UART_CNT) {
-    return -1;
-  }
-
-  if (uart == UARTSTDIN) {
-    print("Cannot pipe STDIN channel\n");
-    return 0;
-  }
-
-  int i;
-  char via = FALSE;
-  for (i = 1; i < _argc; i++) {
-    if (strcmp("-via", _args[i]) == 0) {
-      via = TRUE;
-      break;
-    }
-  }
-
-  cli_state.uart_pipe_via = via;
-
-  print("\nPiping uart %i, bash '***' to exit\n", uart);
-
-  cli_state.uart_pipe = _UART(uart);
-  UART_get_callback(_UART(uart),
-      &cli_state.prev_uart_rx_f, &cli_state.prev_uart_arg);
-  UART_set_callback(_UART(uart), CLI_uart_pipe_irq, NULL);
-
-  return 0;
-}
-
-static int f_udisconnect() {
-  if (cli_state.uart_pipe == 0) {
-    return -1;
-  }
-  UART_set_callback(cli_state.uart_pipe,
-      cli_state.prev_uart_rx_f, cli_state.prev_uart_arg);
-  cli_state.uart_pipe = 0;
-  print("\nUART pipe disconnected\n");
-  print(CLI_PROMPT);
-  return 0;
-}
-
 static int f_help(char *s) {
   if (IS_STRING(s)) {
     int i = 0;
@@ -604,7 +552,7 @@ static int f_dump_trace() {
 
 #ifdef CONFIG_I2C
 
-static lsm303_dev lsm_dev;
+extern lsm303_dev lsm_dev;
 static int lsm_op = 0;
 static int lsm_still = 0;
 static int lsm_readings = 0;
@@ -744,7 +692,7 @@ static int f_lsm_close() {
    return 0;
 }
 
-
+#ifdef I2C_DBG
 static u8_t i2c_dev_reg = 0;
 static u8_t i2c_dev_val = 0;
 static i2c_dev i2c_device;
@@ -814,7 +762,8 @@ static int f_i2c_scan(void) {
   I2C_set_callback(_I2C_BUS(0), i2c_scan_cb_irq);
   return I2C_query(_I2C_BUS(0), i2c_scan_addr);
 }
-#endif
+#endif // I2C_DBG
+#endif // CONFIG_I2C
 
 static int f_comrad_init(void) {
   COMRAD_init();
@@ -833,33 +782,6 @@ static int f_comrad_tx(char *str, int ack) {
   return 0;
 }
 
-static int f_radio_carrier(void) {
-  int res = NRF905_IMPL_carrier();
-  if (res < NRF905_OK) {
-    print("err:%i\n",res);
-  }
-  return 0;
-}
-
-static int f_radio_channel(u16_t channel) {
-  if (_argc < 1) return -1;
-  int res = NRF905_IMPL_conf_channel(channel, TRUE);
-  if (res < NRF905_OK) {
-    print("err:%i\n",res);
-  }
-  return 0;
-}
-
-static int f_radio_pa(u8_t pa) {
-  if (_argc < 1) return -1;
-  int res = NRF905_IMPL_conf_pa(pa, TRUE);
-  if (res < NRF905_OK) {
-    print("err:%i\n",res);
-  }
-  return 0;
-}
-
-
 static int f_col(int col) {
   print("\033[1;3%im", col & 7);
   return 0;
@@ -873,21 +795,6 @@ static int f_hardfault(int a) {
   volatile int x = 0;
   return q/x;
 #pragma GCC diagnostic pop
-}
-
-static int f_test_us(int high, int low, int times) {
-  if (_argc != 3) return -1;
-
-  //enter_critical();
-  while(times--) {
-    GPIO_set(GPIOA, GPIO_Pin_4, 0);
-    SYS_hardsleep_us(high);
-    GPIO_set(GPIOA, 0, GPIO_Pin_4);
-    SYS_hardsleep_us(low);
-  }
-  //exit_critical();
-
-  return 0;
 }
 
 static void cli_range_cb(u32_t t) {
@@ -959,11 +866,39 @@ static int f_servo(int p) {
   return 0;
 }
 
+#ifdef RADIO_DBG
 
 static int f_radio_init(void) {
   NRF905_IMPL_init(NULL, NULL, NULL, NULL);
   return 0;
 }
+
+static int f_radio_carrier(void) {
+  int res = NRF905_IMPL_carrier();
+  if (res < NRF905_OK) {
+    print("err:%i\n",res);
+  }
+  return 0;
+}
+
+static int f_radio_channel(u16_t channel) {
+  if (_argc < 1) return -1;
+  int res = NRF905_IMPL_conf_channel(channel, TRUE);
+  if (res < NRF905_OK) {
+    print("err:%i\n",res);
+  }
+  return 0;
+}
+
+static int f_radio_pa(u8_t pa) {
+  if (_argc < 1) return -1;
+  int res = NRF905_IMPL_conf_pa(pa, TRUE);
+  if (res < NRF905_OK) {
+    print("err:%i\n",res);
+  }
+  return 0;
+}
+
 
 static int f_radio_read_conf(void) {
   NRF905_IMPL_read_conf();
@@ -990,7 +925,12 @@ static int f_radio_tx(void) {
   return 0;
 }
 
+#endif //RADIO_DBG
+
+
 extern gcontext gctx;
+
+#ifdef VIDEO_DBG
 
 static int f_cvideo_init(void) {
   CVIDEO_init(HUD_vbl);
@@ -1016,6 +956,10 @@ static int f_cvideo_effect(int i) {
   return 0;
 }
 
+#endif
+
+#ifdef GFX_DBG
+
 static int f_gfx_fill(int x, int y, int w, int h, int c) {
   if (_argc < 5) return -1;
   GFX_fill(&gctx, x, y, w, h, c);
@@ -1032,7 +976,7 @@ static task_timer gtimer;
 static task *gtask = NULL;
 
 static void gtask_f(u32_t a, void *b) {
-  HUD_paint(&lsm_dev);
+  HUD_paint();
   lsm_read_both(&lsm_dev);
 }
 
@@ -1059,11 +1003,13 @@ static int f_gfx_test(void) {
   return 0;
 }
 
+#endif // GFX_DBG
+
 static int f_hud_dbg(char *s) {
   if (_argc < 1 || !IS_STRING(s)) {
     return -1;
   }
-  HUD_dbg_print(s);
+  HUD_dbg_print(&gctx, s);
   return 0;
 }
 
@@ -1079,7 +1025,7 @@ static int f_hud_view(int x, int y, int z, int ax, int ay, int az) {
   if (_argc < 6) {
     return -1;
   }
-  ROVER_view(x,y,z,ax,ay,az);
+  ROVER_view(x,y,z,ax,ay,az,FALSE);
   return 0;
 }
 
@@ -1087,34 +1033,7 @@ static int f_hud_view(int x, int y, int z, int ax, int ay, int az) {
 /////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CLI_TASK_on_piped_output(u32_t len, void *p) {
-  while (UART_rx_available(cli_state.uart_pipe) > 0) {
-    UART_put_char(_UART(UARTSTDOUT), UART_get_char(cli_state.uart_pipe));
-  }
-}
-
-static void CLI_TASK_on_piped_input(u32_t len, void *p) {
-  u32_t rlen = UART_get_buf(_UART(UARTSTDIN), in, MIN(len, sizeof(in)));
-  int i = 0;
-  for (i = 0; i < rlen; i++) {
-    if (in[i] == '*') {
-      cli_state.uart_pipe_stars++;
-      if (cli_state.uart_pipe_stars > 2) {
-        f_udisconnect();
-        return;
-      }
-    } else {
-      cli_state.uart_pipe_stars = 0;
-    }
-  }
-  UART_put_buf(cli_state.uart_pipe, in, rlen);
-}
-
 void CLI_TASK_on_input(u32_t len, void *p) {
-  if (cli_state.uart_pipe != 0) {
-    CLI_TASK_on_piped_input(len, p);
-    return;
-  }
   if (len > sizeof(in)) {
     DBG(D_CLI, D_WARN, "CONS input overflow\n");
     print(CLI_PROMPT);
@@ -1191,14 +1110,6 @@ void CLI_uart_check_char(void *a, u8_t c) {
   if (c == '\n') {
     task *t = TASK_create(CLI_TASK_on_input, 0);
     TASK_run(t, UART_rx_available(_UART(UARTSTDIN)), NULL);
-  }
-}
-
-void CLI_uart_pipe_irq(void *a, u8_t c) {
-  task *t = TASK_create(CLI_TASK_on_piped_output, 0);
-  TASK_run(t, UART_rx_available(cli_state.uart_pipe), NULL);
-  if (cli_state.uart_pipe_via && cli_state.prev_uart_rx_f) {
-    cli_state.prev_uart_rx_f(cli_state.prev_uart_arg, c);
   }
 }
 
