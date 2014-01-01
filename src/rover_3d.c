@@ -104,17 +104,17 @@ const s16_t const base_radar_pts[RADAR_BASE_POINTS][3] = {
 };
 
 const s16_t const base_camera_pts[CAMERA_BASE_POINTS][3] = {
-    {0,-100/5,100/5},
-    {0,100/5,100/5},
-    {0,100/5,-100/5},
-    {0,-100/5,-100/5},
+    {-100/5,-100/5,100/5},
+    {-100/5,100/5,100/5},
+    {-100/5,100/5,-100/5},
+    {-100/5,-100/5,-100/5},
 };
 
 const s16_t const lens_camera_pts[LENS_BASE_POINTS][3] = {
-    {0,0/5,60/5},
-    {0,60/5,0/5},
-    {0,0/5,-60/5},
-    {0,-60/5,0/5},
+    {-100/5,0/5,60/5},
+    {-100/5,60/5,0/5},
+    {-100/5,0/5,-60/5},
+    {-100/5,-60/5,0/5},
 };
 
 static void rover_draw_transform(gcontext *ctx,  s16_t (*t)[3], gcolor col) {
@@ -225,9 +225,12 @@ static void rover_reset_transform(gcontext *ctx, s16_t (*t)[3]) {
   for (i = CAMERA_IX; i < CAMERA_IX+CAMERA_BASE_POINTS; i++) {
     GFX_rotate_y_3d(&t[i][0], cos1, sin1);
     GFX_rotate_z_3d(&t[i][0], cos2, sin2);
-    GFX_translate_3d(&t[i][0], -20, 0, 0);
-    GFX_translate_3d(&t[i+CAMERA_BASE_POINTS][0], 20, 0, 0);
+    //GFX_translate_3d(&t[i][0], -20, 0, 0);
     GFX_translate_3d(&t[i][0], -100, 0, -20);
+
+    GFX_translate_3d(&t[i+CAMERA_BASE_POINTS][0], 40, 0, 0);
+    GFX_rotate_y_3d(&t[i+CAMERA_BASE_POINTS][0], cos1, sin1);
+    GFX_rotate_z_3d(&t[i+CAMERA_BASE_POINTS][0], cos2, sin2);
     GFX_translate_3d(&t[i+CAMERA_BASE_POINTS][0], -100, 0, -20);
   }
   // lens base build
@@ -235,7 +238,7 @@ static void rover_reset_transform(gcontext *ctx, s16_t (*t)[3]) {
   for (i = LENS_IX; i < LENS_IX+LENS_POINTS; i++) {
     GFX_rotate_y_3d(&t[i][0], cos1, sin1);
     GFX_rotate_z_3d(&t[i][0], cos2, sin2);
-    GFX_translate_3d(&t[i][0], -20, 0, 0);
+    //GFX_translate_3d(&t[i][0], -20, 0, 0);
     GFX_translate_3d(&t[i][0], -100, 0, -20);
   }
   // radar base build
@@ -322,9 +325,20 @@ void ROVER_paint(gcontext *ctx) {
   if (ABS(cam_daz) < 8) cam.caz += SIGN(cam_daz);
   else cam.caz += (cam_daz>>2);
 
+  static bool radar_dir = FALSE;
+
   angles.wheel_left += angles.anim_d_wheel_left;
   angles.wheel_right += angles.anim_d_wheel_right;
-  angles.radar += angles.anim_d_radar;
+  if (angles.radar < -PI_TRIG_T/8) {
+    radar_dir = TRUE;
+  } else if (angles.radar > PI_TRIG_T/8) {
+    radar_dir = FALSE;
+  }
+  if (radar_dir) {
+    angles.radar += angles.anim_d_radar;
+  } else {
+    angles.radar -= angles.anim_d_radar;
+  }
 }
 
 rover_angles *ROVER_angle_config(void) {

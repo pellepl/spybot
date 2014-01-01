@@ -35,6 +35,9 @@ static struct {
   u8_t menu_sel_ix;
 
   s8_t motor;
+  s8_t radar;
+  s8_t pan;
+  s8_t tilt;
 } conf;
 
 //////////////////////////////////////////////////////
@@ -47,9 +50,9 @@ static void hud_conf_paint_setting_bar(gcontext *ctx, bool ver_else_hor, s16_t x
 
   if (ver_else_hor) {
     if (setting < 0) {
-      GFX_fill(ctx, x+3, y+h/2, w-5, (((h/2)-2) * (128+setting))/128, COL_SET);
+      GFX_fill(ctx, x+3, y+h/2, w-5, (((h/2)-2) * (-setting))/128, COL_SET);
     } else if (setting > 0) {
-      s16_t sy = y+2+(((h/2)-2) * setting)/128;
+      s16_t sy = y+2+(((h/2)-2) * (128-setting))/128;
       GFX_fill(ctx, x+3, sy, w-5, y+h/2 - sy, COL_SET);
     }
   } else {
@@ -107,7 +110,27 @@ static void hud_conf_paint_menu(gcontext *ctx) {
 ////////////////////////////////////////////////////// MAIN CONFIG
 
 static void hud_conf_paint_main(gcontext *ctx) {
-  ROVER_view(0,0,200, 50,70,-200, FALSE);
+  int view = (SYS_get_time_ms() / 4096) & 3;
+  switch (view) {
+  case 0:
+    ROVER_view(0,0,200, 50,70,-200, FALSE);
+    break;
+  case 1:
+    ROVER_view(0,0,200, -128, 0, 0, FALSE);
+    break;
+  case 2:
+    ROVER_view(0,50,200, 0, 0, 128, FALSE);
+    break;
+  case 3:
+    ROVER_view(0,50,200, -128, 128, 0, FALSE);
+    break;
+  }
+  rover_angles *ra = ROVER_angle_config();
+  ra->anim_d_radar = 7;
+  ra->anim_d_wheel_left = -10;
+  ra->anim_d_wheel_right = -10;
+  ra->tilt = 0;
+  ra->pan = 0;
   hud_conf_paint_menu(ctx);
 }
 
@@ -155,10 +178,60 @@ static void hud_conf_input_motor(input_type in) {
 
 ////////////////////////////////////////////////////// RADAR CONFIG
 
+static void hud_conf_paint_radar(gcontext *ctx) {
+  ROVER_view(0,30,70, 0,-PI_TRIG/32, PI_TRIG_T/4, FALSE);
+  hud_conf_paint_title(ctx, " RADAR");
+  hud_conf_paint_setting_bar(ctx, FALSE, 10, 24, ctx->width-10*2, 16, conf.radar);
+  rover_angles *ra = ROVER_angle_config();
+  ra->anim_d_wheel_left = 0;
+  ra->anim_d_wheel_right = 0;
+  ra->anim_d_radar = 0;
+  ra->radar = (PI_TRIG_T/4 * (conf.radar)) / 256;
+}
+
+static void hud_conf_input_radar(input_type in) {
+  if (in == UP) {
+  } else if (in == DOWN) {
+  } else if (in == LEFT) {
+    conf.radar -=10; // TODO
+  } else if (in == RIGHT) {
+    conf.radar +=10; // TODO
+  } else if (in == PRESS) {
+    conf.state = CONF_MAIN;
+  }
+}
+
 
 ////////////////////////////////////////////////////// CAMERA CONFIG
+//hud_view 0 20 120 0 128 -128
 
+static void hud_conf_paint_camera(gcontext *ctx) {
+  ROVER_view(0,20,120, 0,PI_TRIG/5, -PI_TRIG_T/4, FALSE);
+  hud_conf_paint_title(ctx, " CAMERA");
+  hud_conf_paint_setting_bar(ctx, FALSE, 30, 24, ctx->width-30*2, 16, conf.pan);
+  hud_conf_paint_setting_bar(ctx, TRUE, 10, 44, 16, ctx->height-44-10, conf.tilt);
+  rover_angles *ra = ROVER_angle_config();
+  ra->anim_d_wheel_left = 0;
+  ra->anim_d_wheel_right = 0;
+  ra->anim_d_radar = 0;
+  ra->radar = 0;
+  ra->pan = (PI_TRIG_T/4 * -(conf.pan)) / 256;
+  ra->tilt = (PI_TRIG_T/4 * (conf.tilt)) / 256;
+}
 
+static void hud_conf_input_camera(input_type in) {
+  if (in == UP) {
+    conf.tilt -=10; // TODO
+  } else if (in == DOWN) {
+    conf.tilt +=10; // TODO
+  } else if (in == LEFT) {
+    conf.pan -=10; // TODO
+  } else if (in == RIGHT) {
+    conf.pan +=10; // TODO
+  } else if (in == PRESS) {
+    conf.state = CONF_MAIN;
+  }
+}
 ////////////////////////////////////////////////////// SPEED CONFIG
 
 
@@ -178,13 +251,21 @@ void hud_paint_config(gcontext *ctx, bool init) {
     ra->anim_d_wheel_right = -10;
     ROVER_view(0,100,400, 0,0,0, TRUE);
   }
+
   ROVER_paint(ctx);
+
   switch (conf.state) {
   case CONF_MAIN:
     hud_conf_paint_main(ctx);
     break;
   case CONF_MOTOR:
     hud_conf_paint_motor(ctx);
+    break;
+  case CONF_RADAR:
+    hud_conf_paint_radar(ctx);
+    break;
+  case CONF_CAMERA:
+    hud_conf_paint_camera(ctx);
     break;
   }
 }
@@ -196,6 +277,12 @@ void HUD_input(input_type in) {
     break;
   case CONF_MOTOR:
     hud_conf_input_motor(in);
+    break;
+  case CONF_RADAR:
+    hud_conf_input_radar(in);
+    break;
+  case CONF_CAMERA:
+    hud_conf_input_camera(in);
     break;
   }
 }

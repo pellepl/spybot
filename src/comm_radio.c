@@ -169,17 +169,14 @@ static void comrad_rad_goto_rx(void) {
 static void comrad_rad_rx(u8_t *data, u8_t len) {
   // pretend to be phy and feed comm link layer comm_link_rx
   IF_DBG(D_RADIO, D_DEBUG) {
-    print("COMRAD got packet, len %i\n", len);
-    int i;
-    for (i = 0; i < len; i++) {
-      print("%02x", data[i]);
-    }
-    print("\n");
+    print("COMRAD got packet, radio len %i\n", len);
+    printbuf(IOSTD, data, len);
   }
-  comrad.stack.phy.up_rx_f(&comrad.stack, len-1, NULL);
+  //comrad.stack.phy.up_rx_f(&comrad.stack, len-1, NULL);
   int i;
   int res;
-  for (i = 0; i < len; i++) {
+  // first byte is packet length - 1, so add 1 + 1 more for length byte
+  for (i = 0; i < data[0]+1+1; i++) {
     res = comrad.stack.phy.up_rx_f(&comrad.stack, data[i], NULL);
     if (res != R_COMM_OK) {
       DBG(D_COMM, D_WARN, "COMRAD rx: lnk err %i\n", res);
@@ -315,6 +312,7 @@ static int comrad_com_rx_pkt(comm *comm, comm_arg *rx,  unsigned short len, unsi
 
   // todo
   // up to app
+  printbuf(IOSTD, data, len);
 
   return res;
 }

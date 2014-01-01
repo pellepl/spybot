@@ -23,7 +23,7 @@ static struct {
 
 void HUD_state(hud_state state) {
   if (hud.state != state) {
-    if (state == HUD_MAIN  || state == HUD_CONFIG) {
+    if (state == HUD_MAIN  || state == HUD_CONFIG || state == HUD_TEST) {
       CVIDEO_gram_double_buffer(TRUE);
     } else {
       CVIDEO_gram_double_buffer(FALSE);
@@ -54,6 +54,9 @@ void HUD_paint(void) {
     hud_paint_config(hud.ctx, init);
   } else if (hud.state == HUD_DBG) {
     hud_paint_dbg(hud.ctx, init);
+  } else if (hud.state == HUD_TEST) {
+    GFX_fill(hud.ctx, 0, 0, hud.ctx->width, hud.ctx->height, COL_RESET);
+    ROVER_paint(hud.ctx);
   }
   CVIDEO_gram_switch();
   hud.cstate = hud.state;

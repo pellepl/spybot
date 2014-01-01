@@ -17,7 +17,8 @@ typedef enum {
   HUD_INIT = 0,
   HUD_MAIN,
   HUD_CONFIG,
-  HUD_DBG
+  HUD_DBG,
+  HUD_TEST
 } hud_state;
 
 void HUD_init(gcontext *ctx, lsm303_dev *lsm_dev);
