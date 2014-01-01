@@ -45,14 +45,15 @@ void HUD_init(gcontext *ctx, lsm303_dev *lsm_dev) {
 }
 
 void HUD_paint(void) {
+  bool init = hud.state != hud.cstate;
   if (hud.state == HUD_MAIN) {
     GFX_fill(hud.ctx, 0, 0, hud.ctx->width, hud.ctx->height, COL_RESET);
-    hud_paint_main(hud.ctx, hud.lsm, hud.state == hud.cstate);
+    hud_paint_main(hud.ctx, hud.lsm, init);
   } else if (hud.state == HUD_CONFIG) {
     GFX_fill(hud.ctx, 0, 0, hud.ctx->width, hud.ctx->height, COL_RESET);
-    hud_paint_config(hud.ctx, hud.state == hud.cstate);
+    hud_paint_config(hud.ctx, init);
   } else if (hud.state == HUD_DBG) {
-    hud_paint_dbg(hud.ctx, hud.state == hud.cstate);
+    hud_paint_dbg(hud.ctx, init);
   }
   CVIDEO_gram_switch();
   hud.cstate = hud.state;

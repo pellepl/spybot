@@ -1,4 +1,15 @@
+ifeq ($(SEC),1)
+BINARY = spybot_sec
+GDB_PORT = 4445
+DBG_SCRIPT = debug_sec.gdb
+LD_SCRIPT = arm_sec.ld
+FLAGS += -DSECONDARY
+else
 BINARY = spybot
+DBG_SCRIPT = debug.gdb
+LD_SCRIPT = arm.ld
+GDB_PORT = 4444
+endif
 
 ############
 #
@@ -19,10 +30,10 @@ STARTUP = startup_stm32f10x_md.s
 sourcedir = src
 builddir = build
 
-#basetoolsdir = /home/petera/toolchain/arm-elf-tools-4.8.2
+basetoolsdir = /home/petera/toolchain/arm-elf-tools-4.8.2
 #basetoolsdir = /home/petera/toolchain/gcc/arm-elf-tools-4.8.1
 #basetoolsdir = /home/petera/toolchain/gcc/arm-elf-tools-4.7.1
-basetoolsdir = /usr/local/gcc/arm-elf-tools-4.8.2
+#basetoolsdir = /usr/local/gcc/arm-elf-tools-4.8.2
 #codir = ${basetoolsdir}/lib/gcc/arm-none-eabi/4.8.1/
 
 hfile = ${sourcedir}/config_header.h
@@ -34,10 +45,10 @@ stmcmsisdircore = ${stmlibdir}/CMSIS/CM3/CoreSupport
 
 tools = ${basetoolsdir}/bin
 
-#gensysdir = ../generic/system
-#comm = ../generic/comm
-gensysdir = ../generic/generic_embedded
-comm = ../comm
+gensysdir = ../generic/system
+comm = ../generic/comm
+#gensysdir = ../generic/generic_embedded
+#comm = ../comm
 
 
 CPATH =
@@ -76,7 +87,7 @@ COMPILEROPTIONS = $(INCLUDE_DIRECTIVES) $(FLAGS) -mcpu=cortex-m3 -mno-thumb-inte
 COMPILEROPTIONS += -Os
 # -nostartfiles -nostdlib 
 ASSEMBLEROPTION = $(COMPILEROPTIONS)
-LINKERSCRIPT = arm.ld
+LINKERSCRIPT = $(LD_SCRIPT)
 LINKEROPTIONS = --gc-sections -cref
 OBJCOPYOPTIONS_HEX = -O ihex ${builddir}/$(BINARY).elf
 OBJCOPYOPTIONS_BIN = -O binary ${builddir}/$(BINARY).elf
@@ -259,11 +270,11 @@ install: binlen = $(shell stat -c%s ${builddir}/${BINARY}.out)
 install: $(BINARY)
 	@echo "binary length of install is ${binlen} bytes.."
 	@sed 's/BUILDFILE/${builddir}\/${BINARY}.out/;s/LENGTH/${binlen}/' stm32flash.script > _stm32flash.script
-	@echo "script _stm32flash.script" | nc localhost 4444
+	@echo "script _stm32flash.script" | nc localhost $(GDB_PORT)
 	@${RM} _stm32flash.script
 
 debug: $(BINARY)
-	@${GDB} ${builddir}/${BINARY}.elf -x debug.gdb
+	@${GDB} ${builddir}/${BINARY}.elf -x $(DBG_SCRIPT)
 	
 ${hfile}: config.mk
 	@echo "* Generating config header ${hfile}.."

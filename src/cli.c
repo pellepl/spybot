@@ -21,16 +21,17 @@
 #include "cvideo.h"
 #include "hud.h"
 
-//#define VIDEO_DBG
-//#define I2C_DBG
-//#define RADIO_DBG
+#ifndef SECONDARY
+#define VIDEO_DBG
+#define I2C_DBG
+#define RADIO_DBG
 #define GFX_DBG
-
+#endif
 
 #define CLI_PROMPT "> "
 #define IS_STRING(s) ((u8_t*)(s) >= (u8_t*)in && (u8_t*)(s) < (u8_t*)in + sizeof(in))
 
-typedef int(*func)(int a, ...);
+typedef int (*func)(int a, ...);
 
 typedef struct cmd_s {
   const char* name;
@@ -118,6 +119,7 @@ static int f_gfx_str(int x, int y, char *str);
 static int f_hud_dbg(char *s);
 static int f_hud_state(int state);
 static int f_hud_view(int x, int y, int z, int ax, int ay, int az);
+static int f_hud_in(int i);
 
 static int f_comrad_init(void);
 static int f_comrad_tx(char *str, int ack);
@@ -127,208 +129,201 @@ static int f_comrad_tx(char *str, int ack);
 /////////////////////////////////////////////////////////////////////////////////////////////
 
 static cmd c_tbl[] = {
-    {.name = "dump",  .fn = (func)f_dump,
-            .help = "Dumps state of all system\n"
+    { .name = "dump", .fn = (func) f_dump,
+        .help = "Dumps state of all system\n"
     },
-    {.name = "dump_trace",  .fn = (func)f_dump_trace,
-            .help = "Dumps system trace\n"
+    { .name = "dump_trace", .fn = (func) f_dump_trace, .help = "Dumps system trace\n"
     },
-    {.name = "time",  .fn = (func)f_time,
-            .help = "Prints or sets time\n"\
-                "time or time <day> <hour> <minute> <second> <millisecond>\n"
+    { .name = "time", .fn = (func) f_time,
+        .help = "Prints or sets time\n"
+        "time or time <day> <hour> <minute> <second> <millisecond>\n"
     },
-    {.name = "uwrite",  .fn = (func)f_uwrite,
-        .help = "Writes to uart\n"\
-        "uwrite <uart> <string>\n"\
-        HELP_UART_DEFS \
-        "ex: uwrite 2 \"foo\"\n"
+    { .name = "uwrite", .fn = (func) f_uwrite,
+        .help = "Writes to uart\n"
+        "uwrite <uart> <string>\n"
+            HELP_UART_DEFS
+            "ex: uwrite 2 \"foo\"\n"
     },
-    {.name = "uread",  .fn = (func)f_uread,
-        .help = "Reads from uart\n"\
-        "uread <uart> (<numchars>)\n"\
-        HELP_UART_DEFS \
-        "numchars - number of chars to read, if omitted uart is drained\n"\
-        "ex: uread 2 10\n"
+    { .name = "uread", .fn = (func) f_uread,
+        .help = "Reads from uart\n"
+        "uread <uart> (<numchars>)\n"
+            HELP_UART_DEFS
+            "numchars - number of chars to read, if omitted uart is drained\n"
+            "ex: uread 2 10\n"
     },
-    {.name = "uconf",  .fn = (func)f_uconf,
-        .help = "Configure uart\n"\
-        "uconf <uart> <speed>\n"\
-        HELP_UART_DEFS \
-        "ex: uconf 2 9600\n"
-    },
-
-    {.name = "range_init",  .fn = (func)f_range_init,
-            .help = "Initiates range sensor\n"
+    { .name = "uconf", .fn = (func) f_uconf,
+        .help = "Configure uart\n"
+        "uconf <uart> <speed>\n"
+            HELP_UART_DEFS
+            "ex: uconf 2 9600\n"
     },
 
-    {.name = "range",  .fn = (func)f_range,
-            .help = "Range sample\n"
+    { .name = "range_init", .fn = (func) f_range_init,
+        .help = "Initiates range sensor\n"
     },
-
-    {.name = "servo",  .fn = (func)f_servo,
-            .help = "Set PB9 servo, 0-99\n"
+    { .name = "range", .fn = (func) f_range,
+        .help = "Range sample\n"
+    },
+    { .name = "servo", .fn = (func) f_servo,
+        .help = "Set PB9 servo, 0-99\n"
     },
 
 #ifdef RADIO_DBG
-    {.name = "radio_init",  .fn = (func)f_radio_init,
-            .help = "Initialize radio\n"
+    { .name = "radio_init", .fn = (func)f_radio_init,
+        .help = "Initialize radio\n"
     },
-    {.name = "radio_rconf",  .fn = (func)f_radio_read_conf,
-            .help = "Read radio config\n"
+    { .name = "radio_rconf", .fn = (func)f_radio_read_conf,
+        .help = "Read radio config\n"
     },
-    {.name = "radio_conf",  .fn = (func)f_radio_set_conf,
-            .help = "Set radio config\n"
+    { .name = "radio_conf", .fn = (func)f_radio_set_conf,
+        .help = "Set radio config\n"
     },
-    {.name = "radio_rx",  .fn = (func)f_radio_rx,
-            .help = "Put radio in rx\n"
+    { .name = "radio_rx", .fn = (func)f_radio_rx,
+        .help = "Put radio in rx\n"
     },
-    {.name = "radio_set_addr",  .fn = (func)f_radio_tx_addr,
-            .help = "Radio set tx addr\n"
+    { .name = "radio_set_addr", .fn = (func)f_radio_tx_addr,
+        .help = "Radio set tx addr\n"
     },
-    {.name = "radio_tx",  .fn = (func)f_radio_tx,
-            .help = "Radio tx a sequence\n"
+    { .name = "radio_tx", .fn = (func)f_radio_tx,
+        .help = "Radio tx a sequence\n"
     },
-    {.name = "radio_carrier", .fn = (func)f_radio_carrier,
+    { .name = "radio_carrier", .fn = (func)f_radio_carrier,
         .help = "Transmit carrier\n"
     },
-    {.name = "radio_channel", .fn = (func)f_radio_channel,
+    { .name = "radio_channel", .fn = (func)f_radio_channel,
         .help = "Set radio channel freq <0-511>\n"
     },
-    {.name = "radio_pa", .fn = (func)f_radio_pa,
+    { .name = "radio_pa", .fn = (func)f_radio_pa,
         .help = "Set radio PA <0-3>\n"
     },
 #endif //RADIO_DBG
-
 #ifdef VIDEO_DBG
-    {.name = "video_init",  .fn = (func)f_cvideo_init,
-            .help = "Initializes cvideo\n"
+    { .name = "video_init", .fn = (func)f_cvideo_init,
+        .help = "Initializes cvideo\n"
     },
-    {.name = "video_offs",  .fn = (func)f_cvideo_voffset,
-            .help = "Sets vertical gram offset\n"
+    { .name = "video_offs", .fn = (func)f_cvideo_voffset,
+        .help = "Sets vertical gram offset\n"
     },
-    {.name = "video_scroll",  .fn = (func)f_cvideo_vscroll,
-            .help = "Sets vertical scroll\n"
+    { .name = "video_scroll", .fn = (func)f_cvideo_vscroll,
+        .help = "Sets vertical scroll\n"
     },
-    {.name = "video_effect",  .fn = (func)f_cvideo_effect,
-            .help = "Sets effect\n"
+    { .name = "video_effect", .fn = (func)f_cvideo_effect,
+        .help = "Sets effect\n"
     },
 #endif
 
 #ifdef GFX_DBG
-    {.name = "gfill",  .fn = (func)f_gfx_fill,
-            .help = "Paints a rectangle to cvideo (x,y,w,h,c)\n"
+    { .name = "gfill", .fn = (func) f_gfx_fill,
+        .help = "Paints a rectangle to cvideo (x,y,w,h,c)\n"
     },
-    {.name = "gstr",  .fn = (func)f_gfx_str,
-            .help = "Paints text to cvideo (x,y,str)\n"
+    { .name = "gstr", .fn = (func) f_gfx_str,
+        .help = "Paints text to cvideo (x,y,str)\n"
     },
-    {.name = "gtest",  .fn = (func)f_gfx_test,
-            .help = "Paint test\n"
+    { .name = "gtest", .fn = (func) f_gfx_test,
+        .help = "Paint test\n"
     },
 #endif
 
-    {.name = "hud_dbg",  .fn = (func)f_hud_dbg,
-            .help = "Print string on hud screen\n"
+    { .name = "hud_dbg", .fn = (func) f_hud_dbg,
+        .help = "Print string on hud screen\n"
     },
-    {.name = "hud_state",  .fn = (func)f_hud_state,
-            .help = "Change hud state\n"
+    { .name = "hud_state", .fn = (func) f_hud_state,
+        .help = "Change hud state\n"
     },
-    {.name = "hud_view",  .fn = (func)f_hud_view,
-            .help = "Change hud rover view (x,y,z,ax,ay,az)\n"
+    { .name = "hud_view", .fn = (func) f_hud_view,
+        .help = "Change hud rover view (x,y,z,ax,ay,az)\n"
     },
-
+    { .name = "hud_in", .fn = (func) f_hud_in,
+        .help = "Emulate input (1=UP, 2=DOWN, 4=LEFT, 8=RIGHT, 16=PRESS)\n"
+    },
 
 #ifdef CONFIG_I2C
 #ifdef I2C_DBG
-    {.name = "i2c_r",     .fn = (func)f_i2c_read,
+    { .name = "i2c_r", .fn = (func) f_i2c_read,
         .help = "i2c read reg\n"
     },
-    {.name = "i2c_w",     .fn = (func)f_i2c_write,
+    { .name = "i2c_w", .fn = (func) f_i2c_write,
         .help = "i2c write reg\n"
     },
-    {.name = "i2c_scan",     .fn = (func)f_i2c_scan,
-        .help = "scans i2c bus for all addresses\n"
-    },
+    { .name = "i2c_scan", .fn = (func) f_i2c_scan,
+        .help = "scans i2c bus for all addresses\n" },
 #endif
 
-    {.name = "lsm_open",     .fn = (func)f_lsm_open,
+    { .name = "lsm_open", .fn = (func) f_lsm_open,
         .help = "setups and configures lsm303 device\n"
     },
-    {.name = "lsm_calib",     .fn = (func)f_lsm_calibrate,
+    { .name = "lsm_calib", .fn = (func) f_lsm_calibrate,
         .help = "calibrate lsm303 device\n"
     },
-    {.name = "lsm_acc",     .fn = (func)f_lsm_readacc,
+    { .name = "lsm_acc", .fn = (func) f_lsm_readacc,
         .help = "reads out lsm303 acceleration values\n"
     },
-    {.name = "lsm_mag",     .fn = (func)f_lsm_readmag,
+    { .name = "lsm_mag", .fn = (func) f_lsm_readmag,
         .help = "reads out lsm303 magneto values\n"
     },
-    {.name = "lsm_read",     .fn = (func)f_lsm_read,
+    { .name = "lsm_read", .fn = (func) f_lsm_read,
         .help = "reads out lsm303 values\n"
     },
-    {.name = "lsm_close",     .fn = (func)f_lsm_close,
+    { .name = "lsm_close", .fn = (func) f_lsm_close,
         .help = "closes lsm303 device\n"
     },
 
 #endif
 
-    #ifdef CONFIG_ADC
-    {.name = "adc",     .fn = (func)f_adc,
+#ifdef CONFIG_ADC
+    { .name = "adc", .fn = (func)f_adc,
         .help = "Sample adc\n"
     },
 #endif
 #if 0
-    {.name = "test",     .fn = (func)f_test,
+    { .name = "test", .fn = (func)f_test,
         .help = "Test func\n"
     },
 #endif
 
-    {.name = "comrad_init", .fn = (func)f_comrad_init,
+    { .name = "comrad_init", .fn = (func) f_comrad_init,
         .help = "Initiates comm radio stack\n"
     },
-    {.name = "comrad_tx", .fn = (func)f_comrad_tx,
-        .help = "Transmit packet\n" \
-            "comrad_tx <data> <ack>\n"
+    { .name = "comrad_tx", .fn = (func) f_comrad_tx,
+        .help = "Transmit packet\n"
+        "comrad_tx <data> <ack>\n"
     },
 
-
-    {.name = "dbg",   .fn = (func)f_dbg,
-        .help = "Set debug filter and level\n"\
-        "dbg (level <dbg|info|warn|fatal>) (enable [x]*) (disable [x]*)\n"\
-        "x - <task|heap|comm|cnc|cli|nvs|spi|all>\n"\
+    { .name = "dbg", .fn = (func) f_dbg,
+        .help = "Set debug filter and level\n"
+        "dbg (level <dbg|info|warn|fatal>) (enable [x]*) (disable [x]*)\n"
+        "x - <task|heap|comm|cnc|cli|nvs|spi|all>\n"
         "ex: dbg level info disable all enable cnc comm\n"
     },
-    {.name = "assert",  .fn = (func)f_assert,
-        .help = "Asserts system\n"\
-        "NOTE system will need to be rebooted\n"
+    { .name = "assert", .fn = (func) f_assert,
+        .help = "Asserts system\n"
+            "NOTE system will need to be rebooted\n"
     },
-    {.name = "rand",  .fn = (func)f_rand,
+    { .name = "rand", .fn = (func) f_rand,
         .help = "Generates pseudo random sequence\n"
     },
-    {.name = "col",  .fn = (func)f_col,
+    { .name = "col", .fn = (func) f_col,
         .help = "Set text color\n"
     },
-    {.name = "reset",  .fn = (func)f_reset,
+    { .name = "reset", .fn = (func) f_reset,
         .help = "Resets system\n"
     },
-    {.name = "hardfault",  .fn = (func)f_hardfault,
+    { .name = "hardfault", .fn = (func) f_hardfault,
         .help = "Generate hardfault, div by zero\n"
     },
-    {.name = "help",  .fn = (func)f_help,
-        .help = "Prints help\n"\
+    { .name = "help", .fn = (func) f_help,
+        .help = "Prints help\n"
         "help or help <command>\n"
     },
-    {.name = "?",     .fn = (func)f_help,
-        .help = "Prints help\n"\
-        "help or help <command>\n"
-    },
+    { .name = "?", .fn = (func) f_help,
+        .help = "Prints help\n"
+        "help or help <command>\n" },
 
     // menu end marker
-    {.name = NULL,    .fn = (func)0,        .help = NULL},
-};
-
+    { .name = NULL, .fn = (func) 0, .help = NULL },
+  };
 
 /////////////////////////////////////////////////////////////////////////////////////////////
-
 
 static int f_rand() {
   print("%08x\n", rand_next());
@@ -342,9 +337,10 @@ static int f_reset() {
 
 static int f_time(int ad, int ah, int am, int as, int ams) {
   if (_argc == 0) {
-    u16_t d, ms; u8_t h, m, s;
+    u16_t d, ms;
+    u8_t h, m, s;
     SYS_get_time(&d, &h, &m, &s, &ms);
-    print("day:%i time:%02i:%02i:%02i.%03i\n", d,h,m,s,ms);
+    print("day:%i time:%02i:%02i:%02i.%03i\n", d, h, m, s, ms);
   } else if (_argc == 5) {
     SYS_set_time(ad, ah, am, as, ams);
   } else {
@@ -364,13 +360,16 @@ const char* DBG_BIT_NAME[] = _DBG_BIT_NAMES;
 static void print_debug_setting() {
   print("DBG level: %i\n", SYS_dbg_get_level());
   int d;
-  for (d = 0; d < sizeof(DBG_BIT_NAME)/sizeof(const char*); d++) {
-    print("DBG mask %s: %s\n", DBG_BIT_NAME[d], SYS_dbg_get_mask() & (1<<d) ? "ON":"OFF");
+  for (d = 0; d < sizeof(DBG_BIT_NAME) / sizeof(const char*); d++) {
+    print("DBG mask %s: %s\n", DBG_BIT_NAME[d],
+        SYS_dbg_get_mask() & (1 << d) ? "ON" : "OFF");
   }
 }
 
 static int f_dbg() {
-  enum state {NONE, LEVEL, ENABLE, DISABLE} st = NONE;
+  enum state {
+    NONE, LEVEL, ENABLE, DISABLE
+  } st = NONE;
   int a;
   if (_argc == 0) {
     print_debug_setting();
@@ -378,7 +377,7 @@ static int f_dbg() {
   }
   for (a = 0; a < _argc; a++) {
     u32_t f = 0;
-    char *s = (char*)_args[a];
+    char *s = (char*) _args[a];
     if (!IS_STRING(s)) {
       return -1;
     }
@@ -393,14 +392,11 @@ static int f_dbg() {
       case LEVEL:
         if (strcmp("dbg", s) == 0) {
           SYS_dbg_level(D_DEBUG);
-        }
-        else if (strcmp("info", s) == 0) {
+        } else if (strcmp("info", s) == 0) {
           SYS_dbg_level(D_INFO);
-        }
-        else if (strcmp("warn", s) == 0) {
+        } else if (strcmp("warn", s) == 0) {
           SYS_dbg_level(D_WARN);
-        }
-        else if (strcmp("fatal", s) == 0) {
+        } else if (strcmp("fatal", s) == 0) {
           SYS_dbg_level(D_FATAL);
         } else {
           return -1;
@@ -409,9 +405,10 @@ static int f_dbg() {
       case ENABLE:
       case DISABLE: {
         int d;
-        for (d = 0; f == 0 && d < sizeof(DBG_BIT_NAME)/sizeof(const char*); d++) {
+        for (d = 0; f == 0 && d < sizeof(DBG_BIT_NAME) / sizeof(const char*);
+            d++) {
           if (strcmp(DBG_BIT_NAME[d], s) == 0) {
-            f = (1<<d);
+            f = (1 << d);
           }
         }
         if (strcmp("all", s) == 0) {
@@ -457,7 +454,7 @@ static int f_uwrite(int uart, char* data) {
 }
 
 static int f_uread(int uart, int numchars) {
-  if (_argc < 1  || _argc > 2) {
+  if (_argc < 1 || _argc > 2) {
     return -1;
   }
   if (uart < 0 || uart >= CONFIG_UART_CNT) {
@@ -492,7 +489,8 @@ static int f_uconf(int uart, int speed) {
   USART_InitStructure.USART_WordLength = USART_WordLength_8b;
   USART_InitStructure.USART_StopBits = USART_StopBits_1;
   USART_InitStructure.USART_Parity = USART_Parity_No ;
-  USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
+  USART_InitStructure.USART_HardwareFlowControl =
+      USART_HardwareFlowControl_None;
   USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
 
   /* Configure the USART */
@@ -506,24 +504,28 @@ static int f_uconf(int uart, int speed) {
 static int f_help(char *s) {
   if (IS_STRING(s)) {
     int i = 0;
-    while (c_tbl[i].name != NULL) {
+    while (c_tbl[i].name != NULL ) {
       if (strcmp(s, c_tbl[i].name) == 0) {
         print("%s\t%s", c_tbl[i].name, c_tbl[i].help);
         return 0;
       }
       i++;
     }
-    print("%s\tno such command\n",s);
+    print("%s\tno such command\n", s);
   } else {
+#ifdef SECONDARY
+    print("  "APP_NAME" SECONDARY CONTROL\n");
+#else
     print("  "APP_NAME" CONTROL\n");
+#endif
     int i = 0;
-    while (c_tbl[i].name != NULL) {
+    while (c_tbl[i].name != NULL ) {
       int len = strpbrk(c_tbl[i].help, "\n") - c_tbl[i].help;
       char tmp[64];
-      strncpy(tmp, c_tbl[i].help, len+1);
-      tmp[len+1] = 0;
+      strncpy(tmp, c_tbl[i].help, len + 1);
+      tmp[len + 1] = 0;
       char fill[24];
-      int fill_len = sizeof(fill)-strlen(c_tbl[i].name);
+      int fill_len = sizeof(fill) - strlen(c_tbl[i].name);
       memset(fill, ' ', sizeof(fill));
       fill[fill_len] = 0;
       print("  %s%s%s", c_tbl[i].name, fill, tmp);
@@ -589,7 +591,8 @@ static void lsm_cb(lsm303_dev *dev, int res) {
     if (res != I2C_OK) {
       print("error %i\n", res);
     } else {
-      print("lsm acc %04x %04x %04x, mag %04x %04x %04x\n", acc[0], acc[1], acc[2], mag[0], mag[1], mag[2]);
+      print("lsm acc %04x %04x %04x, mag %04x %04x %04x\n", acc[0], acc[1],
+          acc[2], mag[0], mag[1], mag[2]);
       u16_t heading = lsm_get_heading(&lsm_dev);
       print("heading: %04x, %i\n", heading, (heading * 360) >> 16);
     }
@@ -597,9 +600,9 @@ static void lsm_cb(lsm303_dev *dev, int res) {
   case 4: // calibrate
     lsm_readings++;
     if (res == I2C_OK) {
-      if (ABS(lsm_last_mag[0] - mag[0]) < 32 &&
-          ABS(lsm_last_mag[1] - mag[1]) < 32 &&
-          ABS(lsm_last_mag[2] - mag[2]) < 32) {
+      if (ABS(lsm_last_mag[0] - mag[0]) < 32
+          && ABS(lsm_last_mag[1] - mag[1]) < 32
+          && ABS(lsm_last_mag[2] - mag[2]) < 32) {
         lsm_still++;
         if (lsm_still > 100) {
           print("Calibration finished.\n");
@@ -629,20 +632,20 @@ static void lsm_cb(lsm303_dev *dev, int res) {
         print("%i < z < %i\n", lsm_mag_min[2], lsm_mag_max[2]);
       }
       SYS_hardsleep_ms(50);
-      (void)lsm_read_mag(&lsm_dev);
+      (void) lsm_read_mag(&lsm_dev);
     }
     break;
   }
 }
 
 static int f_lsm_open() {
-   lsm_open(&lsm_dev, _I2C_BUS(0), FALSE, lsm_cb);
-   lsm_op = 0;
-   int res = lsm_config_default(&lsm_dev);
-   if (res != I2C_OK) {
-     print("err: %i\n", res);
-   }
-   return 0;
+  lsm_open(&lsm_dev, _I2C_BUS(0), FALSE, lsm_cb);
+  lsm_op = 0;
+  int res = lsm_config_default(&lsm_dev);
+  if (res != I2C_OK) {
+    print("err: %i\n", res);
+  }
+  return 0;
 }
 
 static int f_lsm_readacc() {
@@ -688,8 +691,8 @@ static int f_lsm_calibrate() {
 
 }
 static int f_lsm_close() {
-   lsm_close(&lsm_dev);
-   return 0;
+  lsm_close(&lsm_dev);
+  return 0;
 }
 
 #ifdef I2C_DBG
@@ -697,16 +700,13 @@ static u8_t i2c_dev_reg = 0;
 static u8_t i2c_dev_val = 0;
 static i2c_dev i2c_device;
 static u8_t i2c_wr_data[2];
-static i2c_dev_sequence i2c_r_seqs[] = {
-    I2C_SEQ_TX(&i2c_dev_reg, 1),
-    I2C_SEQ_RX_STOP(&i2c_dev_val, 1)
-};
-static i2c_dev_sequence i2c_w_seqs[] = {
-    I2C_SEQ_TX_STOP(i2c_wr_data, 2),
-};
+static i2c_dev_sequence i2c_r_seqs[] = { I2C_SEQ_TX(&i2c_dev_reg, 1),
+    I2C_SEQ_RX_STOP(&i2c_dev_val, 1) };
+static i2c_dev_sequence i2c_w_seqs[] = { I2C_SEQ_TX_STOP(i2c_wr_data, 2) , };
 
 static void i2c_test_cb(i2c_dev *dev, int result) {
-  print("i2c_dev_cb: reg %02x val %02x res:%i\n", i2c_dev_reg, i2c_dev_val, result);
+  print("i2c_dev_cb: reg %02x val %02x res:%i\n", i2c_dev_reg, i2c_dev_val,
+      result);
   I2C_DEV_close(&i2c_device);
 }
 
@@ -741,7 +741,7 @@ void i2c_scan_report_task(u32_t addr, void *res) {
     print("\n%02x ", addr & 0xf0);
   }
 
-  print("%s", (char *)res);
+  print("%s", (char *) res);
 
   if (i2c_scan_addr < 254) {
     i2c_scan_addr += 2;
@@ -758,25 +758,29 @@ static void i2c_scan_cb_irq(i2c_bus *bus, int res) {
 
 static int f_i2c_scan(void) {
   i2c_scan_addr = 0;
-  I2C_config(_I2C_BUS(0), 100);
-  I2C_set_callback(_I2C_BUS(0), i2c_scan_cb_irq);
-  return I2C_query(_I2C_BUS(0), i2c_scan_addr);
+  int res = I2C_config(_I2C_BUS(0), 10000);
+  if (res != I2C_OK) print("i2c config err %i\n", res);
+  res = I2C_set_callback(_I2C_BUS(0), i2c_scan_cb_irq);
+  if (res != I2C_OK) print("i2c cb err %i\n", res);
+  res = I2C_query(_I2C_BUS(0), i2c_scan_addr);
+  if (res != I2C_OK) print("i2c query err %i\n", res);
+  return 0;
 }
 #endif // I2C_DBG
 #endif // CONFIG_I2C
-
 static int f_comrad_init(void) {
   COMRAD_init();
   return 0;
 }
 
 static int f_comrad_tx(char *str, int ack) {
-  if (_argc < 2) return -1;
-  int res = COMRAD_send((u8_t*)str, strlen(str), ack);
+  if (_argc < 2)
+    return -1;
+  int res = COMRAD_send((u8_t*) str, strlen(str), ack);
   if (res < R_COMM_OK) {
-    print("err:%i\n",res);
+    print("err:%i\n", res);
   } else {
-    print("seq:%03x\n",res);
+    print("seq:%03x\n", res);
 
   }
   return 0;
@@ -790,10 +794,10 @@ static int f_col(int col) {
 static int f_hardfault(int a) {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdiv-by-zero"
-  SCB->CCR |= SCB_CCR_DIV_0_TRP_Msk;
+  SCB ->CCR |= SCB_CCR_DIV_0_TRP_Msk;
   volatile int q = 3;
   volatile int x = 0;
-  return q/x;
+  return q / x;
 #pragma GCC diagnostic pop
 }
 
@@ -834,17 +838,17 @@ static void servo_task_f(u32_t a, void *b) {
       s_dir = TRUE;
     }
   }
-  TIM_OCInitTypeDef  TIM_OCInitStructure;
+  TIM_OCInitTypeDef TIM_OCInitStructure;
   TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
   TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
   TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
-  TIM_OCInitStructure.TIM_Pulse = 3277 + ((6554-3277)*s_val)/200;
+  TIM_OCInitStructure.TIM_Pulse = 3277 + ((6554 - 3277) * s_val) / 200;
   TIM_OC4Init(TIM4, &TIM_OCInitStructure);
 }
 static int f_servo(int p) {
   if (p == 9999) {
     servo_task = TASK_create(servo_task_f, TASK_STATIC);
-    TASK_start_timer(servo_task, &servo_timer, 0,0,0,50,"servo_tim");
+    TASK_start_timer(servo_task, &servo_timer, 0, 0, 0, 50, "servo_tim");
     servo_timer_started = TRUE;
     return 0;
   }
@@ -854,11 +858,11 @@ static int f_servo(int p) {
     servo_timer_started = FALSE;
   }
   p %= 100;
-  TIM_OCInitTypeDef  TIM_OCInitStructure;
+  TIM_OCInitTypeDef TIM_OCInitStructure;
   TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
   TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
   TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
-  TIM_OCInitStructure.TIM_Pulse = 3277 + ((6554-3277)*p)/99;
+  TIM_OCInitStructure.TIM_Pulse = 3277 + ((6554 - 3277) * p) / 99;
   // 3277 ~= 1ms
   // 4915 ~= 1.5ms
   // 6554 ~= 2ms
@@ -899,7 +903,6 @@ static int f_radio_pa(u8_t pa) {
   return 0;
 }
 
-
 static int f_radio_read_conf(void) {
   NRF905_IMPL_read_conf();
   return 0;
@@ -916,7 +919,7 @@ static int f_radio_rx(void) {
 }
 
 static int f_radio_tx_addr(void) {
-  NRF905_IMPL_conf_tx_addr((u8_t[4]){0x63, 0x1c, 0x51, 0x2d}, TRUE);
+  NRF905_IMPL_conf_tx_addr((u8_t[4]) {0x63, 0x1c, 0x51, 0x2d}, TRUE);
   return 0;
 }
 
@@ -926,7 +929,6 @@ static int f_radio_tx(void) {
 }
 
 #endif //RADIO_DBG
-
 
 extern gcontext gctx;
 
@@ -961,13 +963,15 @@ static int f_cvideo_effect(int i) {
 #ifdef GFX_DBG
 
 static int f_gfx_fill(int x, int y, int w, int h, int c) {
-  if (_argc < 5) return -1;
+  if (_argc < 5)
+    return -1;
   GFX_fill(&gctx, x, y, w, h, c);
   return 0;
 }
 
 static int f_gfx_str(int x, int y, char *str) {
-  if (_argc < 3) return -1;
+  if (_argc < 3)
+    return -1;
   GFX_printn(&gctx, str, 0, x, y, COL_OVER);
   return 0;
 }
@@ -982,7 +986,7 @@ static void gtask_f(u32_t a, void *b) {
 
 static void f_gfx_test_lsm_cb(lsm303_dev *dev, int res) {
   if (res != I2C_OK) {
-    print("lsm error %i\n", res);
+    //print("lsm error %i\n", res);
     I2C_config(_I2C_BUS(0), 100000);
   }
 }
@@ -999,12 +1003,11 @@ static int f_gfx_test(void) {
   lsm_set_lowpass(&lsm_dev, 50, 50);
 
   gtask = TASK_create(gtask_f, TASK_STATIC);
-  TASK_start_timer(gtask, &gtimer, 0,0, 0, 50, "gtest");
+  TASK_start_timer(gtask, &gtimer, 0, 0, 0, 50, "gtest");
   return 0;
 }
 
 #endif // GFX_DBG
-
 static int f_hud_dbg(char *s) {
   if (_argc < 1 || !IS_STRING(s)) {
     return -1;
@@ -1025,13 +1028,19 @@ static int f_hud_view(int x, int y, int z, int ax, int ay, int az) {
   if (_argc < 6) {
     return -1;
   }
-  ROVER_view(x,y,z,ax,ay,az,FALSE);
+  ROVER_view(x, y, z, ax, ay, az, FALSE);
   return 0;
 }
 
+static int f_hud_in(int i) {
+  if (_argc < 1) {
+    return -1;
+  }
+  HUD_input(i);
+  return 0;
+}
 
 /////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void CLI_TASK_on_input(u32_t len, void *p) {
   if (len > sizeof(in)) {
@@ -1046,7 +1055,7 @@ void CLI_TASK_on_input(u32_t len, void *p) {
     return;
   }
   cursor cursor;
-  strarg_init(&cursor, (char*)in, rlen);
+  strarg_init(&cursor, (char*) in, rlen);
   strarg arg;
   _argc = 0;
   func fn = NULL;
@@ -1064,25 +1073,25 @@ void CLI_TASK_on_input(u32_t len, void *p) {
       if (arg.type != STR) {
         break;
       } else {
-        while (c_tbl[ix].name != NULL) {
+        while (c_tbl[ix].name != NULL ) {
           if (strcmp(arg.str, c_tbl[ix].name) == 0) {
             fn = c_tbl[ix].fn;
             break;
           }
           ix++;
         }
-        if (fn == NULL) {
+        if (fn == NULL ) {
           break;
         }
       }
     } else {
       // succeeding arguments¸ store them in global vector
-      if (_argc-1 >= 16) {
+      if (_argc - 1 >= 16) {
         DBG(D_CLI, D_WARN, "CONS too many args\n");
         fn = NULL;
         break;
       }
-      _args[_argc-1] = (void*)arg.val;
+      _args[_argc - 1] = (void*) arg.val;
     }
     _argc++;
   }
@@ -1091,7 +1100,7 @@ void CLI_TASK_on_input(u32_t len, void *p) {
   if (fn) {
     _argc--;
     DBG(D_CLI, D_DEBUG, "CONS calling [%p] with %i args\n", fn, _argc);
-    int res = (int)_variadic_call(fn, _argc, _args);
+    int res = (int) _variadic_call(fn, _argc, _args);
     if (res == -1) {
       print("%s", c_tbl[ix].help);
     } else {
@@ -1118,12 +1127,14 @@ void CLI_init() {
   DBG(D_CLI, D_DEBUG, "CLI init\n");
   SYS_dbg_mask_set(0);
   UART_set_callback(_UART(UARTSTDIN), CLI_uart_check_char, NULL);
-  print("\n"APP_NAME"\n");
+#ifdef SECONDARY
+    print("\n"APP_NAME" SECONDARY\n\n");
+#else
+    print("\n"APP_NAME"\n\n");
+#endif
   print("build     : %i\n", SYS_build_number());
   print("build date: %i\n", SYS_build_date());
   print("\ntype '?' or 'help' for list of commands\n\n");
   print(CLI_PROMPT);
 }
-
-
 

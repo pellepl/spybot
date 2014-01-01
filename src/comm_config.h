@@ -46,7 +46,7 @@ typedef time comm_time;
 
 #define COMM_STATS
 
-#define COMM_DBG 0
+#define COMM_DBG 1
 #if COMM_DBG
 #define COMM_PHY_DBG(x, ...)   print("COMM_PHY:"x"\n", ##__VA_ARGS__)
 #define COMM_LNK_DBG(x, ...)   print("COMM_LNK:"x"\n", ##__VA_ARGS__)

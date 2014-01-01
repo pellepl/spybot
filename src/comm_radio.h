@@ -17,6 +17,6 @@
 
 void COMRAD_init(void);
 int COMRAD_send(u8_t *data, u16_t len, bool ack);
-int COMMAD_reply(u8_t *data, u16_t len);
+int COMRAD_reply(u8_t *data, u16_t len);
 
 #endif /* COMM_RADIO_H_ */

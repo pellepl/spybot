@@ -7,6 +7,9 @@
 
 #include "nrf905_driver.h"
 
+#define DBG_STATE(s) print("NRF905DRV: state->%s\n", (s))
+//#define DBG_STATE(s)
+
 static void nrf905_spi_dev_cb(spi_dev *d, int res) {
   nrf905 *nrf = (nrf905 *)d->user_data;
   ASSERT(nrf);
@@ -64,12 +67,14 @@ static void nrf905_spi_dev_cb(spi_dev *d, int res) {
   }
   case NRF905_TX_PRIME: {
     nrf->state = NRF905_TX;
+    DBG_STATE("TX");
     // data_ready signal when packet sent
     GPIO_set(nrf->trx_ce_port, nrf->trx_ce_pin, 0);
     break;
   }
   case NRF905_TX_PRIME_CARRIER: {
     nrf->state = NRF905_TX_CARRIER;
+    DBG_STATE("TX_CARRIER");
     // data_ready signal when packet sent, carrier continues
     GPIO_set(nrf->trx_ce_port, nrf->trx_ce_pin, 0);
     break;
@@ -99,6 +104,7 @@ int NRF905_powerdown(nrf905 *nrf) {
   GPIO_set(nrf->trx_ce_port, 0, nrf->trx_ce_pin);
   GPIO_set(nrf->tx_en_port, 0, nrf->tx_en_pin);
   nrf->state = NRF905_POWERDOWN;
+  DBG_STATE("POWDOW");
 
   return NRF905_OK;
 }
@@ -112,6 +118,7 @@ int NRF905_standby(nrf905 *nrf) {
     SYS_hardsleep_us(NRF905_STATE_TRANS_POWDOW_STDBY_US);
   }
   nrf->state = NRF905_STANDBY;
+  DBG_STATE("STDBY");
   return NRF905_OK;
 }
 
@@ -126,6 +133,7 @@ int NRF905_config(nrf905 *nrf, nrf905_config *cfg) {
   }
 
   nrf->state = NRF905_CONFIG;
+  DBG_STATE("CFG");
 
   memcpy(&nrf->config, cfg, sizeof(nrf905_config));
   u8_t *b = nrf->_buf;
@@ -183,6 +191,7 @@ int NRF905_quick_config_channel(nrf905 *nrf, u16_t channel_freq) {
     return NRF905_ERR_ILLEGAL_STATE;
   }
   nrf->state = NRF905_QUICK_CONFIG;
+  DBG_STATE("QCFG");
   u8_t *b = nrf->_buf;
   u16_t d = NRF905_SPI_CH_CONFIG(channel_freq, nrf->config.hfreq_pll, nrf->config.pa_pwr);
   b[0] = (d>>8) & 0xff;
@@ -207,6 +216,7 @@ int NRF905_quick_config_pa(nrf905 *nrf, nrf905_cfg_pa_pwr pa_pwr) {
     return NRF905_ERR_ILLEGAL_STATE;
   }
   nrf->state = NRF905_QUICK_CONFIG;
+  DBG_STATE("QCFG");
   u8_t *b = nrf->_buf;
 
   u16_t d = NRF905_SPI_CH_CONFIG(nrf->config.channel_freq, nrf->config.hfreq_pll, pa_pwr);
@@ -235,6 +245,7 @@ int NRF905_read_config(nrf905 *nrf, nrf905_config *cfg) {
   u8_t *b = nrf->_buf;
 
   nrf->state = NRF905_READ_CONFIG;
+  DBG_STATE("RCFG");
   memset(b, 0, 11);
   nrf->_scratch = cfg;
 
@@ -261,6 +272,7 @@ int NRF905_config_tx_address(nrf905 *nrf, u8_t *addr) {
   }
 
   nrf->state = NRF905_CONFIG_TX_ADDR;
+  DBG_STATE("CFGTXADR");
   u8_t *b = nrf->_buf;
 
   b[0] = NRF905_SPI_W_TX_ADDRESS;
@@ -299,6 +311,7 @@ int NRF905_tx(nrf905 *nrf, u8_t *data, u8_t len) {
   }
 
   nrf->state = NRF905_TX_PRIME;
+  DBG_STATE("TXPRIME");
   u8_t *b = nrf->_buf;
 
   GPIO_set(nrf->tx_en_port, nrf->tx_en_pin, 0);
@@ -325,6 +338,7 @@ int NRF905_rx(nrf905 *nrf) {
     return NRF905_ERR_ILLEGAL_STATE;
   }
   nrf->state = NRF905_RX_LISTEN;
+  DBG_STATE("RX");
 
   GPIO_set(nrf->tx_en_port, 0, nrf->tx_en_pin);
   GPIO_set(nrf->trx_ce_port, nrf->trx_ce_pin, 0);
@@ -338,6 +352,7 @@ int NRF905_tx_carrier(nrf905 *nrf) {
   }
 
   nrf->state = NRF905_TX_PRIME_CARRIER;
+  DBG_STATE("TXPRIMECARRIER");
   u8_t *b = nrf->_buf;
 
   GPIO_set(nrf->tx_en_port, nrf->tx_en_pin, 0);
@@ -369,6 +384,7 @@ void NRF905_signal_data_ready(nrf905 *nrf) {
   }
   case NRF905_RX_LISTEN: {
     nrf->state = NRF905_RX_READ;
+    DBG_STATE("READ");
     u8_t *b = nrf->_buf;
     GPIO_set(nrf->trx_ce_port, 0, nrf->trx_ce_pin);
     b[0] = NRF905_SPI_R_RX_PAYLOAD;
@@ -413,6 +429,7 @@ void NRF905_init(nrf905 *nrf, spi_dev *spi_dev,
   GPIO_set(tx_en_port, 0, tx_en_pin);
 
   nrf->state = NRF905_POWERDOWN;
+  DBG_STATE("POWDOW");
 
   SPI_DEV_set_callback(spi_dev, nrf905_spi_dev_cb);
   SPI_DEV_set_user_data(spi_dev, nrf);

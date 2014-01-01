@@ -173,7 +173,7 @@ int NRF905_IMPL_conf(nrf905_config *c, bool force) {
     spybot_conf.out_clk_enable = NRF905_CFG_OUT_CLK_OFF;
     spybot_conf.out_clk_freq = NRF905_CFG_OUT_CLK_FREQ_1MHZ;
     spybot_conf.pa_pwr= NRF905_CFG_PA_PWR_6;
-#ifdef DBG_RADIO
+#ifdef SECONDARY
     spybot_conf.rx_address = 0x9ce3aed2;
 #else
     spybot_conf.rx_address = 0x631c512d;

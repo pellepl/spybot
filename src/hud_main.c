@@ -48,9 +48,8 @@ static void hud_plane_reset(gcontext *ctx) {
 void hud_paint_main(gcontext *ctx, lsm303_dev *lsm_dev, bool init) {
   char txt[28];
   memset(txt,0,28);
-  sprint(txt, "build:%i", SYS_build_number());
-  GFX_printn_big(ctx, APP_NAME, 0,  0, 15, COL_OVER);
-  GFX_printn(ctx, txt, 0,  14, 16, COL_OVER);
+  sprint(txt, "%s build:%i", APP_NAME, SYS_build_number());
+  GFX_printn(ctx, txt, 0,  0, 16, COL_OVER);
 
   // heading
   s16_t x = ctx->width/2;
