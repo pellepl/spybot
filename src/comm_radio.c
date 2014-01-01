@@ -71,6 +71,8 @@ static void comrad_rad_tx(int res);
 static void comrad_rad_cfg(int res);
 static void comrad_rad_err(nrf905_state state, int res);
 
+static void comrad_rad_goto_rx(void);
+
 //
 // comm radio api
 //
@@ -138,7 +140,7 @@ void COMRAD_init(void) {
   if (res != NRF905_OK) {
     DBG(D_COMM, D_WARN, "COMRAD init config failed %i\n", res);
   }
-  SYS_hardsleep_ms(500); // ugly wait for conf to finish - todo
+  SYS_hardsleep_ms(250); // ugly wait for conf to finish - todo
 #ifdef SECONDARY
   u8_t tx_addr[4] = {0x63, 0x1c, 0x51, 0x2d};
 #else
@@ -148,13 +150,17 @@ void COMRAD_init(void) {
   if (res != NRF905_OK) {
     DBG(D_COMM, D_WARN, "COMRAD config tx addr failed %i\n", res);
   }
-  SYS_hardsleep_ms(500); // ugly wait for conf to finish - todo
-  res = NRF905_IMPL_rx();
-  if (res != NRF905_OK) {
-    DBG(D_COMM, D_WARN, "COMRAD init rx failed %i\n", res);
-  }
+  SYS_hardsleep_ms(250); // ugly wait for conf to finish - todo
+  comrad_rad_goto_rx();
 }
 
+
+static void comrad_rad_goto_rx(void) {
+  int res = NRF905_IMPL_rx();
+  if (res != NRF905_OK) {
+    DBG(D_COMM, D_WARN, "COMRAD goto rx failed %i\n", res);
+  }
+}
 
 //
 // radio stack implementation functions
@@ -177,6 +183,7 @@ static void comrad_rad_rx(u8_t *data, u8_t len) {
     res = comrad.stack.phy.up_rx_f(&comrad.stack, data[i], NULL);
     if (res != R_COMM_OK) {
       DBG(D_COMM, D_WARN, "COMRAD rx: lnk err %i\n", res);
+      comrad_rad_goto_rx();
       return;
     }
   }
@@ -184,19 +191,18 @@ static void comrad_rad_rx(u8_t *data, u8_t len) {
 
 static void comrad_rad_tx(int res) {
   // goto rx after tx
-  int res2 = NRF905_IMPL_rx();
-  if (res2 != NRF905_OK) DBG(D_COMM, D_WARN, "COMRAD rx after tx: err %i\n", res);
+  comrad_rad_goto_rx();
 }
 
 static void comrad_rad_cfg(int res) {
   // goto rx after config
-  int res2 = NRF905_IMPL_rx();
-  if (res2 != NRF905_OK) DBG(D_COMM, D_WARN, "COMRAD rx after cfg: err %i\n", res);
+  comrad_rad_goto_rx();
 }
 
 static void comrad_rad_err(nrf905_state state, int res) {
   // TODO
   // handle
+  comrad_rad_goto_rx();
 }
 
 
@@ -212,7 +218,10 @@ static void comrad_com_tick_task_f(u32_t arg, void *arg_p) {
 // for further comm stack handling
 static void comrad_com_task_on_pkt(u32_t arg, void* arg_p) {
   comm_arg *rx = (comm_arg *)arg_p;
-  (void)comrad.post_nwk_comm_rx_up_f(&comrad.stack, rx);
+  int res = comrad.post_nwk_comm_rx_up_f(&comrad.stack, rx);
+  if (res != R_COMM_OK) {
+    comrad_rad_goto_rx();
+  }
 }
 
 static int comrad_com_nwk_rx(comm *com, comm_arg *rx) {
@@ -299,10 +308,7 @@ static int comrad_com_rx_pkt(comm *comm, comm_arg *rx,  unsigned short len, unsi
 
   if ((rx->flags & COMM_FLAG_REQACK_BIT) == 0) {
     // no ack required here, so return to rx directly
-    int res2 = NRF905_IMPL_rx();
-    if (res2 != NRF905_OK) {
-      DBG(D_COMM, D_WARN, "COMRAD pkt: nrf err when return to rx %i\n", res2);
-    }
+    comrad_rad_goto_rx();
   }
   // else, ack is required and stack will tx ack, which will end up in radio
   // going to rx
@@ -315,10 +321,7 @@ static int comrad_com_rx_pkt(comm *comm, comm_arg *rx,  unsigned short len, unsi
 
 static void comrad_com_ack_pkt(comm *comm, comm_arg *rx, unsigned short seqno, unsigned short len, unsigned char *data) {
   DBG(D_COMM, D_DEBUG, "COMrad ack seqno:0x%03x\n", seqno);
-  int res = NRF905_IMPL_rx();
-  if (res != NRF905_OK) {
-    DBG(D_COMM, D_WARN, "COMRAD pkt: nrf err when return to rx %i\n", res);
-  }
+  comrad_rad_goto_rx();
 }
 
 /* invoked on transport info */

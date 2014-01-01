@@ -1,4 +1,5 @@
 /build
+/build_sec
 build-number.txt
 .project
 .settings

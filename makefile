@@ -28,7 +28,11 @@ STARTUP = startup_stm32f10x_md.s
 ############
 
 sourcedir = src
+ifeq ($(SEC),1)
+builddir = build_sec
+else
 builddir = build
+endif
 
 basetoolsdir = /home/petera/toolchain/arm-elf-tools-4.8.2
 #basetoolsdir = /home/petera/toolchain/gcc/arm-elf-tools-4.8.1
