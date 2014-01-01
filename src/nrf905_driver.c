@@ -7,8 +7,8 @@
 
 #include "nrf905_driver.h"
 
-#define DBG_STATE(s) print("NRF905DRV: state->%s\n", (s))
-//#define DBG_STATE(s)
+//#define DBG_STATE(s) print("NRF905DRV: state->%s\n", (s))
+#define DBG_STATE(s)
 
 static void nrf905_spi_dev_cb(spi_dev *d, int res) {
   nrf905 *nrf = (nrf905 *)d->user_data;
