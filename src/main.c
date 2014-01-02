@@ -10,55 +10,7 @@
 #include "linker_symaccess.h"
 #include "i2c_driver.h"
 #include "spi_driver.h"
-#include "cvideo.h"
-#include "gfx_bitmap.h"
-#include "hud.h"
-#include "lsm303_driver.h"
-
-#ifdef DBG_KERNEL_TASK_BLINKY
-task_timer dbg_blinky_task_timer;
-task *dbg_blinky_task;
-static bool _dbg_bl_state = TRUE;
-static void dbg_blinky_task_func(u32_t i, void *p) {
-  if (_dbg_bl_state) {
-    GPIO_disable(GPIOC, GPIO_Pin_6);
-    TASK_set_timer_recurrence(&dbg_blinky_task_timer, 10);
-    _dbg_bl_state = FALSE;
-  } else {
-    GPIO_enable(GPIOC, GPIO_Pin_6);
-    TASK_set_timer_recurrence(&dbg_blinky_task_timer, 990);
-    _dbg_bl_state = TRUE;
-  }
-}
-#endif
-
-#ifdef DBG_RADIO
-#include "nrf905_impl.h"
-task_timer dbg_radio_timer;
-task *dbg_radio_task;
-static u32_t _dbg_radio_state = 0;
-static void dbg_radio_task_func(u32_t i, void *p) {
-  switch (_dbg_radio_state) {
-  case 0:
-    NRF905_IMPL_init();
-    break;
-  case 1:
-    NRF905_IMPL_set_conf(NULL);
-    break;
-  case 2:
-    NRF905_IMPL_set_addr();
-    break;
-  default:
-    NRF905_IMPL_tx();
-    break;
-  }
-  _dbg_radio_state++;
-}
-#endif
-
-// todo move
-gcontext gctx;
-lsm303_dev lsm_dev;
+#include "app.h"
 
 // main entry from bootstrap
 
@@ -104,28 +56,8 @@ int main(void) {
 #else
   rand_seed(0xd0decaed ^ SYS_get_tick());
 #endif
-#ifdef DBG_KERNEL_TASK_BLINKY
-  dbg_blinky_task = TASK_create(dbg_blinky_task_func, TASK_STATIC);
-  TASK_start_timer(dbg_blinky_task, &dbg_blinky_task_timer, 0,0,0,950,"dbg_blink");
-#endif
 
-#ifdef DBG_RADIO
-  dbg_radio_task = TASK_create(dbg_radio_task_func, TASK_STATIC);
-  TASK_start_timer(dbg_radio_task, &dbg_radio_timer, 0,0,0,1000,"radio");
-#endif
-
-  // todo move
-#ifdef CONFIG_SPLASH
-  extern unsigned const char const img_modbla_car_bmp[14400/8];
-#endif
-  CVIDEO_init(HUD_vbl);
-  CVIDEO_init_gcontext(&gctx);
-  CVIDEO_set_effect(79);
-#ifdef CONFIG_SPLASH
-  GFX_draw_image(&gctx, img_modbla_car_bmp, 7, 8, 120/8, 120);
-#endif
-
-  HUD_init(&gctx, &lsm_dev);
+  APP_init();
 
   while (1) {
     while (TASK_tick());

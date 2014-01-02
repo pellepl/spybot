@@ -9,6 +9,7 @@
 #include "comm.h"
 #include "nrf905_impl.h"
 #include "taskq.h"
+#include "app.h"
 
 typedef struct {
   u8_t data[COMM_RADIO_LNK_MAX_DATA];
@@ -89,6 +90,12 @@ int COMRAD_reply(u8_t *data, u16_t len) {
   s32_t res = comm_reply(&comrad.stack, comrad.cur_rx, len, data);
   if (res < R_COMM_OK) DBG(D_COMM, D_WARN, "COMrad reply failed %i\n", res);
   return res;
+}
+
+u8_t COMRAD_stats(void) {
+  u8_t squal = comm_squal(&comrad.stack);
+  comm_clear_stats(&comrad.stack);
+  return squal;
 }
 
 void COMRAD_init(void) {
@@ -240,7 +247,7 @@ static int comrad_com_tx_flush(comm *comm, comm_arg* tx) {
     }
   }
 
-  unsigned char buf[COMM_RADIO_LNK_MAX_DATA+1];
+  unsigned char buf[COMM_RADIO_LNK_MAX_DATA];
   buf[0] = tx->len;
   memcpy(&buf[1], tx->data, tx->len+1);
 
@@ -310,9 +317,8 @@ static int comrad_com_rx_pkt(comm *comm, comm_arg *rx,  unsigned short len, unsi
   // else, ack is required and stack will tx ack, which will end up in radio
   // going to rx
 
-  // todo
   // up to app
-  printbuf(IOSTD, data, len);
+  APP_comrad_rx(rx, len, data, already_received);
 
   return res;
 }
@@ -320,6 +326,7 @@ static int comrad_com_rx_pkt(comm *comm, comm_arg *rx,  unsigned short len, unsi
 static void comrad_com_ack_pkt(comm *comm, comm_arg *rx, unsigned short seqno, unsigned short len, unsigned char *data) {
   DBG(D_COMM, D_DEBUG, "COMrad ack seqno:0x%03x\n", seqno);
   comrad_rad_goto_rx();
+  APP_comrad_ack(rx, seqno, len, data);
 }
 
 /* invoked on transport info */
@@ -336,6 +343,7 @@ static void comrad_com_alert(comm *comm, comm_addr addr, unsigned char type, uns
 //typedef void (*comm_app_user_err_fn)(comm *comm, int err, unsigned short seqno, unsigned short len, unsigned char *data);
 static void comrad_com_err(comm *comm, int err, unsigned short seqno, unsigned short len, unsigned char *data) {
   DBG(D_COMM, D_WARN, "COMrad ERR %i seqno:0x%03x\n", err, seqno);
+  APP_comrad_err(seqno, err);
 }
 
 static void comrad_com_alloc(comm *c, void **data, void **arg, unsigned int size_data, unsigned int size_arg) {

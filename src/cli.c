@@ -25,7 +25,6 @@
 #define VIDEO_DBG
 #define I2C_DBG
 #define RADIO_DBG
-#define GFX_DBG
 #endif
 
 #define CLI_PROMPT "> "
@@ -108,12 +107,6 @@ static int f_cvideo_init(void);
 static int f_cvideo_voffset(int i);
 static int f_cvideo_vscroll(int i);
 static int f_cvideo_effect(int i);
-#endif
-
-#ifdef GFX_DBG
-static int f_gfx_fill(int x, int y, int w, int h, int c);
-static int f_gfx_test(void);
-static int f_gfx_str(int x, int y, char *str);
 #endif
 
 static int f_hud_dbg(char *s);
@@ -209,18 +202,6 @@ static cmd c_tbl[] = {
     },
     { .name = "video_effect", .fn = (func)f_cvideo_effect,
         .help = "Sets effect\n"
-    },
-#endif
-
-#ifdef GFX_DBG
-    { .name = "gfill", .fn = (func) f_gfx_fill,
-        .help = "Paints a rectangle to cvideo (x,y,w,h,c)\n"
-    },
-    { .name = "gstr", .fn = (func) f_gfx_str,
-        .help = "Paints text to cvideo (x,y,str)\n"
-    },
-    { .name = "gtest", .fn = (func) f_gfx_test,
-        .help = "Paint test\n"
     },
 #endif
 
@@ -960,54 +941,6 @@ static int f_cvideo_effect(int i) {
 
 #endif
 
-#ifdef GFX_DBG
-
-static int f_gfx_fill(int x, int y, int w, int h, int c) {
-  if (_argc < 5)
-    return -1;
-  GFX_fill(&gctx, x, y, w, h, c);
-  return 0;
-}
-
-static int f_gfx_str(int x, int y, char *str) {
-  if (_argc < 3)
-    return -1;
-  GFX_printn(&gctx, str, 0, x, y, COL_OVER);
-  return 0;
-}
-
-static task_timer gtimer;
-static task *gtask = NULL;
-
-static void gtask_f(u32_t a, void *b) {
-  HUD_paint();
-  lsm_read_both(&lsm_dev);
-}
-
-static void f_gfx_test_lsm_cb(lsm303_dev *dev, int res) {
-  if (res != I2C_OK) {
-    //print("lsm error %i\n", res);
-    I2C_config(_I2C_BUS(0), 100000);
-  }
-}
-
-static int f_gfx_test(void) {
-  if (gtask) {
-    TASK_free(gtask);
-  }
-
-  I2C_config(_I2C_BUS(0), 100000);
-
-  lsm_open(&lsm_dev, _I2C_BUS(0), FALSE, f_gfx_test_lsm_cb);
-  lsm_config_default(&lsm_dev);
-  lsm_set_lowpass(&lsm_dev, 50, 50);
-
-  gtask = TASK_create(gtask_f, TASK_STATIC);
-  TASK_start_timer(gtask, &gtimer, 0, 0, 0, 50, "gtest");
-  return 0;
-}
-
-#endif // GFX_DBG
 static int f_hud_dbg(char *s) {
   if (_argc < 1 || !IS_STRING(s)) {
     return -1;

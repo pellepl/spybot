@@ -9,6 +9,7 @@
 #include "spi_dev.h"
 #include "gpio.h"
 #include "miniutils.h"
+#include "comm_config.h"
 
 static struct {
   nrf905 nrf;
@@ -179,10 +180,10 @@ int NRF905_IMPL_conf(nrf905_config *c, bool force) {
     spybot_conf.rx_address = 0x631c512d;
 #endif
     spybot_conf.rx_address_field_width = NRF905_CFG_ADDRESS_FIELD_WIDTH_4;
-    spybot_conf.rx_payload_width = 16;
+    spybot_conf.rx_payload_width = COMM_LNK_MAX_DATA;
     spybot_conf.rx_reduced_power = NRF905_CFG_RX_REDUCED_POWER_OFF;
     spybot_conf.tx_address_field_width = NRF905_CFG_ADDRESS_FIELD_WIDTH_4;
-    spybot_conf.tx_payload_width = 16;
+    spybot_conf.tx_payload_width = COMM_LNK_MAX_DATA;
 
     c = &spybot_conf;
   }

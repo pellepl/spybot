@@ -120,6 +120,8 @@ CFILES		+= nrf905_driver.c
 CFILES		+= nrf905_impl.c
 CFILES		+= comm_radio.c
 
+CFILES		+= app.c
+
 #rover files
 CFILES 		+= range_sens_hcsr04_driver.c
 

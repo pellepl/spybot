@@ -10,6 +10,7 @@
 #include "miniutils.h"
 
 #define CVID_HALF_VERTICAL
+//#define CVID_DISPLAY_SYNCED_ONLY
 
 #define CVID_MIN_HSCANLINE      21
 #define CVID_MAX_HSCANLINE      (CVID_HSCANLINES+CVID_MIN_HSCANLINE)
@@ -54,6 +55,7 @@ static void cvideo_disable_output(void) {
 static void cvideo_vsync_irq(gpio_pin pin) {
   vid.dbg_last_hsyncs = vid.cur_hsync;
 
+#ifdef CVID_DISPLAY_SYNCED_ONLY
   if (vid.vsync_initial < 2) {
     vid.vsync_initial++;
     return;
@@ -61,6 +63,11 @@ static void cvideo_vsync_irq(gpio_pin pin) {
     vid.vsync_initial = 3;
     return;
   }
+#else
+  bool nsync = TRUE;
+  vid.cur_hsync = 0;
+  vid.vsync_initial = 0;
+#endif
 
   if (vid.v_scroll != 0) {
     vid.v_offset += vid.v_scroll;
@@ -68,7 +75,7 @@ static void cvideo_vsync_irq(gpio_pin pin) {
   if (vid.effect) {
     vid.effect_stage += 8;
   }
-
+#ifdef CVID_DISPLAY_SYNCED_ONLY
   bool nsync = vid.cur_hsync == 320;
   if (nsync != vid.in_sync) {
     if (nsync) {
@@ -83,7 +90,7 @@ static void cvideo_vsync_irq(gpio_pin pin) {
       return;
     }
   }
-
+#endif
   vid.in_sync = nsync;
   vid.cur_hsync = 0;
 }

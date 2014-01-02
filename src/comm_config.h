@@ -36,6 +36,8 @@
 /* Enable to get callbacks when an rx buffer is needed, handle it yourself */
 #define COMM_LNK_ALLOCATE_RX_BUFFER    1
 
+#define COMM_LNK_MAX_DATA           32
+
 #define COMM_LOCK(comm)
 #define COMM_UNLOCK(comm)
 

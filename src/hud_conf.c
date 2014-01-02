@@ -33,6 +33,12 @@ static struct {
   conf_state state;
   const char * const *cur_menu;
   u8_t menu_sel_ix;
+  s16_t fx_x;
+  s16_t fx_y;
+  s16_t fx_z;
+  s8_t dx;
+  s8_t dy;
+  s8_t dz;
 
   s8_t motor;
   s8_t radar;
@@ -109,20 +115,25 @@ static void hud_conf_paint_menu(gcontext *ctx) {
 
 ////////////////////////////////////////////////////// MAIN CONFIG
 
+#define FX_X_LIM  40
+#define FX_Y_LIM  40
+#define FX_Z_LIM  40
+#define FX_BITS   3
+
 static void hud_conf_paint_main(gcontext *ctx) {
   int view = (SYS_get_time_ms() / 4096) & 3;
   switch (view) {
   case 0:
-    ROVER_view(0,0,200, 50,70,-200, FALSE);
+    ROVER_view(0+(conf.fx_x>>FX_BITS),0+(conf.fx_y>>FX_BITS),200+(conf.fx_z>>FX_BITS), 50,70,-200, FALSE);
     break;
   case 1:
-    ROVER_view(0,0,200, -128, 0, 0, FALSE);
+    ROVER_view(0+(conf.fx_x>>FX_BITS),0+(conf.fx_y>>FX_BITS),200+(conf.fx_z>>FX_BITS), -128, 0, 0, FALSE);
     break;
   case 2:
-    ROVER_view(0,50,200, 0, 0, 128, FALSE);
+    ROVER_view(0+(conf.fx_x>>FX_BITS),50+(conf.fx_y>>FX_BITS),200+(conf.fx_z>>FX_BITS), 0, 0, 128, FALSE);
     break;
   case 3:
-    ROVER_view(0,50,200, -128, 128, 0, FALSE);
+    ROVER_view(0+(conf.fx_x>>FX_BITS),50+(conf.fx_y>>FX_BITS),200+(conf.fx_z>>FX_BITS), -128, 128, 0, FALSE);
     break;
   }
   rover_angles *ra = ROVER_angle_config();
@@ -131,6 +142,32 @@ static void hud_conf_paint_main(gcontext *ctx) {
   ra->anim_d_wheel_right = -10;
   ra->tilt = 0;
   ra->pan = 0;
+  conf.fx_x += conf.dx;
+  conf.fx_y += conf.dy;
+  conf.fx_z += conf.dz;
+  if (conf.fx_x < -FX_X_LIM<<FX_BITS) {
+    conf.dx = 1 + (rand_next() & 7);
+    conf.fx_x = -FX_X_LIM<<FX_BITS;
+  } else  if (conf.fx_x > FX_X_LIM<<FX_BITS) {
+    conf.dx = -(1 + (rand_next() & 7));
+    conf.fx_x = FX_X_LIM<<FX_BITS;
+  }
+  if (conf.fx_y < -FX_Y_LIM<<FX_BITS) {
+    conf.dy = 1 + (rand_next() & 7);
+    conf.fx_y = -FX_Y_LIM<<FX_BITS;
+  } else  if (conf.fx_y > FX_Y_LIM<<FX_BITS) {
+    conf.dy = -(1 + (rand_next() & 7));
+    conf.fx_y = FX_Y_LIM<<FX_BITS;
+  }
+  if (conf.fx_z < -FX_Z_LIM<<FX_BITS) {
+    conf.dz = 1 + (rand_next() & 7);
+    conf.fx_z = -FX_Z_LIM<<FX_BITS;
+  } else  if (conf.fx_z > FX_Z_LIM<<FX_BITS) {
+    conf.dz = -(1 + (rand_next() & 7));
+    conf.fx_z = FX_Z_LIM<<FX_BITS;
+  }
+
+
   hud_conf_paint_menu(ctx);
 }
 
@@ -250,6 +287,9 @@ void hud_paint_config(gcontext *ctx, bool init) {
     ra->anim_d_wheel_left = -10;
     ra->anim_d_wheel_right = -10;
     ROVER_view(0,100,400, 0,0,0, TRUE);
+    conf.dx = 2;
+    conf.dy = 4;
+    conf.dz = -5;
   }
 
   ROVER_paint(ctx);

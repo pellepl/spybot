@@ -10,6 +10,7 @@
 #include "gfx_3d.h"
 #include "trig_q.h"
 #include "miniutils.h"
+#include "comm_radio.h"
 
 static struct {
   s32_t heading_ang;
@@ -141,10 +142,27 @@ void hud_paint_main(gcontext *ctx, lsm303_dev *lsm_dev, bool init) {
 
   }
 
-  if ((SYS_get_time_ms() / 500) & 1) {
+  time now = SYS_get_time_ms();
+  if ((now / 500) & 1) {
     GFX_printn(ctx, " ", 0, 27, 16, COL_OVER);
   } else {
     GFX_printn(ctx, "\001",0, 27, 16, COL_OVER);
+  }
+  static time last_comm_check;
+  static u8_t last_squal;
+  if (now - last_comm_check >= 500) {
+    last_comm_check = now;
+    last_squal = COMRAD_stats();
+  }
+
+  if (last_squal > 192) {
+    GFX_printn(ctx, "\010\011", 0, 0, 0, COL_OVER);
+  } else if (last_squal > 128) {
+    GFX_printn(ctx, "\006\007", 0, 0, 0, COL_OVER);
+  } else if (last_squal > 64) {
+    GFX_printn(ctx, "\004\005", 0, 0, 0, COL_OVER);
+  } else {
+    GFX_printn(ctx, "\002\003", 0, 0, 0, COL_OVER);
   }
 }
 
