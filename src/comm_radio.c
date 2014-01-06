@@ -243,6 +243,7 @@ static int comrad_com_tx_flush(comm *comm, comm_arg* tx) {
     if (!NRF905_IMPL_lbt_check_rts(COMM_RADIO_LBT_MS)) {
       // got carrier, return LBT failure
       DBG(D_COMM, D_DEBUG, "COMRAD tx: LBT fail\n");
+      comrad_rad_goto_rx();
       return R_COMM_PHY_TRY_LATER;
     }
   }
@@ -256,8 +257,12 @@ static int comrad_com_tx_flush(comm *comm, comm_arg* tx) {
   if (res == NRF905_OK) {
     return R_COMM_OK;
   } else if (res == NRF905_ERR_BUSY) {
+    DBG(D_COMM, D_DEBUG, "COMRAD tx: rf905 busy\n");
+    comrad_rad_goto_rx();
     return R_COMM_PHY_TRY_LATER;
   } else {
+    DBG(D_COMM, D_DEBUG, "COMRAD tx: rf905 err %i\n", res);
+    comrad_rad_goto_rx();
     return R_COMM_PHY_FAIL;
   }
 }

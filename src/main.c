@@ -10,6 +10,7 @@
 #include "linker_symaccess.h"
 #include "i2c_driver.h"
 #include "spi_driver.h"
+#include "adc.h"
 #include "app.h"
 
 // main entry from bootstrap
@@ -42,20 +43,13 @@ int main(void) {
   I2C_init();
 #endif
 
+#ifdef CONFIG_ADC
+  ADC_init();
+#endif
+
   CLI_init();
 
-#ifdef CONFIG_ADC
-  {
-    int i = 16;
-    uint32_t s = 0;
-    while (i--) {
-      s ^= (ADC_sample() << (i*2));
-    }
-    rand_seed(s);
-  }
-#else
   rand_seed(0xd0decaed ^ SYS_get_tick());
-#endif
 
   APP_init();
 

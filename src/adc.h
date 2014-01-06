@@ -11,6 +11,7 @@
 #include "system.h"
 
 void ADC_init();
-u16_t ADC_sample();
+u32_t ADC_sample(int ch);
+void ADC_irq(void);
 
 #endif /* ADC_H_ */

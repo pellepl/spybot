@@ -12,7 +12,7 @@
 
 typedef enum {
    CONF_MAIN = 0,
-   CONF_MOTOR,
+   CONF_STEER,
    CONF_RADAR,
    CONF_CAMERA,
    CONF_SPEED,
@@ -21,7 +21,7 @@ typedef enum {
 
 static const char * const(MAIN_MENU[]) =  {
   " MAIN",
-  "MOTOR",
+  "STEERING",
   "RADAR",
   "CAMERA",
   "SPEED",
@@ -40,7 +40,7 @@ static struct {
   s8_t dy;
   s8_t dz;
 
-  s8_t motor;
+  s8_t steer;
   s8_t radar;
   s8_t pan;
   s8_t tilt;
@@ -137,7 +137,7 @@ static void hud_conf_paint_main(gcontext *ctx) {
     break;
   }
   rover_angles *ra = ROVER_angle_config();
-  ra->anim_d_radar = 7;
+  ra->anim_d_radar = 4;
   ra->anim_d_wheel_left = -10;
   ra->anim_d_wheel_right = -10;
   ra->tilt = 0;
@@ -189,24 +189,24 @@ static void hud_conf_input_main(input_type in) {
   }
 }
 
-////////////////////////////////////////////////////// MOTOR CONFIG
+////////////////////////////////////////////////////// STEERING CONFIG
 
-static void hud_conf_paint_motor(gcontext *ctx) {
+static void hud_conf_paint_steer(gcontext *ctx) {
   ROVER_view(0,90,70, 0,0, PI_TRIG_T/4, FALSE);
-  hud_conf_paint_title(ctx, " MOTOR");
-  hud_conf_paint_setting_bar(ctx, FALSE, 10, 24, ctx->width-10*2, 16, conf.motor);
+  hud_conf_paint_title(ctx, " STEER");
+  hud_conf_paint_setting_bar(ctx, FALSE, 10, 24, ctx->width-10*2, 16, conf.steer);
   rover_angles *ra = ROVER_angle_config();
-  ra->anim_d_wheel_left = -10 + ((9*conf.motor)/128);
-  ra->anim_d_wheel_right = -10 - ((9*conf.motor)/128);
+  ra->anim_d_wheel_left = -10 + ((9*conf.steer)/128);
+  ra->anim_d_wheel_right = -10 - ((9*conf.steer)/128);
 }
 
-static void hud_conf_input_motor(input_type in) {
+static void hud_conf_input_steer(input_type in) {
   if (in == UP) {
   } else if (in == DOWN) {
   } else if (in == LEFT) {
-    conf.motor -=10; // TODO
+    conf.steer -=10; // TODO
   } else if (in == RIGHT) {
-    conf.motor +=10; // TODO
+    conf.steer +=10; // TODO
   } else if (in == PRESS) {
     conf.state = CONF_MAIN;
   }
@@ -283,7 +283,7 @@ void hud_paint_config(gcontext *ctx, bool init) {
     memset(&conf, 0, sizeof(conf));
     conf.cur_menu = MAIN_MENU;
     rover_angles *ra = ROVER_angle_config();
-    ra->anim_d_radar = 7;
+    ra->anim_d_radar = 4;
     ra->anim_d_wheel_left = -10;
     ra->anim_d_wheel_right = -10;
     ROVER_view(0,100,400, 0,0,0, TRUE);
@@ -298,8 +298,8 @@ void hud_paint_config(gcontext *ctx, bool init) {
   case CONF_MAIN:
     hud_conf_paint_main(ctx);
     break;
-  case CONF_MOTOR:
-    hud_conf_paint_motor(ctx);
+  case CONF_STEER:
+    hud_conf_paint_steer(ctx);
     break;
   case CONF_RADAR:
     hud_conf_paint_radar(ctx);
@@ -315,8 +315,8 @@ void HUD_input(input_type in) {
   case CONF_MAIN:
     hud_conf_input_main(in);
     break;
-  case CONF_MOTOR:
-    hud_conf_input_motor(in);
+  case CONF_STEER:
+    hud_conf_input_steer(in);
     break;
   case CONF_RADAR:
     hud_conf_input_radar(in);

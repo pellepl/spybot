@@ -3,6 +3,7 @@
 #include "spi_driver.h"
 #include "timer.h"
 #include "i2c_driver.h"
+#include "adc.h"
 
 /**
   * @brief  This function handles NMI exception.
@@ -178,6 +179,15 @@ void I2C2_EV_IRQHandler(void)
   TRACE_IRQ_ENTER(I2C2_EV_IRQn);
   I2C_IRQ_ev(&__i2c_bus_vec[0]);
   TRACE_IRQ_EXIT(I2C2_EV_IRQn);
+}
+#endif
+
+#ifdef CONFIG_ADC
+void ADC1_2_IRQHandler(void)
+{
+  TRACE_IRQ_ENTER(ADC1_2_IRQn);
+  ADC_irq();
+  TRACE_IRQ_EXIT(ADC1_2_IRQn);
 }
 #endif
 

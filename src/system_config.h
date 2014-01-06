@@ -227,6 +227,10 @@ typedef u16_t system_counter_type;
 /** APP **/
 //#define CONFIG_SPLASH
 
+#ifndef SECONDARY
+#define CONFIG_ADC
+#endif
+
 
 /** DEBUG **/
 

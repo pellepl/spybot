@@ -136,6 +136,7 @@ CFILES		+= hud_main.c
 CFILES		+= hud_conf.c
 CFILES		+= hud_dbg.c
 CFILES		+= rover_3d.c
+CFILES		+= adc.c
 
 # comm files
 include ${comm}/files.mk

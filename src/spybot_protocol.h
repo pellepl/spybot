@@ -11,8 +11,18 @@
 typedef enum {
   // [rover <-> ctrl]
   // arg: null term string
-  // ack: none
+  // ack: [0x00=deny, 0x01=accept]
   CMD_DBG = 0,
+
+  // [rover <-- ctrl]
+  // arg: none
+  // ack: [0x00=deny, 0x01=accept]
+  CMD_PAIRING_BEACON,
+
+  // [rover --> ctrl]
+  // arg: none
+  // ack: [0x00=deny, 0x01=accept]
+  CMD_PAIRING_ECHO,
 
   // [rover <-- ctrl]
   // arg: s8 left, s8 right, u8_t action_mask, u8 status_mask
@@ -23,7 +33,8 @@ typedef enum {
   //                      bit 2 - temp
   //                      bit 3 - batt
   //                      bit 7 - req_radar
-  // ack: acc:     s8 acc_x, s8 acc_y, s8 acc_z
+  // ack: [0x00=deny, 0x01=accept]
+  //      acc:     s8 acc_x, s8 acc_y, s8 acc_z
   //      heading: s8 heading
   //      temp:    s8 temperature
   //      batt:    u8 battery
@@ -32,48 +43,58 @@ typedef enum {
   // [rover --> ctrl]
   // arg: s8 angle_start, s8 len, [s8 value]*len
   //      rest of arg is filled with status_mask results from requesting CMD_CONTROL
-  // ack: none
+  // ack: [0x00=deny, 0x01=accept]
   CMD_RADAR_REPORT,
+
+  // [rover --> ctrl]
+  // arg: none
+  // ack: [0x00=deny, 0x01=accept]
+  CMD_ALERT,
 
   // [rover <-- ctrl]
   // arg: [u8 cfg, s8 val]* until CFG_STOP
-  // ack: s8 result
+  // ack: [0x00=deny, 0x01=accept]
+  //      s8 result
   CMD_SET_CONFIG,
 
   // [rover <-- ctrl]
   // arg: none
-  // ack: s8 result
+  // ack: [0x00=deny, 0x01=accept]
+  //      s8 result
   CMD_STORE_CONFIG,
 
   // [rover <-- ctrl]
   // arg: none
-  // ack: none
+  // ack: [0x00=deny, 0x01=accept]
   CMD_LOAD_CONFIG,
 
   // [rover <-- ctrl]
   // arg: u8 reset [1 = reset mag extremes, 0 = keep mag extremes]
-  // ack: s8 lsm_mag_x_min, s8 lsm_mag_x_max,
+  // ack: [0x00=deny, 0x01=accept]
+  //      s8 lsm_mag_x_min, s8 lsm_mag_x_max,
   //      s8 lsm_mag_y_min, s8 lsm_mag_y_max,
   //      s8 lsm_mag_z_min, s8 lsm_mag_z_max
   CMD_LSM_MAG_EXTREMES,
 
   // [rover <-- ctrl]
   // arg: u8 reset [1 = reset acc extremes, 0 = keep acc extremes]
-  // ack: s8 lsm_acc_x_min, s8 lsm_acc_x_max,
+  // ack: [0x00=deny, 0x01=accept]
+  //      s8 lsm_acc_x_min, s8 lsm_acc_x_max,
   //      s8 lsm_acc_y_min, s8 lsm_acc_y_max,
   //      s8 lsm_acc_z_min, s8 lsm_acc_z_max
   CMD_LSM_ACC_EXTREMES,
 
   // [rover --> ctrl]
   // arg: u8 channel
-  // ack: [0 = deny, 1 = accept]
+  // ack: [0x00=deny, 0x01=accept]
+  //      [0x00=deny channel change, 0x01=accept channel change]
   CMD_CHANNEL_CHANGE,
 
 } spybot_cmd;
 
 typedef enum {
   CFG_STOP = 0,
-  CFG_MOTOR_ADJUST,
+  CFG_STEER_ADJUST,
   CFG_RADAR_ADJUST,
   CFG_CAM_PAN_ADJUST,
   CFG_CAM_TILT_ADJUST,

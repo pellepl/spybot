@@ -276,14 +276,17 @@ int NRF905_IMPL_carrier(void) {
 
 bool NRF905_IMPL_lbt_check_rts(u32_t ms) {
   nrf905_state st = NRF905_get_state(&radio.nrf);
-//  print("lbt: st %i [%i] carrier:%s delta:%i [>%i]\n",
+  time now = SYS_get_time_ms();
+//  print("lbt: st %i [%i] carrier:%s delta:%i [>%i]",
 //      st, NRF905_RX_LISTEN,
 //          radio.carrier_on ? "UP" : "DOWN",
-//              SYS_get_time_ms() - radio.last_carrier,
+//              now - radio.last_carrier,
 //              ms);
   if (st != NRF905_RX_LISTEN || radio.carrier_on) {
+//    print(" FAIL state:%i\n", st);
     return FALSE;
   }
-  return SYS_get_time_ms() - radio.last_carrier >= ms;
+//  print(" OK\n");
+  return (now - radio.last_carrier) >= ms;
 }
 

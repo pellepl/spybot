@@ -63,7 +63,7 @@ static void RCC_config() {
 
 #ifdef CONFIG_ADC
   RCC_ADCCLKConfig(RCC_PCLK2_Div2);
-  RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC2, ENABLE);
 #endif
 
   // spybot cvideo
@@ -112,6 +112,11 @@ static void NVIC_config(void)
   NVIC_EnableIRQ(I2C2_EV_IRQn);
   NVIC_SetPriority(I2C2_ER_IRQn, NVIC_EncodePriority(prioGrp, 1, 1));
   NVIC_EnableIRQ(I2C2_ER_IRQn);
+#endif
+
+#ifdef CONFIG_ADC
+  NVIC_SetPriority(ADC1_2_IRQn, NVIC_EncodePriority(prioGrp, 6, 0));
+  NVIC_EnableIRQ(ADC1_2_IRQn);
 #endif
 
   // range sensor

@@ -20,11 +20,15 @@
 #include "nrf905_impl.h"
 #include "cvideo.h"
 #include "hud.h"
+#include "app.h"
+#include "adc.h"
+#include "rover_3d.h"
 
 #ifndef SECONDARY
 #define VIDEO_DBG
 #define I2C_DBG
 #define RADIO_DBG
+#define ROVER_PERI_DBG
 #endif
 
 #define CLI_PROMPT "> "
@@ -62,6 +66,8 @@ static int f_dump_trace();
 static int f_assert();
 static int f_dbg();
 
+static int f_dbg_tx(char *s);
+
 #ifdef CONFIG_I2C
 #ifdef I2C_DBG
 static int f_i2c_read(int addr, int reg);
@@ -79,16 +85,17 @@ static int f_lsm_close();
 #endif
 
 #ifdef CONFIG_ADC
-static int f_adc();
+static int f_adc(int ch);
 #endif
 
 static int f_col(int col);
 static int f_hardfault(int a);
 
+#ifdef ROVER_PERI_DBG
 static int f_range_init(void);
 static int f_range(void);
-
-static int f_servo(int p);
+static int f_servo(int p, int servo_d);
+#endif
 
 #ifdef RADIO_DBG
 static int f_radio_init(void);
@@ -151,6 +158,11 @@ static cmd c_tbl[] = {
             "ex: uconf 2 9600\n"
     },
 
+    { .name = "tx", .fn = (func) f_dbg_tx,
+        .help = "sends dbg string to other side\n"
+    },
+
+#ifdef ROVER_PERI_DBG
     { .name = "range_init", .fn = (func) f_range_init,
         .help = "Initiates range sensor\n"
     },
@@ -160,6 +172,7 @@ static cmd c_tbl[] = {
     { .name = "servo", .fn = (func) f_servo,
         .help = "Set PB9 servo, 0-99\n"
     },
+#endif
 
 #ifdef RADIO_DBG
     { .name = "radio_init", .fn = (func)f_radio_init,
@@ -713,6 +726,7 @@ static int f_i2c_write(int addr, int reg, int data) {
 }
 
 static u8_t i2c_scan_addr;
+extern task_mutex i2c_mutex;
 
 void i2c_scan_report_task(u32_t addr, void *res) {
   if (addr == 0) {
@@ -729,6 +743,7 @@ void i2c_scan_report_task(u32_t addr, void *res) {
     I2C_query(_I2C_BUS(0), i2c_scan_addr);
   } else {
     print("\n");
+    TASK_mutex_unlock(&i2c_mutex);
   }
 }
 
@@ -738,6 +753,10 @@ static void i2c_scan_cb_irq(i2c_bus *bus, int res) {
 }
 
 static int f_i2c_scan(void) {
+  if (!TASK_mutex_try_lock(&i2c_mutex)) {
+    print("i2c busy\n");
+    return 0;
+  }
   i2c_scan_addr = 0;
   int res = I2C_config(_I2C_BUS(0), 10000);
   if (res != I2C_OK) print("i2c config err %i\n", res);
@@ -749,6 +768,17 @@ static int f_i2c_scan(void) {
 }
 #endif // I2C_DBG
 #endif // CONFIG_I2C
+
+#ifdef CONFIG_ADC
+static int f_adc(int ch) {
+  print("%04x ", ADC_sample(0));
+  print("%04x\n", ADC_sample(1));
+  return 0;
+}
+#endif // CONFIG_ADC
+
+
+
 static int f_comrad_init(void) {
   COMRAD_init();
   return 0;
@@ -782,6 +812,16 @@ static int f_hardfault(int a) {
 #pragma GCC diagnostic pop
 }
 
+
+static int f_dbg_tx(char *s) {
+  if (_argc < 1 || !IS_STRING(s)) {
+    return -1;
+  }
+  APP_tx_dbg(s);
+  return 0;
+}
+
+#ifdef ROVER_PERI_DBG
 static void cli_range_cb(u32_t t) {
   print("range cb:%i\n", t);
 }
@@ -803,17 +843,18 @@ static int f_range(void) {
 static task *servo_task;
 static bool servo_timer_started = FALSE;
 static task_timer servo_timer;
+static int servo_delta = 1;
 static void servo_task_f(u32_t a, void *b) {
   static bool s_dir = FALSE;
   static int s_val = 0;
   if (s_dir) {
-    s_val++;
+    s_val += servo_delta;
     if (s_val >= 200) {
       s_val = 199;
       s_dir = FALSE;
     }
   } else {
-    s_val--;
+    s_val -= servo_delta;
     if (s_val <= 0) {
       s_val = 0;
       s_dir = TRUE;
@@ -826,8 +867,9 @@ static void servo_task_f(u32_t a, void *b) {
   TIM_OCInitStructure.TIM_Pulse = 3277 + ((6554 - 3277) * s_val) / 200;
   TIM_OC4Init(TIM4, &TIM_OCInitStructure);
 }
-static int f_servo(int p) {
+static int f_servo(int p, int servo_d) {
   if (p == 9999) {
+    servo_delta = 1+(servo_d%8);
     servo_task = TASK_create(servo_task_f, TASK_STATIC);
     TASK_start_timer(servo_task, &servo_timer, 0, 0, 0, 50, "servo_tim");
     servo_timer_started = TRUE;
@@ -850,6 +892,8 @@ static int f_servo(int p) {
   TIM_OC4Init(TIM4, &TIM_OCInitStructure);
   return 0;
 }
+
+#endif // ROVER_PERI_DBG
 
 #ifdef RADIO_DBG
 

@@ -11,6 +11,7 @@
 #include "trig_q.h"
 #include "miniutils.h"
 #include "comm_radio.h"
+#include "app.h"
 
 static struct {
   s32_t heading_ang;
@@ -163,6 +164,10 @@ void hud_paint_main(gcontext *ctx, lsm303_dev *lsm_dev, bool init) {
     GFX_printn(ctx, "\004\005", 0, 0, 0, COL_OVER);
   } else {
     GFX_printn(ctx, "\002\003", 0, 0, 0, COL_OVER);
+  }
+
+  if ((APP_pair_status() == 1 && ((now>>8)&1)) || APP_pair_status() == 2) {
+    GFX_printn(ctx, "\022", 0, 3, 0, COL_OVER);
   }
 }
 
