@@ -1,12 +1,23 @@
 #include "system.h"
 #include "adc.h"
+#include "miniutils.h"
 
 #ifdef CONFIG_ADC
 
+#define ADC_IDLE    0
+#define ADC_FIRST   1
+#define ADC_SECOND  2
+
+static volatile u8_t state;
+static u16_t spl1, spl2;
+static adc_cb adc_finished_cb;
+
 void ADC_init() {
+  state = ADC_IDLE;
+
   ADC_InitTypeDef  ADC_InitStructure;
 
-  ADC_InitStructure.ADC_Mode = ADC_Mode_RegSimult;
+  ADC_InitStructure.ADC_Mode = ADC_Mode_Independent;
   ADC_InitStructure.ADC_ScanConvMode = DISABLE;
   ADC_InitStructure.ADC_ContinuousConvMode = DISABLE;
   ADC_InitStructure.ADC_ExternalTrigConv = ADC_ExternalTrigConv_None;
@@ -25,24 +36,40 @@ void ADC_init() {
   // recalibrate
   ADC_StartCalibration(ADC2);
   while(ADC_GetCalibrationStatus(ADC2));
+
+  state = ADC_IDLE;
 }
 
-u32_t ADC_sample(int ch) {
-  if (ch == 0) {
-    ADC_RegularChannelConfig(ADC2, ADC_Channel_8, 1, ADC_SampleTime_239Cycles5);
-  } else {
-    ADC_RegularChannelConfig(ADC2, ADC_Channel_9, 1, ADC_SampleTime_239Cycles5);
+s32_t ADC_sample(adc_cb cb) {
+  if (state != ADC_IDLE) {
+    return ADC_ERR_BUSY;
   }
+  adc_finished_cb = cb;
+  state = ADC_FIRST;
+  ADC_RegularChannelConfig(ADC2, ADC_Channel_8, 1, ADC_SampleTime_239Cycles5);
   ADC_SoftwareStartConvCmd(ADC2, ENABLE);
-  while (ADC_GetSoftwareStartConvStatus(ADC2));
-  return ADC_GetConversionValue(ADC2);
+
+  return ADC_OK;
 }
 
 
 void ADC_irq(void) {
   if (ADC_GetITStatus(ADC2, ADC_IT_EOC) != RESET) {
     ADC_ClearITPendingBit(ADC2, ADC_IT_EOC);
-    // TODO
+    if (state == ADC_FIRST) {
+      state = ADC_SECOND;
+      spl1 = ADC_GetConversionValue(ADC2);
+      ADC_RegularChannelConfig(ADC2, ADC_Channel_9, 1, ADC_SampleTime_239Cycles5);
+      ADC_SoftwareStartConvCmd(ADC2, ENABLE);
+    } else {
+      spl2 = ADC_GetConversionValue(ADC2);
+      state = ADC_IDLE;
+      if (adc_finished_cb) {
+        adc_finished_cb(spl1, spl2);
+      } else {
+        DBG(D_APP, D_INFO, "ADC: %04x %04x\n", spl1, spl2);
+      }
+    }
   }
 }
 

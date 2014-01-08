@@ -62,5 +62,9 @@ void HUD_paint(void) {
   hud.cstate = hud.state;
 }
 
+hud_state HUD_get_state(void) {
+  return hud.state;
+}
+
 void HUD_vbl(void) {
 }

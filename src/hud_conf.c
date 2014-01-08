@@ -33,6 +33,7 @@ static struct {
   conf_state state;
   const char * const *cur_menu;
   u8_t menu_sel_ix;
+  time last_selection;
   s16_t fx_x;
   s16_t fx_y;
   s16_t fx_z;
@@ -90,6 +91,7 @@ static void hud_conf_paint_title(gcontext *ctx, const char *title) {
 }
 
 static void hud_conf_paint_menu(gcontext *ctx) {
+
   if (conf.cur_menu == NULL) {
     return;
   }
@@ -99,7 +101,7 @@ static void hud_conf_paint_menu(gcontext *ctx) {
 
   u8_t menu_ix = 0;
   u8_t y = 4;
-  bool do_fill = ((SYS_get_time_ms() >> 9) & 1);
+  bool do_fill = (((SYS_get_time_ms() - conf.last_selection) >> 9) & 1) == 0;
   while (menu_items[menu_ix+1]) {
     bool select = do_fill && menu_ix == conf.menu_sel_ix;
     if (select) {
@@ -171,20 +173,26 @@ static void hud_conf_paint_main(gcontext *ctx) {
   hud_conf_paint_menu(ctx);
 }
 
-static void hud_conf_input_main(input_type in) {
-  if (in == UP) {
+static void hud_conf_input_main(input_type in, bool change) {
+  if (!change) {
+    return;
+  }
+  if (in & IN_UP) {
     if (conf.menu_sel_ix == 0) {
       conf.menu_sel_ix = 4;
     } else {
       conf.menu_sel_ix--;
     }
-  } else if (in == DOWN) {
+    conf.last_selection = SYS_get_time_ms();
+  } else if (in & IN_DOWN) {
     if (conf.menu_sel_ix == 4) {
       conf.menu_sel_ix = 0;
     } else {
       conf.menu_sel_ix++;
     }
-  } else if (in == PRESS) {
+    conf.last_selection = SYS_get_time_ms();
+  }
+  if (in & IN_PRESS) {
     conf.state = conf.menu_sel_ix+1;
   }
 }
@@ -200,14 +208,16 @@ static void hud_conf_paint_steer(gcontext *ctx) {
   ra->anim_d_wheel_right = -10 - ((9*conf.steer)/128);
 }
 
-static void hud_conf_input_steer(input_type in) {
-  if (in == UP) {
-  } else if (in == DOWN) {
-  } else if (in == LEFT) {
-    conf.steer -=10; // TODO
-  } else if (in == RIGHT) {
-    conf.steer +=10; // TODO
-  } else if (in == PRESS) {
+static void hud_conf_input_steer(input_type in, bool change) {
+  if (in & IN_UP) {
+  } else if (in & IN_DOWN) {
+  }
+  if (in & IN_LEFT) {
+    conf.steer -=1; // TODO
+  } else if (in & IN_RIGHT) {
+    conf.steer +=1; // TODO
+  }
+  if ((in & IN_PRESS) && change) {
     conf.state = CONF_MAIN;
   }
 }
@@ -226,14 +236,16 @@ static void hud_conf_paint_radar(gcontext *ctx) {
   ra->radar = (PI_TRIG_T/4 * (conf.radar)) / 256;
 }
 
-static void hud_conf_input_radar(input_type in) {
-  if (in == UP) {
-  } else if (in == DOWN) {
-  } else if (in == LEFT) {
-    conf.radar -=10; // TODO
-  } else if (in == RIGHT) {
-    conf.radar +=10; // TODO
-  } else if (in == PRESS) {
+static void hud_conf_input_radar(input_type in, bool change) {
+  if (in & IN_UP) {
+  } else if (in & IN_DOWN) {
+  }
+  if (in & IN_LEFT) {
+    conf.radar -=1; // TODO
+  } else if (in & IN_RIGHT) {
+    conf.radar +=1; // TODO
+  }
+  if ((in & IN_PRESS) && change) {
     conf.state = CONF_MAIN;
   }
 }
@@ -256,16 +268,18 @@ static void hud_conf_paint_camera(gcontext *ctx) {
   ra->tilt = (PI_TRIG_T/4 * (conf.tilt)) / 256;
 }
 
-static void hud_conf_input_camera(input_type in) {
-  if (in == UP) {
-    conf.tilt -=10; // TODO
-  } else if (in == DOWN) {
-    conf.tilt +=10; // TODO
-  } else if (in == LEFT) {
-    conf.pan -=10; // TODO
-  } else if (in == RIGHT) {
-    conf.pan +=10; // TODO
-  } else if (in == PRESS) {
+static void hud_conf_input_camera(input_type in, bool change) {
+  if (in & IN_DOWN) {
+    conf.tilt -=1; // TODO
+  } else if (in & IN_UP) {
+    conf.tilt +=1; // TODO
+  }
+  if (in & IN_LEFT) {
+    conf.pan -=1; // TODO
+  } else if (in & IN_RIGHT) {
+    conf.pan +=1; // TODO
+  }
+  if ((in & IN_PRESS) && change) {
     conf.state = CONF_MAIN;
   }
 }
@@ -310,19 +324,19 @@ void hud_paint_config(gcontext *ctx, bool init) {
   }
 }
 
-void HUD_input(input_type in) {
+void HUD_input(input_type in, bool change) {
   switch (conf.state) {
   case CONF_MAIN:
-    hud_conf_input_main(in);
+    hud_conf_input_main(in, change);
     break;
   case CONF_STEER:
-    hud_conf_input_steer(in);
+    hud_conf_input_steer(in, change);
     break;
   case CONF_RADAR:
-    hud_conf_input_radar(in);
+    hud_conf_input_radar(in, change);
     break;
   case CONF_CAMERA:
-    hud_conf_input_camera(in);
+    hud_conf_input_camera(in, change);
     break;
   }
 }

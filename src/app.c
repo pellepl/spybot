@@ -15,6 +15,7 @@
 #include "comm_radio.h"
 #include "spybot_protocol.h"
 #include "miniutils.h"
+#include "adc.h"
 
 #define PAIRING_CTRL_SEND_BEACON    0
 #define PAIRING_CTRL_AWAIT_ECHO     1
@@ -44,8 +45,10 @@ static task *comm_task = NULL;
 
 // control ram
 gcontext gctx;
-static task_timer hud_timer;
-static task *hud_task = NULL;
+static task_timer ui_timer;
+static task *ui_task = NULL;
+static u16_t joystick_v = 0x800;
+static u16_t joystick_h = 0x800;
 
 // rover ram
 task_mutex i2c_mutex = TASK_MUTEX_INIT;
@@ -59,7 +62,9 @@ static bool reading_lsm = FALSE;
 static void app_rover_lsm_cb_task(u32_t ares, void *adev) {
   lsm303_dev *dev = (lsm303_dev *)dev;
   int res = (int)ares;
-  if (res != I2C_OK) {
+  if (res == I2C_ERR_LSM303_BAD_READ) {
+    print("lsm bad read\n");
+  } else  if (res != I2C_OK) {
     //print("lsm error %i\n", res);
     I2C_config(_I2C_BUS(0), 100000);
   }
@@ -104,8 +109,15 @@ static void app_rover_init(void) {
 
 // control funcs
 
-static void app_control_hud_task(u32_t a, void *b) {
+static void app_ctrl_adc_cb(u16_t ch1, u16_t ch2) {
+  joystick_v = ch1;
+  joystick_h = ch2;
+}
+
+static void app_control_ui_task(u32_t a, void *b) {
+  ADC_sample(app_ctrl_adc_cb);
   HUD_paint();
+  INPUT_read(joystick_v, joystick_h);
 }
 
 
@@ -120,11 +132,13 @@ static void app_control_init(void) {
   GFX_draw_image(&gctx, img_modbla_car_bmp, 7, 8, 120/8, 120);
 #endif
 
+  INPUT_init();
+
   HUD_init(&gctx, &lsm_dev);
   HUD_state(HUD_MAIN);
 
-  hud_task = TASK_create(app_control_hud_task, TASK_STATIC);
-  TASK_start_timer(hud_task, &hud_timer, 0, 0, 0, 50, "hud_upd");
+  ui_task = TASK_create(app_control_ui_task, TASK_STATIC);
+  TASK_start_timer(ui_task, &ui_timer, 0, 0, 0, 50, "ui_upd");
 }
 
 // common funcs
@@ -142,6 +156,7 @@ static void app_tx(u8_t *data, u16_t len) {
 
 static void app_comm_task(u32_t a, void *p) {
 #ifdef SECONDARY
+  // control
   if (common.pair_state == PAIRING_CTRL_SEND_BEACON) {
     TASK_set_timer_recurrence(&comm_timer, BEACON_RECURRENCE);
     u8_t beacon[] = { CMD_PAIRING_BEACON };
@@ -159,11 +174,14 @@ static void app_comm_task(u32_t a, void *p) {
     };
     app_tx(ctrl, sizeof(ctrl));
   }
+
 #else
+  // rover
   if (common.pair_state == PAIRING_ROVER_SEND_ECHO) {
     u8_t beacon_echo[] = { CMD_PAIRING_ECHO };
     app_tx(beacon_echo, sizeof(beacon_echo));
   } else if (common.pair_state == PAIRING_OK) {
+    // todo
   }
 #endif
 }

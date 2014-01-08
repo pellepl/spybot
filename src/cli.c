@@ -85,7 +85,7 @@ static int f_lsm_close();
 #endif
 
 #ifdef CONFIG_ADC
-static int f_adc(int ch);
+static int f_adc(void);
 #endif
 
 static int f_col(int col);
@@ -770,9 +770,8 @@ static int f_i2c_scan(void) {
 #endif // CONFIG_I2C
 
 #ifdef CONFIG_ADC
-static int f_adc(int ch) {
-  print("%04x ", ADC_sample(0));
-  print("%04x\n", ADC_sample(1));
+static int f_adc(void) {
+  ADC_sample(NULL);
   return 0;
 }
 #endif // CONFIG_ADC
@@ -1013,7 +1012,7 @@ static int f_hud_in(int i) {
   if (_argc < 1) {
     return -1;
   }
-  HUD_input(i);
+  HUD_input(i, TRUE);
   return 0;
 }
 
