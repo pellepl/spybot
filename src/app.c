@@ -35,6 +35,10 @@ static struct {
   u8_t pair_wait_cnt;
 } common;
 
+static u8_t const REPLY_OK[] = {ACK_OK};
+static u8_t const REPLY_DENY[] = {ACK_DENY};
+
+
 static task_timer comm_timer;
 static task *comm_task = NULL;
 
@@ -175,14 +179,12 @@ void APP_tx_dbg(const char *s) {
 
 
 void APP_comrad_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_received) {
-  u8_t reply_ok[] = {ACK_OK};
-  u8_t reply_deny[] = {ACK_DENY};
-  DBG(D_APP, D_DEBUG, "app: message %02x\n", data[0]);
+  //DBG(D_APP, D_DEBUG, "app: message %02x\n", data[0]);
 #ifndef SECONDARY
   if (data[0] == CMD_PAIRING_BEACON) {
     DBG(D_APP, D_DEBUG, "rover got pairing beacon\n");
     common.pair_state = PAIRING_ROVER_SEND_ECHO;
-    COMRAD_reply(reply_ok, 1);
+    COMRAD_reply(REPLY_OK, 1);
     TASK_set_timer_recurrence(&comm_timer, BEACON_RECURRENCE);
   } else
 #endif
@@ -191,7 +193,7 @@ void APP_comrad_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_received) {
     if (data[0] == CMD_DBG) {
       print("RDBG: %s\n", &data[1]);
     }
-    COMRAD_reply(reply_ok, 1);
+    COMRAD_reply(REPLY_OK, 1);
     return;
   }
 
@@ -201,16 +203,17 @@ void APP_comrad_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_received) {
     if (data[0] == CMD_PAIRING_ECHO) {
       DBG(D_APP, D_DEBUG, "ctrl got beacon echo, pairing ok\n");
       common.pair_state = PAIRING_OK;
+      COMRAD_report_paired(TRUE);
       TASK_set_timer_recurrence(&comm_timer, COMM_RECURRENCE);
-      COMRAD_reply(reply_ok, 1);
+      COMRAD_reply(REPLY_OK, 1);
     } else {
       DBG(D_APP, D_DEBUG, "ctrl awaits beacon echo only\n");
-      COMRAD_reply(reply_deny, 1);
+      COMRAD_reply(REPLY_DENY, 1);
     }
   } else {
     // controller awaits no message in this state
     DBG(D_APP, D_DEBUG, "ctrl awaits no message\n");
-    COMRAD_reply(reply_deny, 1);
+    COMRAD_reply(REPLY_DENY, 1);
   }
 #else
 
@@ -218,12 +221,12 @@ void APP_comrad_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_received) {
     // rover awaits pairing beacon cmd only
     if (data[0] != CMD_PAIRING_BEACON) {
       DBG(D_APP, D_DEBUG, "rover awaits only pairing beacon\n");
-      COMRAD_reply(reply_deny, 1);
+      COMRAD_reply(REPLY_DENY, 1);
     }
   } else {
     // rover awaits no message in this state
     DBG(D_APP, D_DEBUG, "rover awaits no message\n");
-    COMRAD_reply(reply_deny, 1);
+    COMRAD_reply(REPLY_DENY, 1);
   }
 #endif
 }
@@ -232,6 +235,7 @@ void APP_comrad_ack(comm_arg *rx, u16_t seq_no, u16_t len, u8_t *data) {
   if (seq_no == common.tx_seqno) {
     common.comrad_busy = FALSE;
   } else {
+    DBG(D_APP, D_WARN, "got ack on unsent pkt, seq_no:%04x\n", seq_no);
     return;
   }
 
@@ -243,6 +247,7 @@ void APP_comrad_ack(comm_arg *rx, u16_t seq_no, u16_t len, u8_t *data) {
     DBG(D_APP, D_DEBUG, "rover got denial on ack\n");
     common.pair_state = PAIRING_ROVER_AWAIT_BEACON;
 #endif
+    COMRAD_report_paired(FALSE);
     TASK_set_timer_recurrence(&comm_timer, BEACON_RECURRENCE);
   }
 
@@ -256,6 +261,7 @@ void APP_comrad_ack(comm_arg *rx, u16_t seq_no, u16_t len, u8_t *data) {
   if (common.pair_state == PAIRING_ROVER_SEND_ECHO) {
     DBG(D_APP, D_DEBUG, "rover got ack on beacon echo, pairing ok\n");
     common.pair_state = PAIRING_OK;
+    COMRAD_report_paired(TRUE);
     TASK_set_timer_recurrence(&comm_timer, COMM_RECURRENCE);
   }
 #endif

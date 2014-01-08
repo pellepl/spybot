@@ -211,13 +211,15 @@ s32_t RANGE_SENS_trigger(void) {
 }
 
 #if HCSR04_PULS_TIM == 1
-void TIM3_IRQHandler(void) {
+void TIM1_IRQHandler(void) {
   TRACE_IRQ_ENTER(TIM1_IRQn);
+  range_sens_irq();
   TRACE_IRQ_EXIT(TIM1_IRQn);
 }
 #elif HCSR04_PULS_TIM == 2
-void TIM3_IRQHandler(void) {
+void TIM2_IRQHandler(void) {
   TRACE_IRQ_ENTER(TIM2_IRQn);
+  range_sens_irq();
   TRACE_IRQ_EXIT(TIM2_IRQn);
 }
 #elif HCSR04_PULS_TIM == 3
@@ -227,8 +229,9 @@ void TIM3_IRQHandler(void) {
   TRACE_IRQ_EXIT(TIM3_IRQn);
 }
 #elif HCSR04_PULS_TIM == 4
-void TIM3_IRQHandler(void) {
+void TIM4_IRQHandler(void) {
   TRACE_IRQ_ENTER(TIM4_IRQn);
+  range_sens_irq();
   TRACE_IRQ_EXIT(TIM4_IRQn);
 }
 #endif

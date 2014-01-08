@@ -11,7 +11,7 @@
 #include "system.h"
 
 #define RANGE_SENS_OK         0
-#define ERR_RANGE_SENS_BUSY   -1
+#define ERR_RANGE_SENS_BUSY   -30000
 
 #ifndef HCSR04_TRIG_PORT
 #define HCSR04_TRIG_PORT    PORTA

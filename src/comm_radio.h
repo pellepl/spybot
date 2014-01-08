@@ -19,5 +19,6 @@ void COMRAD_init(void);
 int COMRAD_send(u8_t *data, u16_t len, bool ack);
 int COMRAD_reply(u8_t *data, u16_t len);
 u8_t COMRAD_stats(void);
+void COMRAD_report_paired(bool paired);
 
 #endif /* COMM_RADIO_H_ */

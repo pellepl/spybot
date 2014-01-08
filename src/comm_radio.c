@@ -98,6 +98,11 @@ u8_t COMRAD_stats(void) {
   return squal;
 }
 
+void COMRAD_report_paired(bool paired) {
+  comrad.last_seqno = 0;
+  comrad.seq_mask = 0;
+}
+
 void COMRAD_init(void) {
   int res;
   memset(&comrad, 0, sizeof(struct radio_s));
