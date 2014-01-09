@@ -122,6 +122,7 @@ static void app_control_ui_task(u32_t a, void *b) {
 
 
 static void app_control_init(void) {
+  // setup display
 #ifdef CONFIG_SPLASH
   extern unsigned const char const img_modbla_car_bmp[14400/8];
 #endif
@@ -132,11 +133,10 @@ static void app_control_init(void) {
   GFX_draw_image(&gctx, img_modbla_car_bmp, 7, 8, 120/8, 120);
 #endif
 
+  // setup ui & input
   INPUT_init();
-
   HUD_init(&gctx, &lsm_dev);
   HUD_state(HUD_MAIN);
-
   ui_task = TASK_create(app_control_ui_task, TASK_STATIC);
   TASK_start_timer(ui_task, &ui_timer, 0, 0, 0, 50, "ui_upd");
 }

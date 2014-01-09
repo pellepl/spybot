@@ -52,7 +52,7 @@ typedef enum {
   CMD_ALERT,
 
   // [rover <-- ctrl]
-  // arg: [u8 cfg, s8 val]* until CFG_STOP
+  // arg: [u8 cfg, s16 val]* until CFG_STOP
   // ack: [0x00=deny, 0x01=accept]
   //      s8 result
   CMD_SET_CONFIG,
@@ -71,17 +71,17 @@ typedef enum {
   // [rover <-- ctrl]
   // arg: u8 reset [1 = reset mag extremes, 0 = keep mag extremes]
   // ack: [0x00=deny, 0x01=accept]
-  //      s8 lsm_mag_x_min, s8 lsm_mag_x_max,
-  //      s8 lsm_mag_y_min, s8 lsm_mag_y_max,
-  //      s8 lsm_mag_z_min, s8 lsm_mag_z_max
+  //      s16 lsm_mag_x_min, s16 lsm_mag_x_max,
+  //      s16 lsm_mag_y_min, s16 lsm_mag_y_max,
+  //      s16 lsm_mag_z_min, s16 lsm_mag_z_max
   CMD_LSM_MAG_EXTREMES,
 
   // [rover <-- ctrl]
   // arg: u8 reset [1 = reset acc extremes, 0 = keep acc extremes]
   // ack: [0x00=deny, 0x01=accept]
-  //      s8 lsm_acc_x_min, s8 lsm_acc_x_max,
-  //      s8 lsm_acc_y_min, s8 lsm_acc_y_max,
-  //      s8 lsm_acc_z_min, s8 lsm_acc_z_max
+  //      s16 lsm_acc_x_min, s16 lsm_acc_x_max,
+  //      s16 lsm_acc_y_min, s16 lsm_acc_y_max,
+  //      s16 lsm_acc_z_min, s16 lsm_acc_z_max
   CMD_LSM_ACC_EXTREMES,
 
   // [rover --> ctrl]

@@ -78,16 +78,16 @@ static void comrad_rad_goto_rx(void);
 // comm radio api
 //
 
-int COMRAD_send(u8_t *data, u16_t len, bool ack) {
+int COMRAD_send(const u8_t *data, u16_t len, bool ack) {
 #ifdef SECONDARY
-  return comm_tx(&comrad.stack, 1, len, data, ack);
+  return comm_tx(&comrad.stack, 1, len, (u8_t *)data, ack);
 #else
-  return comm_tx(&comrad.stack, 2, len, data, ack);
+  return comm_tx(&comrad.stack, 2, len, (u8_t *)data, ack);
 #endif
 }
 
-int COMRAD_reply(u8_t *data, u16_t len) {
-  s32_t res = comm_reply(&comrad.stack, comrad.cur_rx, len, data);
+int COMRAD_reply(const u8_t *data, u16_t len) {
+  s32_t res = comm_reply(&comrad.stack, comrad.cur_rx, len, (u8_t *)data);
   if (res < R_COMM_OK) DBG(D_COMM, D_WARN, "COMrad reply failed %i\n", res);
   return res;
 }

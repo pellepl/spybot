@@ -50,8 +50,16 @@ static void hud_plane_reset(gcontext *ctx) {
 void hud_paint_main(gcontext *ctx, lsm303_dev *lsm_dev, bool init) {
   char txt[28];
   memset(txt,0,28);
-  sprint(txt, "%s build:%i", APP_NAME, SYS_build_number());
+  sprint(txt, "%s %i", APP_NAME, SYS_build_number());
   GFX_printn(ctx, txt, 0,  0, 16, COL_OVER);
+
+  {
+    u8_t h, m, s;
+    u16_t ms;
+    SYS_get_time(NULL, &h, &m, &s, &ms);
+    sprint(txt, "%02i:%02i:%02i.%i ", h,m,s,ms/100);
+    GFX_printn(ctx, txt, 0,  17, 16, COL_OVER);
+  }
 
   // heading
   s16_t x = ctx->width/2;
@@ -149,6 +157,8 @@ void hud_paint_main(gcontext *ctx, lsm303_dev *lsm_dev, bool init) {
   } else {
     GFX_printn(ctx, "\001",0, 27, 16, COL_OVER);
   }
+
+  // upper status bar
   static time last_comm_check;
   static u8_t last_squal;
   if (now - last_comm_check >= 500) {
