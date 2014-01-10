@@ -18,7 +18,6 @@ static struct {
   gcontext *ctx;
   hud_state state;
   hud_state cstate;
-  lsm303_dev *lsm;
 } hud;
 
 void HUD_state(hud_state state) {
@@ -37,10 +36,9 @@ void HUD_state(hud_state state) {
   }
 }
 
-void HUD_init(gcontext *ctx, lsm303_dev *lsm_dev) {
+void HUD_init(gcontext *ctx) {
   memset(&hud, 0, sizeof(hud));
   hud.ctx = ctx;
-  hud.lsm = lsm_dev;
   ROVER_init();
 }
 
@@ -48,7 +46,7 @@ void HUD_paint(void) {
   bool init = hud.state != hud.cstate;
   if (hud.state == HUD_MAIN) {
     GFX_fill(hud.ctx, 0, 0, hud.ctx->width, hud.ctx->height, COL_RESET);
-    hud_paint_main(hud.ctx, hud.lsm, init);
+    hud_paint_main(hud.ctx, init);
   } else if (hud.state == HUD_CONFIG) {
     GFX_fill(hud.ctx, 0, 0, hud.ctx->width, hud.ctx->height, COL_RESET);
     hud_paint_config(hud.ctx, init);

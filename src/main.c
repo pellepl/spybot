@@ -8,9 +8,15 @@
 #include "cli.h"
 #include "processor.h"
 #include "linker_symaccess.h"
+#ifdef CONFIG_I2C
 #include "i2c_driver.h"
+#endif
+#ifdef CONFIG_SPI
 #include "spi_driver.h"
+#endif
+#ifdef CONFIG_ADC
 #include "adc.h"
+#endif
 #include "app.h"
 
 // main entry from bootstrap

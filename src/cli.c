@@ -10,26 +10,42 @@
 #include "taskq.h"
 #include "miniutils.h"
 #include "system.h"
+
+#include "app.h"
+
+#ifdef CONFIG_SPI
 #include "spi_dev.h"
 #include "spi_driver.h"
+#endif
+
+#include "comm_radio.h"
+#include "nrf905_impl.h"
+
+#ifdef CONFIG_SPYBOT_LSM
 #include "i2c_driver.h"
 #include "i2c_dev.h"
-#include "comm_radio.h"
 #include "lsm303_driver.h"
+#endif
+
+#ifdef CONFIG_SPYBOT_HCSR
 #include "range_sens_hcsr04_driver.h"
-#include "nrf905_impl.h"
+#endif
+
+#ifdef CONFIG_SPYBOT_VIDEO
 #include "cvideo.h"
 #include "hud.h"
-#include "app.h"
-#include "adc.h"
 #include "rover_3d.h"
-
-#ifndef SECONDARY
-#define VIDEO_DBG
-#define I2C_DBG
-#define RADIO_DBG
-#define ROVER_PERI_DBG
 #endif
+
+#ifdef CONFIG_SPYBOT_JOYSTICK
+#include "adc.h"
+#endif
+
+#ifdef CONFIG_SPYBOT_MOTOR
+#include "motor.h"
+#endif
+
+#define RADIO_DBG
 
 #define CLI_PROMPT "> "
 #define IS_STRING(s) ((u8_t*)(s) >= (u8_t*)in && (u8_t*)(s) < (u8_t*)in + sizeof(in))
@@ -69,32 +85,36 @@ static int f_dbg();
 static int f_dbg_tx(char *s);
 
 #ifdef CONFIG_I2C
-#ifdef I2C_DBG
 static int f_i2c_read(int addr, int reg);
 static int f_i2c_write(int addr, int reg, int data);
 static int f_i2c_scan(void);
-#endif // I2C_DBG
-#ifdef CONFIG_LSM303
+#endif
+#ifdef CONFIG_SPYBOT_LSM
 static int f_lsm_open();
 static int f_lsm_readacc();
 static int f_lsm_readmag();
 static int f_lsm_read();
 static int f_lsm_calibrate();
 static int f_lsm_close();
-#endif // CONFIG_LSM303
 #endif
 
-#ifdef CONFIG_ADC
+#ifdef CONFIG_SPYBOT_JOYSTICK
 static int f_adc(void);
 #endif
 
 static int f_col(int col);
 static int f_hardfault(int a);
 
-#ifdef ROVER_PERI_DBG
+#ifdef CONFIG_SPYBOT_HCSR
 static int f_range_init(void);
 static int f_range(void);
+#endif
+#ifdef CONFIG_SPYBOT_SERVO
 static int f_servo(int p, int servo_d);
+#endif
+#ifdef CONFIG_SPYBOT_MOTOR
+static int f_motor_init(void);
+static int f_motor_go(int x);
 #endif
 
 #ifdef RADIO_DBG
@@ -109,20 +129,22 @@ static int f_radio_channel(u16_t channel);
 static int f_radio_pa(u8_t pa);
 #endif
 
-#ifdef VIDEO_DBG
+#ifdef CONFIG_SPYBOT_VIDEO
 static int f_cvideo_init(void);
 static int f_cvideo_voffset(int i);
 static int f_cvideo_vscroll(int i);
 static int f_cvideo_effect(int i);
-#endif
 
 static int f_hud_dbg(char *s);
 static int f_hud_state(int state);
 static int f_hud_view(int x, int y, int z, int ax, int ay, int az);
 static int f_hud_in(int i);
+#endif
 
 static int f_comrad_init(void);
 static int f_comrad_tx(char *str, int ack);
+
+static void cli_print_app_name(void);
 
 #define HELP_UART_DEFS "uart - 0,1,2,3 - 0 is COMM, 1 is DBG, 2 is SPL, 3 is BT\n"
 
@@ -162,15 +184,25 @@ static cmd c_tbl[] = {
         .help = "sends dbg string to other side\n"
     },
 
-#ifdef ROVER_PERI_DBG
+#ifdef CONFIG_SPYBOT_HCSR
     { .name = "range_init", .fn = (func) f_range_init,
         .help = "Initiates range sensor\n"
     },
     { .name = "range", .fn = (func) f_range,
         .help = "Range sample\n"
     },
+#endif
+#ifdef CONFIG_SPYBOT_SERVO
     { .name = "servo", .fn = (func) f_servo,
         .help = "Set PB9 servo, 0-99\n"
+    },
+#endif
+#ifdef CONFIG_SPYBOT_MOTOR
+    { .name = "motor_init", .fn = (func) f_motor_init,
+        .help = "Motor driver init\n"
+    },
+    { .name = "motor_go", .fn = (func) f_motor_go,
+        .help = "Start motors, -128..127\n"
     },
 #endif
 
@@ -203,7 +235,7 @@ static cmd c_tbl[] = {
         .help = "Set radio PA <0-3>\n"
     },
 #endif //RADIO_DBG
-#ifdef VIDEO_DBG
+#ifdef CONFIG_SPYBOT_VIDEO
     { .name = "video_init", .fn = (func)f_cvideo_init,
         .help = "Initializes cvideo\n"
     },
@@ -216,7 +248,6 @@ static cmd c_tbl[] = {
     { .name = "video_effect", .fn = (func)f_cvideo_effect,
         .help = "Sets effect\n"
     },
-#endif
 
     { .name = "hud_dbg", .fn = (func) f_hud_dbg,
         .help = "Print string on hud screen\n"
@@ -230,9 +261,9 @@ static cmd c_tbl[] = {
     { .name = "hud_in", .fn = (func) f_hud_in,
         .help = "Emulate input (1=UP, 2=DOWN, 4=LEFT, 8=RIGHT, 16=PRESS)\n"
     },
+#endif
 
 #ifdef CONFIG_I2C
-#ifdef I2C_DBG
     { .name = "i2c_r", .fn = (func) f_i2c_read,
         .help = "i2c read reg\n"
     },
@@ -243,6 +274,7 @@ static cmd c_tbl[] = {
         .help = "scans i2c bus for all addresses\n" },
 #endif
 
+#ifdef CONFIG_SPYBOT_LSM
     { .name = "lsm_open", .fn = (func) f_lsm_open,
         .help = "setups and configures lsm303 device\n"
     },
@@ -261,10 +293,9 @@ static cmd c_tbl[] = {
     { .name = "lsm_close", .fn = (func) f_lsm_close,
         .help = "closes lsm303 device\n"
     },
-
 #endif
 
-#ifdef CONFIG_ADC
+#ifdef CONFIG_SPYBOT_JOYSTICK
     { .name = "adc", .fn = (func)f_adc,
         .help = "Sample adc\n"
     },
@@ -507,11 +538,9 @@ static int f_help(char *s) {
     }
     print("%s\tno such command\n", s);
   } else {
-#ifdef SECONDARY
-    print("  "APP_NAME" SECONDARY CONTROL\n");
-#else
-    print("  "APP_NAME" CONTROL\n");
-#endif
+    print ("  ");
+    cli_print_app_name();
+    print("\n");
     int i = 0;
     while (c_tbl[i].name != NULL ) {
       int len = strpbrk(c_tbl[i].help, "\n") - c_tbl[i].help;
@@ -546,7 +575,7 @@ static int f_dump_trace() {
   return 0;
 }
 
-#ifdef CONFIG_I2C
+#ifdef CONFIG_SPYBOT_LSM
 
 extern lsm303_dev lsm_dev;
 static int lsm_op = 0;
@@ -688,8 +717,10 @@ static int f_lsm_close() {
   lsm_close(&lsm_dev);
   return 0;
 }
+#endif // CONFIG_SPYBOT_LSM
 
-#ifdef I2C_DBG
+#ifdef CONFIG_I2C
+
 static u8_t i2c_dev_reg = 0;
 static u8_t i2c_dev_val = 0;
 static i2c_dev i2c_device;
@@ -766,7 +797,6 @@ static int f_i2c_scan(void) {
   if (res != I2C_OK) print("i2c query err %i\n", res);
   return 0;
 }
-#endif // I2C_DBG
 #endif // CONFIG_I2C
 
 #ifdef CONFIG_ADC
@@ -820,7 +850,7 @@ static int f_dbg_tx(char *s) {
   return 0;
 }
 
-#ifdef ROVER_PERI_DBG
+#ifdef CONFIG_SPYBOT_HCSR
 static void cli_range_cb(u32_t t) {
   print("range cb:%i\n", t);
 }
@@ -838,6 +868,11 @@ static int f_range(void) {
   }
   return 0;
 }
+
+#endif // CONFIG_SPYBOT_HCSR
+
+
+#ifdef CONFIG_SPYBOT_SERVO
 
 static task *servo_task;
 static bool servo_timer_started = FALSE;
@@ -863,7 +898,8 @@ static void servo_task_f(u32_t a, void *b) {
   TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
   TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
   TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
-  TIM_OCInitStructure.TIM_Pulse = 3277 + ((6554 - 3277) * s_val) / 200;
+  //TIM_OCInitStructure.TIM_Pulse = 3277 + ((6554 - 3277) * s_val) / 200;
+  TIM_OCInitStructure.TIM_Pulse = 3277 + (5000 * s_val) / 200;
   TIM_OC4Init(TIM4, &TIM_OCInitStructure);
 }
 static int f_servo(int p, int servo_d) {
@@ -892,7 +928,20 @@ static int f_servo(int p, int servo_d) {
   return 0;
 }
 
-#endif // ROVER_PERI_DBG
+#endif // CONFIG_SPYBOT_SERVO
+
+#ifdef CONFIG_SPYBOT_MOTOR
+static int f_motor_init(void) {
+  MOTOR_init();
+  return 0;
+}
+static int f_motor_go(int x) {
+  if (_argc < 1) return -1;
+  MOTOR_go((s8_t)(x & 0xff));
+  return 0;
+}
+
+#endif // CONFIG_SPYBOT_MOTOR
 
 #ifdef RADIO_DBG
 
@@ -954,9 +1003,9 @@ static int f_radio_tx(void) {
 
 #endif //RADIO_DBG
 
-extern gcontext gctx;
+#ifdef CONFIG_SPYBOT_VIDEO
 
-#ifdef VIDEO_DBG
+extern gcontext gctx;
 
 static int f_cvideo_init(void) {
   CVIDEO_init(HUD_vbl);
@@ -982,7 +1031,6 @@ static int f_cvideo_effect(int i) {
   return 0;
 }
 
-#endif
 
 static int f_hud_dbg(char *s) {
   if (_argc < 1 || !IS_STRING(s)) {
@@ -1015,6 +1063,8 @@ static int f_hud_in(int i) {
   HUD_input(i, TRUE);
   return 0;
 }
+
+#endif // CONFIG_SPYBOT_VIDEO
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1103,14 +1153,29 @@ void CLI_init() {
   DBG(D_CLI, D_DEBUG, "CLI init\n");
   SYS_dbg_mask_set(0);
   UART_set_callback(_UART(UARTSTDIN), CLI_uart_check_char, NULL);
-#ifdef SECONDARY
-    print("\n"APP_NAME" SECONDARY\n\n");
-#else
-    print("\n"APP_NAME"\n\n");
-#endif
+  print ("\n");
+  cli_print_app_name();
+  print("\n\n");
   print("build     : %i\n", SYS_build_number());
   print("build date: %i\n", SYS_build_date());
   print("\ntype '?' or 'help' for list of commands\n\n");
   print(CLI_PROMPT);
 }
 
+static void cli_print_app_name(void) {
+  print (APP_NAME);
+#ifdef SECONDARY
+    print(" SECONDARY: ");
+#else
+    print(" PRIMARY: ");
+#endif
+#ifdef CONFIG_SPYBOT_TEST
+    print ("test config");
+#endif
+#ifdef CONFIG_SPYBOT_ROVER
+    print ("rover config");
+#endif
+#ifdef CONFIG_SPYBOT_CONTROLLER
+    print ("controller config");
+#endif
+}

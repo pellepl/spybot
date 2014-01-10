@@ -231,6 +231,10 @@ typedef u16_t system_counter_type;
 #define CONFIG_ADC
 #endif
 
+/** MOTOR **/
+
+#define CONFIG_MOTOR_PWM_FREQ     50000
+
 
 /** DEBUG **/
 

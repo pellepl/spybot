@@ -47,7 +47,7 @@ static void hud_plane_reset(gcontext *ctx) {
   memcpy(mhud.plane_pts, base_plane_pts, sizeof(base_plane_pts));
 }
 
-void hud_paint_main(gcontext *ctx, lsm303_dev *lsm_dev, bool init) {
+void hud_paint_main(gcontext *ctx, bool init) {
   char txt[28];
   memset(txt,0,28);
   sprint(txt, "%s %i", APP_NAME, SYS_build_number());
@@ -61,13 +61,48 @@ void hud_paint_main(gcontext *ctx, lsm303_dev *lsm_dev, bool init) {
     GFX_printn(ctx, txt, 0,  17, 16, COL_OVER);
   }
 
+  time now = SYS_get_time_ms();
+  if ((now / 500) & 1) {
+    GFX_printn(ctx, " ", 0, 27, 16, COL_OVER);
+  } else {
+    GFX_printn(ctx, "\001",0, 27, 16, COL_OVER);
+  }
+
+  // upper status bar
+  static time last_comm_check;
+  static u8_t last_squal;
+  if (now - last_comm_check >= 500) {
+    last_comm_check = now;
+    last_squal = COMRAD_stats();
+  }
+
+  if (last_squal > 192) {
+    GFX_printn(ctx, "\010\011", 0, 0, 0, COL_OVER);
+  } else if (last_squal > 128) {
+    GFX_printn(ctx, "\006\007", 0, 0, 0, COL_OVER);
+  } else if (last_squal > 64) {
+    GFX_printn(ctx, "\004\005", 0, 0, 0, COL_OVER);
+  } else {
+    GFX_printn(ctx, "\002\003", 0, 0, 0, COL_OVER);
+  }
+
+  if ((APP_pair_status() == 1 && ((now>>8)&1)) || APP_pair_status() == 2) {
+    GFX_printn(ctx, "\022", 0, 3, 0, COL_OVER);
+  }
+
+
+  if (APP_pair_status() != 2) {
+    return;
+  }
+
   // heading
   s16_t x = ctx->width/2;
   s16_t y = 110;
 
-  u16_t heading_raw = lsm_get_heading(lsm_dev);
-  s16_t *acc = lsm_get_acc_reading(lsm_dev);
-  mhud.heading_ang = (heading_raw >> (16-9)) - (PI_TRIG_T / 4);
+  u8_t heading_raw = APP_remote_get_heading();
+  s8_t *acc = APP_remote_get_acc();
+
+  mhud.heading_ang = (heading_raw <<1) - (PI_TRIG_T / 4);
 
   s16_t dx = (cos_table(mhud.heading_ang)*17) >> 15;
   s16_t dy = (sin_table(mhud.heading_ang)*14) >> 15;
@@ -78,7 +113,7 @@ void hud_paint_main(gcontext *ctx, lsm303_dev *lsm_dev, bool init) {
   GFX_printn(ctx, txt, 0, 28 - strlen(txt), 12, COL_OVER);
 
   // accelerometer
-  s16_t ax,ay,az;
+  s8_t ax,ay,az;
   ax = acc[0];
   ay = acc[1];
   az = acc[2];
@@ -149,35 +184,6 @@ void hud_paint_main(gcontext *ctx, lsm303_dev *lsm_dev, bool init) {
           ( ( (1+(_H-2)/2)*axn )>>15 ),
           COL_SET);
 
-  }
-
-  time now = SYS_get_time_ms();
-  if ((now / 500) & 1) {
-    GFX_printn(ctx, " ", 0, 27, 16, COL_OVER);
-  } else {
-    GFX_printn(ctx, "\001",0, 27, 16, COL_OVER);
-  }
-
-  // upper status bar
-  static time last_comm_check;
-  static u8_t last_squal;
-  if (now - last_comm_check >= 500) {
-    last_comm_check = now;
-    last_squal = COMRAD_stats();
-  }
-
-  if (last_squal > 192) {
-    GFX_printn(ctx, "\010\011", 0, 0, 0, COL_OVER);
-  } else if (last_squal > 128) {
-    GFX_printn(ctx, "\006\007", 0, 0, 0, COL_OVER);
-  } else if (last_squal > 64) {
-    GFX_printn(ctx, "\004\005", 0, 0, 0, COL_OVER);
-  } else {
-    GFX_printn(ctx, "\002\003", 0, 0, 0, COL_OVER);
-  }
-
-  if ((APP_pair_status() == 1 && ((now>>8)&1)) || APP_pair_status() == 2) {
-    GFX_printn(ctx, "\022", 0, 3, 0, COL_OVER);
   }
 }
 

@@ -35,7 +35,13 @@ static void RCC_config() {
   /* PCLK1 = HCLK/1 */
   RCC_PCLK1Config(RCC_HCLK_Div1);
 
+#ifdef CONFIG_SPYBOT_SERVO
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE);
+#endif
+#ifdef CONFIG_SPYBOT_MOTOR
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1, ENABLE);
+#endif
+
   RCC_APB1PeriphClockCmd(STM32_SYSTEM_TIMER_RCC, ENABLE);
 
 #ifdef CONFIG_SPI
@@ -66,9 +72,11 @@ static void RCC_config() {
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC2, ENABLE);
 #endif
 
+#ifdef CONFIG_SPYBOT_VIDEO
   // spybot cvideo
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_SPI2, ENABLE);
   RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
+#endif
 }
 
 static void NVIC_config(void)
@@ -119,9 +127,11 @@ static void NVIC_config(void)
   NVIC_EnableIRQ(ADC1_2_IRQn);
 #endif
 
+#ifdef CONFIG_SPYBOT_HCSR
   // range sensor
   NVIC_SetPriority(TIM3_IRQn, NVIC_EncodePriority(prioGrp, 2, 0));
   NVIC_EnableIRQ(TIM3_IRQn);
+#endif
 
   // extis
   NVIC_SetPriority(EXTI0_IRQn, NVIC_EncodePriority(prioGrp, 1, 0)); // radio data ready
@@ -307,6 +317,7 @@ static void I2C_config() {
 }
 
 static void SERVO_config() {
+#ifdef CONFIG_SPYBOT_SERVO
   gpio_config(PORTB, PIN6, CLK_50MHZ, AF, AF0, PUSHPULL, NOPULL);
   gpio_config(PORTB, PIN7, CLK_50MHZ, AF, AF0, PUSHPULL, NOPULL);
   gpio_config(PORTB, PIN8, CLK_50MHZ, AF, AF0, PUSHPULL, NOPULL);
@@ -353,12 +364,18 @@ static void SERVO_config() {
 
 
   TIM_Cmd(TIM4, ENABLE);
+  TIM_CtrlPWMOutputs(TIM4, ENABLE);
+
+#endif // CONFIG_SPYBOT_SERVO
 }
 
 static void RANGE_SENS_config() {
+#ifdef CONFIG_SPYBOT_HCSR
+#endif // CONFIG_SPYBOT_HCSR
 }
 
 static void CVIDEO_config() {
+#ifdef CONFIG_SPYBOT_VIDEO
   // config spi & dma
   SPI_InitTypeDef  SPI_InitStructure;
   DMA_InitTypeDef  DMA_InitStructure;
@@ -407,6 +424,52 @@ static void CVIDEO_config() {
   gpio_config(PORTB, PIN14, CLK_50MHZ, IN, AF0, OPENDRAIN, NOPULL);
   gpio_interrupt_mask_disable(PORTB, PIN14);
   gpio_interrupt_mask_disable(PORTB, PIN8);
+#endif // CONFIG_SPYBOT_VIDEO
+}
+
+static void MOTOR_config() {
+#ifdef CONFIG_SPYBOT_MOTOR
+  gpio_config(PORTB, PIN12, CLK_2MHZ, OUT, AF0, PUSHPULL, NOPULL);
+  gpio_config(PORTB, PIN13, CLK_2MHZ, OUT, AF0, PUSHPULL, NOPULL);
+  gpio_config(PORTB, PIN14, CLK_2MHZ, OUT, AF0, PUSHPULL, NOPULL);
+  gpio_config(PORTB, PIN15, CLK_2MHZ, OUT, AF0, PUSHPULL, NOPULL);
+  gpio_config(PORTA, PIN8, CLK_50MHZ, AF, AF0, PUSHPULL, NOPULL);
+  gpio_config(PORTA, PIN9, CLK_50MHZ, AF, AF0, PUSHPULL, NOPULL);
+
+  gpio_disable(PORTB, PIN12);
+  gpio_disable(PORTB, PIN13);
+  gpio_disable(PORTB, PIN14);
+  gpio_disable(PORTB, PIN15);
+
+  // Maximum PWM frequency: 100 kHz
+  // go for 50 kHz
+  // 72000000/50000=1440
+
+  TIM_TimeBaseInitTypeDef  TIM_TimeBaseStructure;
+  TIM_TimeBaseStructure.TIM_Period = SYS_CPU_FREQ / CONFIG_MOTOR_PWM_FREQ;
+  TIM_TimeBaseStructure.TIM_Prescaler = 1-1;
+  TIM_TimeBaseStructure.TIM_ClockDivision = 0;
+  TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+  TIM_TimeBaseInit(TIM1, &TIM_TimeBaseStructure);
+
+  TIM_OCInitTypeDef  TIM_OCInitStructure;
+  TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
+  TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+  TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
+
+  TIM_OCInitStructure.TIM_Pulse = 0;
+  TIM_OC1Init(TIM1, &TIM_OCInitStructure);
+  TIM_OC1PreloadConfig(TIM1, TIM_OCPreload_Enable);
+
+  TIM_OCInitStructure.TIM_Pulse = 0;
+  TIM_OC2Init(TIM1, &TIM_OCInitStructure);
+  TIM_OC2PreloadConfig(TIM1, TIM_OCPreload_Enable);
+
+  TIM_ARRPreloadConfig(TIM1, ENABLE);
+
+  TIM_Cmd(TIM1, ENABLE);
+  TIM_CtrlPWMOutputs(TIM1, ENABLE);
+#endif // CONFIG_SPYBOT_MOTOR
 }
 
 // ifc
@@ -430,5 +493,6 @@ void PROC_periph_init() {
   SERVO_config();
   RANGE_SENS_config();
   CVIDEO_config();
+  MOTOR_config();
 }
 

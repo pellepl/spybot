@@ -19,4 +19,8 @@ void APP_comrad_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_received);
 void APP_comrad_ack(comm_arg *rx, u16_t seq_no, u16_t len, u8_t *data);
 void APP_comrad_err(u16_t seq_no, int err);
 
+s8_t *APP_remote_get_acc(void);
+u8_t APP_remote_get_heading(void);
+
+
 #endif /* APP_H_ */

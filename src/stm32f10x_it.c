@@ -1,9 +1,15 @@
 #include "stm32f10x_it.h"
 #include "uart_driver.h"
+#ifdef CONFIG_SPI
 #include "spi_driver.h"
+#endif
 #include "timer.h"
+#ifdef CONFIG_I2C
 #include "i2c_driver.h"
+#endif
+#ifdef CONFIG_ADC
 #include "adc.h"
+#endif
 
 /**
   * @brief  This function handles NMI exception.

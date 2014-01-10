@@ -8,6 +8,15 @@
 #ifndef SPYBOT_PROTOCOL_H_
 #define SPYBOT_PROTOCOL_H_
 
+#define SPYBOT_ACT_LIGHTS   (1<<0)
+#define SPYBOT_ACT_BEEP     (1<<1)
+
+#define SPYBOT_SR_ACC       (1<<0)
+#define SPYBOT_SR_HEADING   (1<<1)
+#define SPYBOT_SR_TEMP      (1<<2)
+#define SPYBOT_SR_BATT      (1<<3)
+#define SPYBOT_SR_RADAR     (1<<7)
+
 typedef enum {
   // [rover <-> ctrl]
   // arg: null term string
@@ -34,6 +43,7 @@ typedef enum {
   //                      bit 3 - batt
   //                      bit 7 - req_radar
   // ack: [0x00=deny, 0x01=accept]
+  //      sr:      u8 sent sr
   //      acc:     s8 acc_x, s8 acc_y, s8 acc_z
   //      heading: s8 heading
   //      temp:    s8 temperature

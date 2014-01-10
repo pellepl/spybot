@@ -1,15 +1,42 @@
+
+
+# primary build target configuration
+ifneq ($(SEC),1)
+CONFIG_SPYBOT_ROVER = 0
+CONFIG_SPYBOT_CONTROLLER = 1
+CONFIG_SPYBOT_TEST = 0
+# secondary build target configuration
+else
+CONFIG_SPYBOT_ROVER = 1
+CONFIG_SPYBOT_CONTROLLER = 0
+CONFIG_SPYBOT_TEST = 0
+endif
+
+
 ifeq ($(SEC),1)
 BINARY = spybot_sec
 GDB_PORT = 4445
 DBG_SCRIPT = debug_sec.gdb
-LD_SCRIPT = arm_sec.ld
 FLAGS += -DSECONDARY
 else
 BINARY = spybot
 DBG_SCRIPT = debug.gdb
-LD_SCRIPT = arm.ld
 GDB_PORT = 4444
+PRI = 1
+FLAGS += -DPRIMARY
 endif
+
+
+ifeq ($(CONFIG_SPYBOT_ROVER),1)
+CONFIG_MAKE = config_rover.mk
+endif
+ifeq ($(CONFIG_SPYBOT_CONTROLLER),1)
+CONFIG_MAKE = config_controller.mk
+endif
+ifeq ($(CONFIG_SPYBOT_TEST),1)
+CONFIG_MAKE = config_test.mk
+endif
+
 
 ############
 #
@@ -85,6 +112,7 @@ MKDIR = mkdir -p
 #
 ###############
 
+LD_SCRIPT = arm.ld
 INCLUDE_DIRECTIVES =
 COMPILEROPTIONS = $(INCLUDE_DIRECTIVES) $(FLAGS) -mcpu=cortex-m3 -mno-thumb-interwork -mthumb -Wall -gdwarf-2 -Wno-packed-bitfield-compat
 #-ffunction-sections -fdata-sections
@@ -110,6 +138,62 @@ CPATH 		+= ${sourcedir}
 SPATH 		+= ${sourcedir}
 INC			+= -I./${sourcedir}
 
+
+
+# generic system configuration
+include ${CONFIG_MAKE}
+
+# extra cflags
+
+ifeq ($(CONFIG_SPYBOT_APP_MASTER),1)
+FLAGS += -DCONFIG_SPYBOT_APP_MASTER
+endif
+ifeq ($(CONFIG_SPYBOT_APP_CLIENT),1)
+FLAGS += -DCONFIG_SPYBOT_APP_CLIENT
+endif
+ifeq ($(CONFIG_SPYBOT_LSM),1)
+FLAGS += -DCONFIG_SPYBOT_LSM
+endif
+ifeq ($(CONFIG_SPYBOT_HCSR),1)
+FLAGS += -DCONFIG_SPYBOT_HCSR
+endif
+ifeq ($(CONFIG_SPYBOT_SERVO),1)
+FLAGS += -DCONFIG_SPYBOT_SERVO
+endif
+ifeq ($(CONFIG_SPYBOT_MOTOR),1)
+FLAGS += -DCONFIG_SPYBOT_MOTOR
+endif
+ifeq ($(CONFIG_SPYBOT_VIDEO),1)
+FLAGS += -DCONFIG_SPYBOT_VIDEO
+endif
+ifeq ($(CONFIG_SPYBOT_JOYSTICK),1)
+CONFIG_SPYBOT_ADC = 1
+CONFIG_SPYBOT_INPUT = 1
+FLAGS += -DCONFIG_SPYBOT_JOYSTICK
+endif
+ifeq ($(CONFIG_SPYBOT_XBUTTONS),1)
+CONFIG_SPYBOT_INPUT = 1
+FLAGS += -DCONFIG_SPYBOT_XBUTTONS
+endif
+ifeq ($(CONFIG_SPYBOT_XLEDS),1)
+FLAGS += -DCONFIG_SPYBOT_XLEDS
+endif
+
+ifeq ($(CONFIG_SPYBOT_CONTROLLER),1)
+FLAGS += -DCONFIG_SPYBOT_CONTROLLER
+endif
+ifeq ($(CONFIG_SPYBOT_ROVER),1)
+FLAGS += -DCONFIG_SPYBOT_ROVER
+endif
+ifeq ($(CONFIG_SPYBOT_TEST),1)
+FLAGS += -DCONFIG_SPYBOT_TEST
+endif
+
+
+
+
+# common spybot files
+
 SFILES 		+= stm32f10x_it_h.s
 
 CFILES 		+= main.c
@@ -122,10 +206,17 @@ CFILES		+= comm_radio.c
 
 CFILES		+= app.c
 
-#rover files
+# spybot rover files
+ifeq ($(CONFIG_SPYBOT_HCSR),1)
 CFILES 		+= range_sens_hcsr04_driver.c
+endif
+ifeq ($(CONFIG_SPYBOT_MOTOR),1)
+CFILES 		+= motor.c
+endif
 
-#controller files
+# spybot controller files
+
+ifeq ($(CONFIG_SPYBOT_VIDEO),1)
 CFILES		+= cvideo.c
 CFILES		+= gfx_bitmap.c
 CFILES		+= gfx_3d.c
@@ -136,8 +227,13 @@ CFILES		+= hud_main.c
 CFILES		+= hud_conf.c
 CFILES		+= hud_dbg.c
 CFILES		+= rover_3d.c
+endif
+ifeq ($(CONFIG_SPYBOT_INPUT),1)
 CFILES		+= input.c
+endif
+ifeq ($(CONFIG_SPYBOT_ADC),1)
 CFILES		+= adc.c
+endif
 
 # comm files
 include ${comm}/files.mk
@@ -182,12 +278,10 @@ CFILES	+= core_cm3.c
 # stm32 system
 CFILES 	+= stm32f10x_it.c
 
-# generic system configuration
-include config.mk 
-
 LIBS = 
 
 BINARYEXT = .hex
+
 
 ############
 #
@@ -213,7 +307,7 @@ ALLOBJFILES += $(ROBJFILES)
 DEPENDENCIES = $(DEPFILES) 
 
 # link object files, create binary for flashing
-$(BINARY): $(ALLOBJFILES)
+$(BINARY): ${hfile} $(ALLOBJFILES)
 	@echo "... build info"
 	@if ! test -f $(BUILD_NUMBER_FILE); then echo 0 > $(BUILD_NUMBER_FILE); fi
 	@echo $$(($$(cat $(BUILD_NUMBER_FILE)) + 1)) > $(BUILD_NUMBER_FILE)	
@@ -284,13 +378,13 @@ install: $(BINARY)
 debug: $(BINARY)
 	@${GDB} ${builddir}/${BINARY}.elf -x $(DBG_SCRIPT)
 	
-${hfile}: config.mk
+${hfile}: ${CONFIG_MAKE}
 	@echo "* Generating config header ${hfile}.."
 	@echo "// Auto generated file, do not tamper" > ${hfile}
 	@echo "#ifdef INCLUDE_CONFIG_HEADER" >> ${hfile}
 	@echo "#ifndef _CONFIG_HEADER_H" >> ${hfile}
 	@echo "#define _CONFIG_HEADER_H" >> ${hfile}
-	@sed -nr 's/([^ \t]*)?[ \t]*=[ \t]*1/#define \1/p' config.mk >> ${hfile}
+	@sed -nr 's/([^ \t]*)?[ \t]*=[ \t]*1/#define \1/p' ${CONFIG_MAKE} >> ${hfile}
 	@echo "#endif" >> ${hfile}
 	@echo "#endif" >> ${hfile}
 
