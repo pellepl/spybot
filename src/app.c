@@ -79,6 +79,11 @@ static task *lsm_task = NULL;
 static bool reading_lsm = FALSE;
 #endif
 
+#ifdef CONFIG_SPYBOT_MOTOR
+static task_timer motor_timer;
+static task *motor_task = NULL;
+#endif
+
 // ram updated over RF
 static s8_t lsm_heading;
 static s8_t lsm_acc[3];
@@ -126,6 +131,13 @@ static void app_rover_lsm_task(u32_t a, void *b) {
 }
 #endif // CONFIG_SPYBOT_LSM
 
+#ifdef CONFIG_SPYBOT_MOTOR
+static void app_rover_motor_task(u32_t a, void *b) {
+  MOTOR_update();
+}
+
+#endif
+
 static void app_rover_init(void) {
 #ifdef CONFIG_SPYBOT_LSM
   I2C_config(_I2C_BUS(0), 100000);
@@ -141,6 +153,11 @@ static void app_rover_init(void) {
   lsm_task = TASK_create(app_rover_lsm_task, TASK_STATIC);
   TASK_start_timer(lsm_task, &lsm_timer, 0, 0, 0, 100, "lsm_read");
 #endif // CONFIG_SPYBOT_LSM
+#ifdef CONFIG_SPYBOT_MOTOR
+  MOTOR_init();
+  motor_task = TASK_create(app_rover_motor_task, TASK_STATIC);
+  TASK_start_timer(motor_task, &motor_timer, 0, 0, 0, 20, "motor");
+#endif
 }
 
 #define REPLY_MAX_LEN (COMM_LNK_MAX_DATA-COMM_H_SIZE-1)
@@ -154,6 +171,11 @@ void app_rover_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_recei
     reply[reply_ix++] = data[4];
     s8_t left_motor = (s8_t)data[1];
     s8_t right_motor = (s8_t)data[2];
+
+#ifdef CONFIG_SPYBOT_MOTOR
+    MOTOR_control_vector(left_motor, right_motor);
+#endif
+
     if (already_received) {
 
     }
@@ -313,8 +335,10 @@ static void app_comm_task(u32_t a, void *p) {
     }
   } else if (common.pair_state == PAIRING_OK) {
     u8_t sr = SPYBOT_SR_ACC | SPYBOT_SR_HEADING;
+    s8_t left_motor = ((u16_t)(joystick_h >> 4) - 128);
+    s8_t right_motor = ((u16_t)(joystick_v >> 4) - 128);
     u8_t ctrl[] = {
-        CMD_CONTROL, 0, 0, 0, sr
+        CMD_CONTROL, left_motor, right_motor, 0, sr
     };
     app_tx(ctrl, sizeof(ctrl));
   }
