@@ -9,6 +9,13 @@
 #include "gpio.h"
 #include "miniutils.h"
 
+//
+// China Surveillance Cam V1
+//  Black:  GND
+//  Red:    5V
+//  Yellow: 8V
+//
+
 #define CVID_HALF_VERTICAL
 //#define CVID_DISPLAY_SYNCED_ONLY
 

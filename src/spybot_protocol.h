@@ -76,6 +76,11 @@ typedef enum {
   // [rover <-- ctrl]
   // arg: none
   // ack: [0x00=deny, 0x01=accept]
+  //      s8 steer adjust
+  //      s8 radar adjust
+  //      s8 cam_pan adjust
+  //      s8 cam_tilt adjust
+  //      u8 common config
   CMD_LOAD_CONFIG,
 
   // [rover <-- ctrl]
@@ -101,28 +106,6 @@ typedef enum {
   CMD_CHANNEL_CHANGE,
 
 } spybot_cmd;
-
-typedef enum {
-  CFG_STOP = 0,
-  CFG_STEER_ADJUST,
-  CFG_RADAR_ADJUST,
-  CFG_CAM_PAN_ADJUST,
-  CFG_CAM_TILT_ADJUST,
-  CFG_SPEED_ADJUST,
-  CFG_RADIO_CHANNEL,
-  CFG_LSM_MAG_X_MIN,
-  CFG_LSM_MAG_X_MAX,
-  CFG_LSM_MAG_Y_MIN,
-  CFG_LSM_MAG_Y_MAX,
-  CFG_LSM_MAG_Z_MIN,
-  CFG_LSM_MAG_Z_MAX,
-  CFG_LSM_ACC_X_MIN,
-  CFG_LSM_ACC_X_MAX,
-  CFG_LSM_ACC_Y_MIN,
-  CFG_LSM_ACC_Y_MAX,
-  CFG_LSM_ACC_Z_MIN,
-  CFG_LSM_ACC_Z_MAX,
-} spybot_cfg;
 
 
 #endif /* SPYBOT_PROTOCOL_H_ */

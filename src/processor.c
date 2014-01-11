@@ -81,6 +81,15 @@ static void RCC_config() {
 
 static void NVIC_config(void)
 {
+  // STM32 7 6 5 4 3 2 1 0
+  //       I I I I X X X X
+  //
+  // priogrp 4 =>
+  // STM32 7 6 5 4 3 2 1 0
+  //       P P P S X X X X
+  // preempt prio 0..7
+  // subprio      0..1
+
   // Configure the NVIC Preemption Priority Bits
   // use 3 bits for preemption and 1 bit for  subgroup
   u8_t prioGrp = 8 - __NVIC_PRIO_BITS;

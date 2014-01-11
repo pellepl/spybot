@@ -17,7 +17,16 @@
 #ifdef CONFIG_ADC
 #include "adc.h"
 #endif
+#ifdef CONFIG_SPYBOT_MOTOR
+#include "motor.h"
+#endif
 #include "app.h"
+
+static void spybot_assert_cb(void) {
+#ifdef CONFIG_SPYBOT_MOTOR
+  MOTOR_go(0);
+#endif
+}
 
 // main entry from bootstrap
 
@@ -28,8 +37,9 @@ int main(void) {
   UART_init();
   UART_assure_tx(_UART(0), TRUE);
   PROC_periph_init();
-
   exit_critical();
+
+  SYS_set_assert_callback(spybot_assert_cb);
 
   IO_define(IOSTD, io_uart, UARTSTDIN);
 
@@ -110,6 +120,10 @@ void hard_fault_handler_c (unsigned int * hardfault_args)
   // Hijack the process stack pointer to make backtrace work
   asm("mrs %0, psp" : "=r"(HARDFAULT_PSP) : :);
   stack_pointer = HARDFAULT_PSP;
+
+#ifdef CONFIG_SPYBOT_MOTOR
+  MOTOR_go(0);
+#endif
 
   u8_t io = IODBG;
 

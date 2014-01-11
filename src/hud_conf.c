@@ -15,7 +15,7 @@ typedef enum {
    CONF_STEER,
    CONF_RADAR,
    CONF_CAMERA,
-   CONF_SPEED,
+   CONF_GENERAL,
    CONF_EXIT
 } conf_state;
 
@@ -24,7 +24,7 @@ static const char * const(MAIN_MENU[]) =  {
   "STEERING",
   "RADAR",
   "CAMERA",
-  "SPEED",
+  "GENERAL",
   "EXIT",
   NULL
 };
@@ -40,11 +40,15 @@ static struct {
   s8_t dx;
   s8_t dy;
   s8_t dz;
+  bool dirty;
 
-  s8_t steer;
-  s8_t radar;
-  s8_t pan;
-  s8_t tilt;
+  struct {
+    s8_t steer;
+    s8_t radar;
+    s8_t pan;
+    s8_t tilt;
+    u8_t common_conf;
+  } remote;
 } conf;
 
 //////////////////////////////////////////////////////
@@ -202,10 +206,10 @@ static void hud_conf_input_main(input_type in, bool change) {
 static void hud_conf_paint_steer(gcontext *ctx) {
   ROVER_view(0,90,70, 0,0, PI_TRIG_T/4, FALSE);
   hud_conf_paint_title(ctx, " STEER");
-  hud_conf_paint_setting_bar(ctx, FALSE, 10, 24, ctx->width-10*2, 16, conf.steer);
+  hud_conf_paint_setting_bar(ctx, FALSE, 10, 24, ctx->width-10*2, 16, conf.remote.steer);
   rover_angles *ra = ROVER_angle_config();
-  ra->anim_d_wheel_left = -10 + ((9*conf.steer)/128);
-  ra->anim_d_wheel_right = -10 - ((9*conf.steer)/128);
+  ra->anim_d_wheel_left = -10 + ((9*conf.remote.steer)/128);
+  ra->anim_d_wheel_right = -10 - ((9*conf.remote.steer)/128);
 }
 
 static void hud_conf_input_steer(input_type in, bool change) {
@@ -213,9 +217,9 @@ static void hud_conf_input_steer(input_type in, bool change) {
   } else if (in & IN_DOWN) {
   }
   if (in & IN_LEFT) {
-    conf.steer -=1; // TODO
+    conf.remote.steer -=1; // TODO
   } else if (in & IN_RIGHT) {
-    conf.steer +=1; // TODO
+    conf.remote.steer +=1; // TODO
   }
   if ((in & IN_PRESS) && change) {
     conf.state = CONF_MAIN;
@@ -228,12 +232,12 @@ static void hud_conf_input_steer(input_type in, bool change) {
 static void hud_conf_paint_radar(gcontext *ctx) {
   ROVER_view(0,30,70, 0,-PI_TRIG/32, PI_TRIG_T/4, FALSE);
   hud_conf_paint_title(ctx, " RADAR");
-  hud_conf_paint_setting_bar(ctx, FALSE, 10, 24, ctx->width-10*2, 16, conf.radar);
+  hud_conf_paint_setting_bar(ctx, FALSE, 10, 24, ctx->width-10*2, 16, conf.remote.radar);
   rover_angles *ra = ROVER_angle_config();
   ra->anim_d_wheel_left = 0;
   ra->anim_d_wheel_right = 0;
   ra->anim_d_radar = 0;
-  ra->radar = (PI_TRIG_T/4 * (conf.radar)) / 256;
+  ra->radar = (PI_TRIG_T/4 * (conf.remote.radar)) / 256;
 }
 
 static void hud_conf_input_radar(input_type in, bool change) {
@@ -241,9 +245,9 @@ static void hud_conf_input_radar(input_type in, bool change) {
   } else if (in & IN_DOWN) {
   }
   if (in & IN_LEFT) {
-    conf.radar -=1; // TODO
+    conf.remote.radar -=1; // TODO
   } else if (in & IN_RIGHT) {
-    conf.radar +=1; // TODO
+    conf.remote.radar +=1; // TODO
   }
   if ((in & IN_PRESS) && change) {
     conf.state = CONF_MAIN;
@@ -257,37 +261,49 @@ static void hud_conf_input_radar(input_type in, bool change) {
 static void hud_conf_paint_camera(gcontext *ctx) {
   ROVER_view(0,20,120, 0,PI_TRIG/5, -PI_TRIG_T/4, FALSE);
   hud_conf_paint_title(ctx, " CAMERA");
-  hud_conf_paint_setting_bar(ctx, FALSE, 30, 24, ctx->width-30*2, 16, conf.pan);
-  hud_conf_paint_setting_bar(ctx, TRUE, 10, 44, 16, ctx->height-44-10, conf.tilt);
+  hud_conf_paint_setting_bar(ctx, FALSE, 30, 24, ctx->width-30*2, 16, conf.remote.pan);
+  hud_conf_paint_setting_bar(ctx, TRUE, 10, 44, 16, ctx->height-44-10, conf.remote.tilt);
   rover_angles *ra = ROVER_angle_config();
   ra->anim_d_wheel_left = 0;
   ra->anim_d_wheel_right = 0;
   ra->anim_d_radar = 0;
   ra->radar = 0;
-  ra->pan = (PI_TRIG_T/4 * -(conf.pan)) / 256;
-  ra->tilt = (PI_TRIG_T/4 * (conf.tilt)) / 256;
+  ra->pan = (PI_TRIG_T/4 * -(conf.remote.pan)) / 256;
+  ra->tilt = (PI_TRIG_T/4 * (conf.remote.tilt)) / 256;
 }
 
 static void hud_conf_input_camera(input_type in, bool change) {
   if (in & IN_DOWN) {
-    conf.tilt -=1; // TODO
+    conf.remote.tilt -=1; // TODO
   } else if (in & IN_UP) {
-    conf.tilt +=1; // TODO
+    conf.remote.tilt +=1; // TODO
   }
   if (in & IN_LEFT) {
-    conf.pan -=1; // TODO
+    conf.remote.pan -=1; // TODO
   } else if (in & IN_RIGHT) {
-    conf.pan +=1; // TODO
+    conf.remote.pan +=1; // TODO
   }
   if ((in & IN_PRESS) && change) {
     conf.state = CONF_MAIN;
   }
 }
-////////////////////////////////////////////////////// SPEED CONFIG
+////////////////////////////////////////////////////// GENERAL CONFIG
 
+// TODO
 
-////////////////////////////////////////////////////// SAVE
+////////////////////////////////////////////////////// EXIT
 
+static void hud_conf_paint_exit(gcontext *ctx) {
+  if (!conf.dirty) {
+    HUD_state(HUD_MAIN);
+  }
+}
+
+static void hud_conf_input_exit(input_type in, bool change) {
+  if (!conf.dirty) {
+    return;
+  }
+}
 
 //////////////////////////////////////////////////////
 
@@ -295,6 +311,7 @@ static void hud_conf_input_camera(input_type in, bool change) {
 void hud_paint_config(gcontext *ctx, bool init) {
   if (init) {
     memset(&conf, 0, sizeof(conf));
+    conf.dirty = FALSE;
     conf.cur_menu = MAIN_MENU;
     rover_angles *ra = ROVER_angle_config();
     ra->anim_d_radar = 4;
@@ -321,6 +338,10 @@ void hud_paint_config(gcontext *ctx, bool init) {
   case CONF_CAMERA:
     hud_conf_paint_camera(ctx);
     break;
+  case CONF_GENERAL:
+  case CONF_EXIT:
+    hud_conf_paint_exit(ctx);
+    break;
   }
 }
 
@@ -337,6 +358,10 @@ void HUD_input(input_type in, bool change) {
     break;
   case CONF_CAMERA:
     hud_conf_input_camera(in, change);
+    break;
+  case CONF_GENERAL:
+  case CONF_EXIT:
+    hud_conf_input_exit(in, change);
     break;
   }
 }

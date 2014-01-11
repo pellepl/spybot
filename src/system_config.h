@@ -199,8 +199,10 @@ typedef u16_t system_counter_type;
 #define SYS_OS_TICK_DIV       8
 
 /** ARCH **/
+#ifdef CONFIG_SPYBOT_VIDEO
 #define CONFIG_ARCH_CRITICAL_DISABLE_IRQ __set_BASEPRI(0x02)
 #define CONFIG_ARCH_CRITICAL_ENABLE_IRQ __set_BASEPRI(0x00)
+#endif
 
 /** UART **/
 

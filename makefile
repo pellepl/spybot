@@ -205,6 +205,7 @@ CFILES		+= nrf905_impl.c
 CFILES		+= comm_radio.c
 
 CFILES		+= app.c
+CFILES		+= configuration.c
 
 # spybot rover files
 ifeq ($(CONFIG_SPYBOT_HCSR),1)

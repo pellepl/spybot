@@ -28,6 +28,10 @@
 #include "hud.h"
 #endif
 
+#ifdef CONFIG_SPYBOT_INPUT
+#include "input.h"
+#endif
+
 #ifdef CONFIG_SPYBOT_MOTOR
 #include "motor.h"
 #endif
@@ -85,9 +89,11 @@ static task *motor_task = NULL;
 #endif
 
 // ram updated over RF
-static s8_t lsm_heading;
-static s8_t lsm_acc[3];
-
+static struct {
+  s8_t lsm_heading;
+  s8_t lsm_acc[3];
+  s8_t motor_ctrl[2]; // steer vector : [0] hori, [1] vert
+} remote;
 
 // rover funcs
 
@@ -106,10 +112,10 @@ static void app_rover_lsm_cb_task(u32_t ares, void *adev) {
 
   u16_t heading_raw = lsm_get_heading(&lsm_dev);
   s16_t *acc = lsm_get_acc_reading(&lsm_dev);
-  lsm_heading = heading_raw >> 8;
-  lsm_acc[0] = acc[0] >> 4;
-  lsm_acc[1] = acc[1] >> 4;
-  lsm_acc[2] = acc[2] >> 4;
+  remote.lsm_heading = heading_raw >> 8;
+  remote.lsm_acc[0] = acc[0] >> 4;
+  remote.lsm_acc[1] = acc[1] >> 4;
+  remote.lsm_acc[2] = acc[2] >> 4;
 }
 
 static void app_rover_lsm_cb_irq(lsm303_dev *dev, int res) {
@@ -169,12 +175,8 @@ void app_rover_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_recei
   case CMD_CONTROL:
     reply[reply_ix++] = ACK_OK;
     reply[reply_ix++] = data[4];
-    s8_t left_motor = (s8_t)data[1];
-    s8_t right_motor = (s8_t)data[2];
-
-#ifdef CONFIG_SPYBOT_MOTOR
-    MOTOR_control_vector(left_motor, right_motor);
-#endif
+    remote.motor_ctrl[0] = (s8_t)data[1];
+    remote.motor_ctrl[1] = (s8_t)data[2];
 
     if (already_received) {
 
@@ -186,13 +188,13 @@ void app_rover_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_recei
     // status_mask
     if (data[4] & SPYBOT_SR_ACC) {
       //DBG(D_APP, D_DEBUG, "ctrl wants acc data\n");
-      reply[reply_ix++] = lsm_acc[0];
-      reply[reply_ix++] = lsm_acc[1];
-      reply[reply_ix++] = lsm_acc[2];
+      reply[reply_ix++] = remote.lsm_acc[0];
+      reply[reply_ix++] = remote.lsm_acc[1];
+      reply[reply_ix++] = remote.lsm_acc[2];
     }
     if (data[4] & SPYBOT_SR_HEADING) {
       //DBG(D_APP, D_DEBUG, "ctrl wants heading data\n");
-      reply[reply_ix++] = lsm_heading;
+      reply[reply_ix++] = remote.lsm_heading;
     }
     if (data[4] & SPYBOT_SR_TEMP) {
       DBG(D_APP, D_DEBUG, "ctrl wants temp data\n");
@@ -204,6 +206,11 @@ void app_rover_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_recei
       DBG(D_APP, D_DEBUG, "ctrl wants radar data\n");
     }
     COMRAD_reply(reply, reply_ix);
+
+#ifdef CONFIG_SPYBOT_MOTOR
+    MOTOR_control_vector(remote.motor_ctrl[0], remote.motor_ctrl[1]);
+#endif
+
     break;
   case CMD_SET_CONFIG:
     break;
@@ -239,15 +246,19 @@ static void app_control_adc_cb(u16_t ch1, u16_t ch2) {
 
 #ifdef CONFIG_SPYBOT_VIDEO
 static void app_control_ui_task(u32_t a, void *b) {
+  APP_remote_set_motor_ctrl(0, 0);
 #ifdef CONFIG_SPYBOT_JOYSTICK
   ADC_sample(app_control_adc_cb);
-#endif
+#endif // CONFIG_SPYBOT_JOYSTICK
   HUD_paint();
 #ifdef CONFIG_SPYBOT_JOYSTICK
   INPUT_read(joystick_v, joystick_h);
-#endif
+  if (HUD_get_state() == HUD_MAIN) {
+    APP_remote_set_motor_ctrl((u16_t)(joystick_h >> 4) - 128, (u16_t)(joystick_v >> 4) - 128);
+  }
+#endif // CONFIG_SPYBOT_JOYSTICK
 }
-#endif
+#endif // CONFIG_SPYBOT_VIDEO
 
 
 static void app_control_init(void) {
@@ -285,12 +296,12 @@ void app_control_handle_ack(u8_t cmd, comm_arg *rx, u16_t len, u8_t *data) {
   case CMD_CONTROL: {
     u8_t sr = data[ix++];
     if (sr & SPYBOT_SR_ACC) {
-      lsm_acc[0] = data[ix++];
-      lsm_acc[1] = data[ix++];
-      lsm_acc[2] = data[ix++];
+      remote.lsm_acc[0] = data[ix++];
+      remote.lsm_acc[1] = data[ix++];
+      remote.lsm_acc[2] = data[ix++];
     }
     if (sr & SPYBOT_SR_HEADING) {
-      lsm_heading = data[ix++];
+      remote.lsm_heading = data[ix++];
     }
 
     break;
@@ -335,8 +346,8 @@ static void app_comm_task(u32_t a, void *p) {
     }
   } else if (common.pair_state == PAIRING_OK) {
     u8_t sr = SPYBOT_SR_ACC | SPYBOT_SR_HEADING;
-    s8_t left_motor = ((u16_t)(joystick_h >> 4) - 128);
-    s8_t right_motor = ((u16_t)(joystick_v >> 4) - 128);
+    s8_t left_motor = remote.motor_ctrl[0];
+    s8_t right_motor = remote.motor_ctrl[1];
     u8_t ctrl[] = {
         CMD_CONTROL, left_motor, right_motor, 0, sr
     };
@@ -484,6 +495,7 @@ void APP_init(void) {
   SYS_dbg_mask_enable(D_APP);
   // common
   memset(&common, 0, sizeof(common));
+  memset(&remote, 0, sizeof(remote));
   COMRAD_init();
 
 #ifdef CONFIG_SPYBOT_TEST
@@ -498,11 +510,18 @@ void APP_init(void) {
 #endif
   comm_task = TASK_create(app_comm_task, TASK_STATIC);
   TASK_start_timer(comm_task, &comm_timer, 0, 0, 1000, 1000, "comm");
+  //print("priogroup to stop at critical context:%i\n",
+  //  NVIC_EncodePriority(8 - __NVIC_PRIO_BITS, 1, 0));
 }
 
 u8_t APP_remote_get_heading(void) {
-  return lsm_heading;
+  return remote.lsm_heading;
 }
 s8_t *APP_remote_get_acc(void) {
-  return &lsm_acc[0];
+  return &remote.lsm_acc[0];
+}
+
+void APP_remote_set_motor_ctrl(s8_t horizontal, s8_t vertical) {
+  remote.motor_ctrl[0] = horizontal;
+  remote.motor_ctrl[1] = vertical;
 }

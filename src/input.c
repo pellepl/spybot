@@ -13,15 +13,16 @@
 #define ADC_LEVEL_LOW     0x100
 
 static input_type cur_input = IN_IDLE;
-static time press_time;
+static time press_time = 0;
 
 static void input_main(input_type in, bool change) {
   // check joystick long-press
   if (in & IN_PRESS) {
-    if (change) {
+    if (change || press_time == 0) {
       press_time = SYS_get_time_ms();
     } else {
-      if (SYS_get_time_ms()-press_time > 3000) {
+      if (SYS_get_time_ms()-press_time > 2000) {
+        press_time = 0;
         HUD_state(HUD_CONFIG);
       }
     }
