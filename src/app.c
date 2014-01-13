@@ -95,6 +95,24 @@ static struct {
   s8_t motor_ctrl[2]; // steer vector : [0] hori, [1] vert
 } remote;
 
+
+static void app_set_paired_state(bool paired) {
+  if (!paired) {
+#ifdef CONFIG_SPYBOT_APP_MASTER
+    common.pair_state = PAIRING_CTRL_SEND_BEACON;
+#endif
+#ifdef CONFIG_SPYBOT_APP_CLIENT
+    common.pair_state = PAIRING_ROVER_AWAIT_BEACON;
+#endif
+#ifdef CONFIG_SPYBOT_MOTOR
+    MOTOR_go(0);
+#endif
+  } else {
+    common.pair_state = PAIRING_OK;
+  }
+  COMRAD_report_paired(paired);
+}
+
 // rover funcs
 
 #ifdef CONFIG_SPYBOT_LSM
@@ -111,6 +129,7 @@ static void app_rover_lsm_cb_task(u32_t ares, void *adev) {
   reading_lsm = FALSE;
 
   u16_t heading_raw = lsm_get_heading(&lsm_dev);
+  //print("heading:%04x\n", heading_raw);
   s16_t *acc = lsm_get_acc_reading(&lsm_dev);
   remote.lsm_heading = heading_raw >> 8;
   remote.lsm_acc[0] = acc[0] >> 4;
@@ -225,8 +244,7 @@ void app_rover_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_recei
   default:
     DBG(D_APP, D_WARN, "rover: unknown message %02x\n", data[0]);
     COMRAD_reply(REPLY_DENY, 1);
-    common.pair_state = PAIRING_ROVER_AWAIT_BEACON;
-    COMRAD_report_paired(FALSE);
+    app_set_paired_state(FALSE);
     break;
   }
 }
@@ -311,14 +329,15 @@ void app_control_handle_ack(u8_t cmd, comm_arg *rx, u16_t len, u8_t *data) {
 
 // common funcs
 
-static void app_tx(u8_t *data, u16_t len) {
-  if (common.comrad_busy) return;
+static int app_tx(u8_t *data, u16_t len) {
+  if (common.comrad_busy) return R_COMM_PHY_TRY_LATER;
   int res = COMRAD_send(data, len, TRUE);
   if (res >= R_COMM_OK) {
     common.tx_seqno = res;
     common.tx_cmd = data[0];
     common.comrad_busy = TRUE;
   }
+  return res;
 }
 
 static void app_comm_task(u32_t a, void *p) {
@@ -337,12 +356,17 @@ static void app_comm_task(u32_t a, void *p) {
   if (common.pair_state == PAIRING_CTRL_SEND_BEACON) {
     TASK_set_timer_recurrence(&comm_timer, BEACON_RECURRENCE);
     u8_t beacon[] = { CMD_PAIRING_BEACON };
-    app_tx(beacon, sizeof(beacon));
+    int res = app_tx(beacon, sizeof(beacon));
+    if (res >= R_COMM_OK) {
+      DBG(D_APP, D_DEBUG, "ctrl sent beacon: seq %04x\n", res);
+    } else {
+      DBG(D_APP, D_WARN, "ctrl failed sending beacon %i\n", res);
+    }
   } else if (common.pair_state == PAIRING_CTRL_AWAIT_ECHO) {
     common.pair_wait_cnt++;
-    if (common.pair_wait_cnt > 1) {
+    if (common.pair_wait_cnt > 3) {
       DBG(D_APP, D_DEBUG, "ctrl echo wait timed out\n");
-      common.pair_state = PAIRING_CTRL_SEND_BEACON;
+      app_set_paired_state(FALSE);
     }
   } else if (common.pair_state == PAIRING_OK) {
     u8_t sr = SPYBOT_SR_ACC | SPYBOT_SR_HEADING;
@@ -371,8 +395,7 @@ void APP_comrad_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_received) {
     do {
 #ifdef CONFIG_SPYBOT_APP_CLIENT
       if (data[0] == CMD_PAIRING_BEACON) {
-        common.pair_state = PAIRING_ROVER_AWAIT_BEACON;
-        COMRAD_report_paired(FALSE);
+        app_set_paired_state(FALSE);
         break; // handle new pairing beacon while being paired
       }
 #endif
@@ -408,9 +431,13 @@ void APP_comrad_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_received) {
       COMRAD_reply(REPLY_DENY, 1);
     }
   } else {
-    // rover awaits no message in this state
-    DBG(D_APP, D_DEBUG, "rover awaits no message\n");
-    COMRAD_reply(REPLY_DENY, 1);
+    // rover awaits no message in this state, but we allow beacon anyway
+    if (data[0] != CMD_PAIRING_BEACON) {
+      DBG(D_APP, D_DEBUG, "rover awaits no message\n");
+      COMRAD_reply(REPLY_DENY, 1);
+    } else {
+      COMRAD_reply(REPLY_OK, 1);
+    }
   }
 #endif
 
@@ -420,8 +447,7 @@ void APP_comrad_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_received) {
     // controller awaits pairing echo cmd only
     if (data[0] == CMD_PAIRING_ECHO) {
       DBG(D_APP, D_DEBUG, "ctrl got beacon echo, pairing ok\n");
-      common.pair_state = PAIRING_OK;
-      COMRAD_report_paired(TRUE);
+      app_set_paired_state(TRUE);
       TASK_set_timer_recurrence(&comm_timer, COMM_RECURRENCE);
       COMRAD_reply(REPLY_OK, 1);
     } else {
@@ -446,15 +472,8 @@ void APP_comrad_ack(comm_arg *rx, u16_t seq_no, u16_t len, u8_t *data) {
 
   // bad ack or denied ack
   if (len == 0 || data[0] != ACK_OK) {
-#ifdef CONFIG_SPYBOT_APP_CLIENT
-    DBG(D_APP, D_DEBUG, "rover got denial on ack\n");
-    common.pair_state = PAIRING_ROVER_AWAIT_BEACON;
-#endif
-#ifdef CONFIG_SPYBOT_APP_MASTER
-    DBG(D_APP, D_DEBUG, "ctrl got denial on ack\n");
-    common.pair_state = PAIRING_CTRL_SEND_BEACON;
-#endif
-    COMRAD_report_paired(FALSE);
+    DBG(D_APP, D_DEBUG, "app got denial on ack\n");
+    app_set_paired_state(FALSE);
     TASK_set_timer_recurrence(&comm_timer, BEACON_RECURRENCE);
     return;
   }
@@ -462,8 +481,7 @@ void APP_comrad_ack(comm_arg *rx, u16_t seq_no, u16_t len, u8_t *data) {
 #ifdef CONFIG_SPYBOT_APP_CLIENT
   if (common.pair_state == PAIRING_ROVER_SEND_ECHO) {
     DBG(D_APP, D_DEBUG, "rover got ack on beacon echo, pairing ok\n");
-    common.pair_state = PAIRING_OK;
-    COMRAD_report_paired(TRUE);
+    app_set_paired_state(TRUE);
     TASK_set_timer_recurrence(&comm_timer, COMM_RECURRENCE);
   } else if (common.pair_state == PAIRING_OK) {
     app_rover_handle_ack(common.tx_cmd, rx, len, data);
@@ -481,8 +499,10 @@ void APP_comrad_ack(comm_arg *rx, u16_t seq_no, u16_t len, u8_t *data) {
 }
 
 void APP_comrad_err(u16_t seq_no, int err) {
+  print("APP comrad err: seq:%04x (%04x) %i\n", seq_no, common.tx_seqno, err);
   if (seq_no == common.tx_seqno) {
     common.comrad_busy = FALSE;
+    app_set_paired_state(FALSE);
   }
 }
 

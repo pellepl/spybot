@@ -12,7 +12,7 @@
 #include "comm.h"
 
 #ifdef CONFIG_I2C
-task_mutex i2c_mutex;
+extern task_mutex i2c_mutex;
 #endif
 
 void APP_init(void);
