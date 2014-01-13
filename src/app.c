@@ -11,11 +11,13 @@
 #include "spybot_protocol.h"
 #include "miniutils.h"
 
-#ifdef CONFIG_SPYBOT_LSM
+#ifdef CONFIG_I2C
 #include "lsm303_driver.h"
+#include "m24m01_driver.h"
 #include "i2c_driver.h"
 #include "trig_q.h"
 #endif
+
 
 
 #ifdef CONFIG_ADC
@@ -54,14 +56,13 @@ static struct {
   bool comrad_busy;
   u8_t pair_state;
   u8_t pair_wait_cnt;
+  task_timer comm_timer;
+  task *comm_task;
 } common;
 
 static u8_t const REPLY_OK[] = {ACK_OK};
 static u8_t const REPLY_DENY[] = {ACK_DENY};
 
-
-static task_timer comm_timer;
-static task *comm_task = NULL;
 
 // control ram
 #ifdef CONFIG_SPYBOT_VIDEO
@@ -75,12 +76,16 @@ static u16_t joystick_h = 0x800;
 #endif
 
 // rover ram
-#ifdef CONFIG_SPYBOT_LSM
+#ifdef CONFIG_I2C
 task_mutex i2c_mutex = TASK_MUTEX_INIT;
+
 lsm303_dev lsm_dev;
 static task_timer lsm_timer;
 static task *lsm_task = NULL;
 static bool reading_lsm = FALSE;
+
+m24m01_dev eeprom_dev;
+
 #endif
 
 #ifdef CONFIG_SPYBOT_MOTOR
@@ -113,9 +118,43 @@ static void app_set_paired_state(bool paired) {
   COMRAD_report_paired(paired);
 }
 
-// rover funcs
 
-#ifdef CONFIG_SPYBOT_LSM
+///////////////////
+// rover funcs
+///////////////////
+
+
+#ifdef CONFIG_I2C
+
+// rover eeprom
+
+static u8_t test[256];
+
+static void app_rover_eeprom_test_fin(u32_t ares, void *adev) {
+  printbuf(IOSTD, test, sizeof(test));
+  print("eeprom i2c release\n");
+  TASK_mutex_unlock(&i2c_mutex);
+}
+
+static void app_rover_eeprom_cb_irq(m24m01_dev *dev, int res) {
+  print("eeprom cb: res %i\n", res);
+  task *test_eeprom_task = TASK_create(app_rover_eeprom_test_fin, 0);
+  TASK_run(test_eeprom_task,0,0);
+}
+
+static void app_rover_test_eeprom(u32_t a, void *b) {
+  if (!TASK_mutex_lock(&i2c_mutex)) {
+    print("eeprom call stalled\n");
+    return;
+  }
+  print("eeprom call\n");
+  memset(test, 0, sizeof(test));
+  m24m01_read(&eeprom_dev, 0, test, sizeof(test));
+}
+
+
+// rover lsm
+
 static void app_rover_lsm_cb_task(u32_t ares, void *adev) {
   lsm303_dev *dev = (lsm303_dev *)dev;
   int res = (int)ares;
@@ -154,7 +193,7 @@ static void app_rover_lsm_task(u32_t a, void *b) {
   reading_lsm = TRUE;
   lsm_read_both(&lsm_dev);
 }
-#endif // CONFIG_SPYBOT_LSM
+#endif // CONFIG_I2C
 
 #ifdef CONFIG_SPYBOT_MOTOR
 static void app_rover_motor_task(u32_t a, void *b) {
@@ -163,21 +202,30 @@ static void app_rover_motor_task(u32_t a, void *b) {
 
 #endif
 
+// rover common
+
 static void app_rover_init(void) {
-#ifdef CONFIG_SPYBOT_LSM
+#ifdef CONFIG_I2C
   I2C_config(_I2C_BUS(0), 100000);
 
+  lsm_open(&lsm_dev, _I2C_BUS(0), FALSE, app_rover_lsm_cb_irq);
+  // lock mutex for lsm config
   if (!TASK_mutex_lock(&i2c_mutex)) {
     ASSERT(FALSE); // should never happen, during init
   }
-
-  lsm_open(&lsm_dev, _I2C_BUS(0), FALSE, app_rover_lsm_cb_irq);
-  lsm_config_default(&lsm_dev);
+  int res = lsm_config_default(&lsm_dev);
+  ASSERT(res == I2C_OK);
   lsm_set_lowpass(&lsm_dev, 50, 50);
 
   lsm_task = TASK_create(app_rover_lsm_task, TASK_STATIC);
-  TASK_start_timer(lsm_task, &lsm_timer, 0, 0, 0, 100, "lsm_read");
-#endif // CONFIG_SPYBOT_LSM
+  TASK_start_timer(lsm_task, &lsm_timer, 0, 0, 500, 100, "lsm_read");
+
+  m24m01_open(&eeprom_dev, _I2C_BUS(0), FALSE, FALSE, app_rover_eeprom_cb_irq);
+  task *test_eeprom_task = TASK_create(app_rover_test_eeprom, 0);
+  TASK_run(test_eeprom_task,0,0);
+
+
+#endif // CONFIG_I2C
 #ifdef CONFIG_SPYBOT_MOTOR
   MOTOR_init();
   motor_task = TASK_create(app_rover_motor_task, TASK_STATIC);
@@ -253,7 +301,14 @@ void app_rover_handle_ack(u8_t cmd, comm_arg *rx, u16_t len, u8_t *data) {
 
 }
 
+
+
+///////////////////
 // control funcs
+///////////////////
+
+
+// control joystick
 
 #ifdef CONFIG_SPYBOT_JOYSTICK
 static void app_control_adc_cb(u16_t ch1, u16_t ch2) {
@@ -261,6 +316,8 @@ static void app_control_adc_cb(u16_t ch1, u16_t ch2) {
   joystick_h = ch2;
 }
 #endif
+
+// control ui
 
 #ifdef CONFIG_SPYBOT_VIDEO
 static void app_control_ui_task(u32_t a, void *b) {
@@ -278,6 +335,7 @@ static void app_control_ui_task(u32_t a, void *b) {
 }
 #endif // CONFIG_SPYBOT_VIDEO
 
+// control common
 
 static void app_control_init(void) {
   // setup display
@@ -327,7 +385,13 @@ void app_control_handle_ack(u8_t cmd, comm_arg *rx, u16_t len, u8_t *data) {
   }
 }
 
+
+
+///////////////////
 // common funcs
+///////////////////
+
+
 
 static int app_tx(u8_t *data, u16_t len) {
   if (common.comrad_busy) return R_COMM_PHY_TRY_LATER;
@@ -354,7 +418,7 @@ static void app_comm_task(u32_t a, void *p) {
 #ifdef CONFIG_SPYBOT_APP_MASTER
   // control
   if (common.pair_state == PAIRING_CTRL_SEND_BEACON) {
-    TASK_set_timer_recurrence(&comm_timer, BEACON_RECURRENCE);
+    TASK_set_timer_recurrence(&common.comm_timer, BEACON_RECURRENCE);
     u8_t beacon[] = { CMD_PAIRING_BEACON };
     int res = app_tx(beacon, sizeof(beacon));
     if (res >= R_COMM_OK) {
@@ -424,7 +488,7 @@ void APP_comrad_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_received) {
       DBG(D_APP, D_DEBUG, "rover got pairing beacon\n");
       common.pair_state = PAIRING_ROVER_SEND_ECHO;
       COMRAD_reply(REPLY_OK, 1);
-      TASK_set_timer_recurrence(&comm_timer, BEACON_RECURRENCE);
+      TASK_set_timer_recurrence(&common.comm_timer, BEACON_RECURRENCE);
     } else {
       // rover awaits pairing beacon cmd only
       DBG(D_APP, D_DEBUG, "rover awaits only pairing beacon\n");
@@ -448,7 +512,7 @@ void APP_comrad_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_received) {
     if (data[0] == CMD_PAIRING_ECHO) {
       DBG(D_APP, D_DEBUG, "ctrl got beacon echo, pairing ok\n");
       app_set_paired_state(TRUE);
-      TASK_set_timer_recurrence(&comm_timer, COMM_RECURRENCE);
+      TASK_set_timer_recurrence(&common.comm_timer, COMM_RECURRENCE);
       COMRAD_reply(REPLY_OK, 1);
     } else {
       DBG(D_APP, D_DEBUG, "ctrl awaits beacon echo only\n");
@@ -474,7 +538,7 @@ void APP_comrad_ack(comm_arg *rx, u16_t seq_no, u16_t len, u8_t *data) {
   if (len == 0 || data[0] != ACK_OK) {
     DBG(D_APP, D_DEBUG, "app got denial on ack\n");
     app_set_paired_state(FALSE);
-    TASK_set_timer_recurrence(&comm_timer, BEACON_RECURRENCE);
+    TASK_set_timer_recurrence(&common.comm_timer, BEACON_RECURRENCE);
     return;
   }
 
@@ -482,7 +546,7 @@ void APP_comrad_ack(comm_arg *rx, u16_t seq_no, u16_t len, u8_t *data) {
   if (common.pair_state == PAIRING_ROVER_SEND_ECHO) {
     DBG(D_APP, D_DEBUG, "rover got ack on beacon echo, pairing ok\n");
     app_set_paired_state(TRUE);
-    TASK_set_timer_recurrence(&comm_timer, COMM_RECURRENCE);
+    TASK_set_timer_recurrence(&common.comm_timer, COMM_RECURRENCE);
   } else if (common.pair_state == PAIRING_OK) {
     app_rover_handle_ack(common.tx_cmd, rx, len, data);
   }
@@ -499,7 +563,7 @@ void APP_comrad_ack(comm_arg *rx, u16_t seq_no, u16_t len, u8_t *data) {
 }
 
 void APP_comrad_err(u16_t seq_no, int err) {
-  print("APP comrad err: seq:%04x (%04x) %i\n", seq_no, common.tx_seqno, err);
+  DBG(D_APP, D_WARN, "comrad err: seq:%04x (%04x) %i\n", seq_no, common.tx_seqno, err);
   if (seq_no == common.tx_seqno) {
     common.comrad_busy = FALSE;
     app_set_paired_state(FALSE);
@@ -528,8 +592,8 @@ void APP_init(void) {
 #ifdef CONFIG_SPYBOT_ROVER
   app_rover_init();
 #endif
-  comm_task = TASK_create(app_comm_task, TASK_STATIC);
-  TASK_start_timer(comm_task, &comm_timer, 0, 0, 1000, 1000, "comm");
+  common.comm_task = TASK_create(app_comm_task, TASK_STATIC);
+  TASK_start_timer(common.comm_task, &common.comm_timer, 0, 0, 1000, 1000, "comm");
   //print("priogroup to stop at critical context:%i\n",
   //  NVIC_EncodePriority(8 - __NVIC_PRIO_BITS, 1, 0));
 }

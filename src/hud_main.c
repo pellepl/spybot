@@ -102,7 +102,7 @@ void hud_paint_main(gcontext *ctx, bool init) {
   u8_t heading_raw = APP_remote_get_heading();
   s8_t *acc = APP_remote_get_acc();
 
-  mhud.heading_ang = (heading_raw <<1) - (PI_TRIG_T / 4);
+  mhud.heading_ang = (heading_raw << 1) - (PI_TRIG_T / 4);
 
   s16_t dx = (cos_table(mhud.heading_ang)*17) >> 15;
   s16_t dy = (sin_table(mhud.heading_ang)*14) >> 15;

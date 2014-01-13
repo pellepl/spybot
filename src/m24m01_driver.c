@@ -6,15 +6,33 @@
  */
 
 #include "m24m01_driver.h"
+#include "miniutils.h"
+
+/*
+ * M24M01 is checked busy by querying the device.
+ * If it does not answer, it is busy,
+ *
+ * Before every start of read, a query is made until device answers.
+ * Then, the full read is performed (may be split up if it crosses
+ * the 64kb + 64kb boundary) without any more queries.
+ *
+ * Writes can be done on 256 byte page basis. Before each write,
+ * a query is made to check if device is busy or not. So write will
+ * alternate queries and writes, i.e. query - write - query - write...
+ */
 
 #define M24M01_SIZE         (128*1024)
 #define M24M01_HIGH_START   (M24M01_SIZE/2)
 #define M24M01_MAX_QUERIES  3
 
+#define EEDBG(x, ...) print("M24M01:"x, ## __VA_ARGS__)
+
 static int _m24m01_read(m24m01_dev *dev, u32_t addr, u8_t *buf, u32_t len);
 
 static void m24m01_cb(i2c_dev *idev, int res) {
   m24m01_dev *dev = (m24m01_dev *)I2C_DEV_get_user_data(idev);
+
+  EEDBG("cb state %i, res %i\n", dev->state, res);
 
   // check query states
   if (dev->state == M24M01_READ_QUERY || dev->state == M24M01_WRITE_QUERY) {
@@ -22,10 +40,12 @@ static void m24m01_cb(i2c_dev *idev, int res) {
       // query fail
       dev->query_tries++;
       if (dev->query_tries >= M24M01_MAX_QUERIES) {
+        EEDBG("cb query fail\n");
         res = I2C_ERR_M24M01_UNRESPONSIVE;
         // all queries failed, goto fail handler below
       } else {
         // query again
+        EEDBG("cb query again #%i\n", dev->query_tries);
         res = I2C_DEV_query(idev);
         if (res >= I2C_OK) {
           // query request ok, await next callback
@@ -46,9 +66,11 @@ static void m24m01_cb(i2c_dev *idev, int res) {
     return;
   }
 
-  dev->addr += dev->oplen;
-  dev->data += dev->oplen;
-  dev->len -= dev->oplen;
+  if (dev->state == M24M01_READ || dev->state == M24M01_WRITE) {
+    dev->addr += dev->oplen;
+    dev->data += dev->oplen;
+    dev->len -= dev->oplen;
+  }
 
   if (dev->len == 0) {
     // finished
@@ -80,6 +102,7 @@ void m24m01_open(m24m01_dev *dev, i2c_bus *bus, bool e1, bool e2,
     void (*m24m01_callback)(m24m01_dev *dev, int res)) {
   memset(dev, 0, sizeof(m24m01_dev));
   dev->state = M24M01_IDLE;
+  dev->callback = m24m01_callback;
   const u32_t clock = 100000;
   dev->dev_addr = 0b10100000;
   dev->dev_addr |= e2 ? (0b10000) : 0;
@@ -104,7 +127,7 @@ static int _m24m01_read(m24m01_dev *dev, u32_t addr, u8_t *buf, u32_t len) {
     return I2C_ERR_M24M01_ADDRESS_RANGE_BAD;
   }
 
-  int res;
+  int res = I2C_OK;
 
   i2c_dev *adev;
   if (addr >= M24M01_HIGH_START) {
@@ -117,6 +140,7 @@ static int _m24m01_read(m24m01_dev *dev, u32_t addr, u8_t *buf, u32_t len) {
   }
 
   if (dev->state == M24M01_READ_QUERY) {
+    EEDBG("read, query\n");
     res = I2C_DEV_query(adev);
   } else if (dev->state == M24M01_READ) {
     dev->tmp[0] = addr >> 8;
@@ -132,7 +156,10 @@ static int _m24m01_read(m24m01_dev *dev, u32_t addr, u8_t *buf, u32_t len) {
     dev->seq[1].len = dev->oplen;
     dev->seq[1].gen_stop = I2C_DEV_STOP;
 
+    EEDBG("read, sequence\n");
     res = I2C_DEV_sequence(adev, &dev->seq[0], 2);
+  } else {
+    ASSERT(FALSE);
   }
 
   return res;
@@ -145,7 +172,6 @@ int m24m01_read(m24m01_dev *dev, u32_t addr, u8_t *buf, u32_t len) {
   if (dev->state != M24M01_IDLE) {
     return I2C_ERR_DEV_BUSY;
   }
-  int res;
 
   dev->addr = addr;
   dev->data = buf;
@@ -154,9 +180,9 @@ int m24m01_read(m24m01_dev *dev, u32_t addr, u8_t *buf, u32_t len) {
   dev->state = M24M01_READ_QUERY;
   dev->query_tries = 0;
 
-  res = _m24m01_read(dev, addr, buf, len);
+  int res = _m24m01_read(dev, addr, buf, len);
 
-  if (res != I2C_OK) {
+  if (res < I2C_OK) {
     dev->state = M24M01_IDLE;
   }
 
@@ -170,8 +196,6 @@ int m24m01_write(m24m01_dev *dev, u32_t addr, u8_t *buf, u32_t len) {
   if (dev->state != M24M01_IDLE) {
     return I2C_ERR_DEV_BUSY;
   }
-  int res;
-
   dev->addr = addr;
   dev->data = buf;
   dev->len = len;
@@ -181,7 +205,9 @@ int m24m01_write(m24m01_dev *dev, u32_t addr, u8_t *buf, u32_t len) {
 
   // TODO
 
-  if (res != I2C_OK) {
+  int res = I2C_OK;
+
+  if (res < I2C_OK) {
     dev->state = M24M01_IDLE;
   }
 
