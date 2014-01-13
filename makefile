@@ -215,6 +215,11 @@ ifeq ($(CONFIG_SPYBOT_MOTOR),1)
 CFILES 		+= motor.c
 endif
 
+#TODO move to generic
+ifeq ($(CONFIG_SPYBOT_ROVER),1)
+CFILES		+= m24m01_driver.c
+endif
+
 # spybot controller files
 
 ifeq ($(CONFIG_SPYBOT_VIDEO),1)
