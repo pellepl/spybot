@@ -27,6 +27,10 @@
 #include "lsm303_driver.h"
 #endif
 
+#ifdef CONFIG_M24M01
+#include "m24m01_driver.h"
+#endif
+
 #ifdef CONFIG_SPYBOT_HCSR
 #include "range_sens_hcsr04_driver.h"
 #endif
@@ -88,7 +92,14 @@ static int f_dbg_tx(char *s);
 static int f_i2c_read(int addr, int reg);
 static int f_i2c_write(int addr, int reg, int data);
 static int f_i2c_scan(void);
+
+#ifdef CONFIG_M24M01
+static int f_ee_open(void);
+static int f_ee_read(int addr, int len);
+static int f_ee_write(int addr, char *s);
 #endif
+#endif
+
 #ifdef CONFIG_SPYBOT_LSM
 static int f_lsm_open();
 static int f_lsm_readacc();
@@ -272,6 +283,17 @@ static cmd c_tbl[] = {
     },
     { .name = "i2c_scan", .fn = (func) f_i2c_scan,
         .help = "scans i2c bus for all addresses\n" },
+
+#ifdef CONFIG_M24M01
+        { .name = "ee_open", .fn = (func) f_ee_open,
+            .help = "ee open device\n"
+        },
+        { .name = "ee_r", .fn = (func) f_ee_read,
+            .help = "read eeprom (address, length)\n"
+        },
+        { .name = "ee_w", .fn = (func) f_ee_write,
+            .help = "write eeprom (address, string)\n" },
+#endif
 #endif
 
 #ifdef CONFIG_SPYBOT_LSM
@@ -780,6 +802,7 @@ void i2c_scan_report_task(u32_t addr, void *res) {
 
 static void i2c_scan_cb_irq(i2c_bus *bus, int res) {
   task *report_scan_task = TASK_create(i2c_scan_report_task, 0);
+
   TASK_run(report_scan_task, bus->addr & 0xfe, res == I2C_OK ? "UP " : ".. ");
 }
 
@@ -797,6 +820,60 @@ static int f_i2c_scan(void) {
   if (res != I2C_OK) print("i2c query err %i\n", res);
   return 0;
 }
+
+#ifdef CONFIG_M24M01
+m24m01_dev ee_dev;
+static u8_t ee_data[128];
+bool ee_bufprint;
+int ee_buflen;
+
+static void ee_cb(m24m01_dev *dev, int res) {
+  print("ee_dev cb, res %i\n", res);
+  if (ee_bufprint) {
+    printbuf(IOSTD, &ee_data[0],ee_buflen);
+  }
+  TASK_mutex_unlock(&i2c_mutex);
+}
+
+static int f_ee_open(void) {
+  m24m01_open(&ee_dev, _I2C_BUS(0), FALSE, FALSE, ee_cb);
+  return 0;
+}
+
+static int f_ee_read(int addr, int len) {
+  if (_argc < 2) {
+    return -1;
+  }
+  if (!TASK_mutex_try_lock(&i2c_mutex)) {
+    print("i2c busy\n");
+    return 0;
+  }
+  ee_bufprint = TRUE;
+  ee_buflen = len;
+  int res = m24m01_read(&ee_dev, addr, (u8_t *)ee_data, len);
+  if (res != I2C_OK) {
+    print("err:%i\n", res);
+  }
+  return 0;
+}
+
+static int f_ee_write(int addr, char *s) {
+  if (_argc < 2 || !IS_STRING(s)) {
+    return -1;
+  }
+  if (!TASK_mutex_try_lock(&i2c_mutex)) {
+    print("i2c busy\n");
+    return 0;
+  }
+  ee_bufprint = FALSE;
+  int res = m24m01_write(&ee_dev, addr, (u8_t*)s, (u32_t)strlen(s));
+  if (res != I2C_OK) {
+    print("err:%i\n", res);
+  }
+  return 0;
+}
+#endif // CONFIG_M24M01
+
 #endif // CONFIG_I2C
 
 #ifdef CONFIG_ADC

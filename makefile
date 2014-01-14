@@ -205,7 +205,6 @@ CFILES		+= nrf905_impl.c
 CFILES		+= comm_radio.c
 
 CFILES		+= app.c
-CFILES		+= configuration.c
 
 # spybot rover files
 ifeq ($(CONFIG_SPYBOT_HCSR),1)
@@ -215,9 +214,8 @@ ifeq ($(CONFIG_SPYBOT_MOTOR),1)
 CFILES 		+= motor.c
 endif
 
-#TODO move to generic
-ifeq ($(CONFIG_SPYBOT_ROVER),1)
-CFILES		+= m24m01_driver.c
+ifeq ($(CONFIG_M24M01), 1)
+CFILES		+= configuration_ee.c
 endif
 
 # spybot controller files

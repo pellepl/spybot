@@ -128,30 +128,6 @@ static void app_set_paired_state(bool paired) {
 
 // rover eeprom
 
-static u8_t test[256];
-
-static void app_rover_eeprom_test_fin(u32_t ares, void *adev) {
-  printbuf(IOSTD, test, sizeof(test));
-  print("eeprom i2c release\n");
-  TASK_mutex_unlock(&i2c_mutex);
-}
-
-static void app_rover_eeprom_cb_irq(m24m01_dev *dev, int res) {
-  print("eeprom cb: res %i\n", res);
-  task *test_eeprom_task = TASK_create(app_rover_eeprom_test_fin, 0);
-  TASK_run(test_eeprom_task,0,0);
-}
-
-static void app_rover_test_eeprom(u32_t a, void *b) {
-  if (!TASK_mutex_lock(&i2c_mutex)) {
-    print("eeprom call stalled\n");
-    return;
-  }
-  print("eeprom call\n");
-  memset(test, 0, sizeof(test));
-  m24m01_read(&eeprom_dev, 0, test, sizeof(test));
-}
-
 
 // rover lsm
 
@@ -220,10 +196,7 @@ static void app_rover_init(void) {
   lsm_task = TASK_create(app_rover_lsm_task, TASK_STATIC);
   TASK_start_timer(lsm_task, &lsm_timer, 0, 0, 500, 100, "lsm_read");
 
-  m24m01_open(&eeprom_dev, _I2C_BUS(0), FALSE, FALSE, app_rover_eeprom_cb_irq);
-  task *test_eeprom_task = TASK_create(app_rover_test_eeprom, 0);
-  TASK_run(test_eeprom_task,0,0);
-
+  //m24m01_open(&eeprom_dev, _I2C_BUS(0), FALSE, FALSE, app_rover_eeprom_cb_irq);
 
 #endif // CONFIG_I2C
 #ifdef CONFIG_SPYBOT_MOTOR
