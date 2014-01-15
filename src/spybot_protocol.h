@@ -34,7 +34,7 @@ typedef enum {
   CMD_PAIRING_ECHO,
 
   // [rover <-- ctrl]
-  // arg: s8 left, s8 right, u8_t action_mask, u8 status_mask
+  // arg: s8 left, s8 right, s8 pan, s8 tilt, s8 radar, u8 action_mask, u8 status_mask
   //      u8 action_mask: bit 0 - lights
   //                      bit 1 - beep
   //      u8 status_mask: bit 0 - acc
@@ -64,24 +64,30 @@ typedef enum {
   // [rover <-- ctrl]
   // arg: [u8 cfg, s16 val]* until CFG_STOP
   // ack: [0x00=deny, 0x01=accept]
-  //      s8 result
+  //      s8 result [0x01=ok]
   CMD_SET_CONFIG,
 
   // [rover <-- ctrl]
   // arg: none
   // ack: [0x00=deny, 0x01=accept]
-  //      s8 result
+  //      s8 result [0x01=ok]
   CMD_STORE_CONFIG,
 
   // [rover <-- ctrl]
   // arg: none
   // ack: [0x00=deny, 0x01=accept]
+  CMD_LOAD_CONFIG,
+
+  // [rover <-- ctrl]
+  // arg: none
+  // ack: [0x00=deny, 0x01=accept]
+  //      [0x00=nocfg, 0x01=ok]
   //      s8 steer adjust
   //      s8 radar adjust
   //      s8 cam_pan adjust
   //      s8 cam_tilt adjust
   //      u8 common config
-  CMD_LOAD_CONFIG,
+  CMD_GET_CONFIG,
 
   // [rover <-- ctrl]
   // arg: u8 reset [1 = reset mag extremes, 0 = keep mag extremes]

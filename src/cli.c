@@ -85,6 +85,7 @@ static int f_dump();
 static int f_dump_trace();
 static int f_assert();
 static int f_dbg();
+static int f_build();
 
 static int f_dbg_tx(char *s);
 
@@ -101,12 +102,14 @@ static int f_ee_write(int addr, char *s);
 #endif
 
 #ifdef CONFIG_SPYBOT_LSM
-static int f_lsm_open();
-static int f_lsm_readacc();
-static int f_lsm_readmag();
+static int f_lsm_extremes(bool reset);
+
+static int f_lsm_open(void);
+static int f_lsm_readacc(void);
+static int f_lsm_readmag(void);
 static int f_lsm_read();
-static int f_lsm_calibrate();
-static int f_lsm_close();
+static int f_lsm_calibrate(void);
+static int f_lsm_close(void);
 #endif
 
 #ifdef CONFIG_SPYBOT_JOYSTICK
@@ -297,6 +300,9 @@ static cmd c_tbl[] = {
 #endif
 
 #ifdef CONFIG_SPYBOT_LSM
+    { .name = "lsm_x", .fn = (func) f_lsm_extremes,
+        .help = "read out extremes from mag and acc\n"
+    },
     { .name = "lsm_open", .fn = (func) f_lsm_open,
         .help = "setups and configures lsm303 device\n"
     },
@@ -357,6 +363,9 @@ static cmd c_tbl[] = {
     },
     { .name = "hardfault", .fn = (func) f_hardfault,
         .help = "Generate hardfault, div by zero\n"
+    },
+    { .name = "build", .fn = (func) f_build,
+        .help = "Outputs build info\n"
     },
     { .name = "help", .fn = (func) f_help,
         .help = "Prints help\n"
@@ -483,6 +492,73 @@ static int f_dbg() {
 
 static int f_assert() {
   ASSERT(FALSE);
+  return 0;
+}
+
+static int f_build(void) {
+  cli_print_app_name();
+  print("\n");
+#ifdef CONFIG_SPYBOT_TEST
+  print("CONFIG_SPYBOT_TEST""\n");
+#endif
+#ifdef CONFIG_SPYBOT_ROVER
+  print("CONFIG_SPYBOT_ROVER""\n");
+#endif
+#ifdef CONFIG_SPYBOT_CONTROLLER
+  print("CONFIG_SPYBOT_CONTROLLER""\n");
+#endif
+#ifdef CONFIG_SPYBOT_APP_MASTER
+  print("CONFIG_SPYBOT_APP_MASTER""\n");
+#endif
+#ifdef CONFIG_SPYBOT_APP_CLIENT
+  print("CONFIG_SPYBOT_APP_CLIENT""\n");
+#endif
+#ifdef CONFIG_SPYBOT_LSM
+  print("CONFIG_SPYBOT_LSM""\n");
+#endif
+#ifdef CONFIG_SPYBOT_HCSR
+  print("CONFIG_SPYBOT_HCSR""\n");
+#endif
+#ifdef CONFIG_SPYBOT_SERVO
+  print("CONFIG_SPYBOT_SERVO""\n");
+#endif
+#ifdef CONFIG_SPYBOT_MOTOR
+  print("CONFIG_SPYBOT_MOTOR""\n");
+#endif
+#ifdef CONFIG_SPYBOT_VIDEO
+  print("CONFIG_SPYBOT_VIDEO""\n");
+#endif
+#ifdef CONFIG_SPYBOT_JOYSTICK
+  print("CONFIG_SPYBOT_JOYSTICK""\n");
+#endif
+#ifdef CONFIG_SPYBOT_XBUTTONS
+  print("CONFIG_SPYBOT_XBUTTONS""\n");
+#endif
+#ifdef CONFIG_SPYBOT_XLEDS
+  print("CONFIG_SPYBOT_XLEDS""\n");
+#endif
+#ifdef CONFIG_ADC
+  print("CONFIG_ADC""\n");
+#endif
+#ifdef CONFIG_I2C
+  print("CONFIG_I2C""\n");
+#endif
+#ifdef CONFIG_I2C_DEVICE
+  print("CONFIG_I2C_DEVICE""\n");
+#endif
+#ifdef CONFIG_LSM303
+  print("CONFIG_LSM303""\n");
+#endif
+#ifdef CONFIG_M24M01
+  print("CONFIG_M24M01""\n");
+#endif
+
+  print("SYS_MAIN_TIMER_FREQ %i\n", SYS_MAIN_TIMER_FREQ);
+  print("SYS_TIMER_TICK_FREQ %i\n", SYS_TIMER_TICK_FREQ);
+  print("UART2_SPEED %i\n", UART2_SPEED);
+  print("CONFIG_TASK_POOL %i\n", CONFIG_TASK_POOL);
+  print("CONFIG_MOTOR_PWM_FREQ %i\n", CONFIG_MOTOR_PWM_FREQ);
+
   return 0;
 }
 
@@ -683,7 +759,21 @@ static void lsm_cb(lsm303_dev *dev, int res) {
   }
 }
 
-static int f_lsm_open() {
+static int f_lsm_extremes(bool reset) {
+  s16_t x[3][2];
+  APP_get_acc_extremes(x,reset);
+  print("ACC x %+06i .. %+06i\n", x[0][0], x[0][1]);
+  print("    y %+06i .. %+06i\n", x[1][0], x[1][1]);
+  print("    z %+06i .. %+06i\n", x[2][0], x[2][1]);
+  APP_get_mag_extremes(x, reset);
+  print("MAG x %+06i .. %+06i\n", x[0][0], x[0][1]);
+  print("    y %+06i .. %+06i\n", x[1][0], x[1][1]);
+  print("    z %+06i .. %+06i\n", x[2][0], x[2][1]);
+
+  return 0;
+}
+
+static int f_lsm_open(void) {
   lsm_open(&lsm_dev, _I2C_BUS(0), FALSE, lsm_cb);
   lsm_op = 0;
   int res = lsm_config_default(&lsm_dev);
@@ -693,7 +783,7 @@ static int f_lsm_open() {
   return 0;
 }
 
-static int f_lsm_readacc() {
+static int f_lsm_readacc(void) {
   lsm_op = 1;
   int res = lsm_read_acc(&lsm_dev);
   if (res != I2C_OK) {
@@ -701,7 +791,7 @@ static int f_lsm_readacc() {
   }
   return 0;
 }
-static int f_lsm_readmag() {
+static int f_lsm_readmag(void) {
   lsm_op = 2;
   int res = lsm_read_mag(&lsm_dev);
   if (res != I2C_OK) {
@@ -709,7 +799,7 @@ static int f_lsm_readmag() {
   }
   return 0;
 }
-static int f_lsm_read() {
+static int f_lsm_read(void) {
   lsm_op = 3;
   int res = lsm_read_both(&lsm_dev);
   if (res != I2C_OK) {
@@ -717,7 +807,7 @@ static int f_lsm_read() {
   }
   return 0;
 }
-static int f_lsm_calibrate() {
+static int f_lsm_calibrate(void) {
   print("Move device around all axes slowly, put it to rest when finished\n");
   lsm_op = 4;
   lsm_still = 0;
@@ -735,7 +825,7 @@ static int f_lsm_calibrate() {
   return 0;
 
 }
-static int f_lsm_close() {
+static int f_lsm_close(void) {
   lsm_close(&lsm_dev);
   return 0;
 }

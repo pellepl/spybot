@@ -18,8 +18,6 @@
 #include "trig_q.h"
 #endif
 
-
-
 #ifdef CONFIG_ADC
 #include "adc.h"
 #endif
@@ -51,8 +49,18 @@
 #define ACK_OK                      0x01
 #define ACK_DENY                    0x00
 
-#define BEACON_RECURRENCE           400
-#define COMM_RECURRENCE             107
+#ifdef CONFIG_SPYBOT_ROVER
+#define BEACON_RECURRENCE           409
+#define COMM_RECURRENCE             113
+#else
+#define BEACON_RECURRENCE           401
+#define COMM_RECURRENCE             97
+#endif
+
+#define APP_CTRL_REMOTE_REQ_SET_CONFIG    (1<<0)
+#define APP_CTRL_REMOTE_REQ_STORE_CONFIG  (1<<1)
+#define APP_CTRL_REMOTE_REQ_LOAD_CONFIG   (1<<2)
+#define APP_CTRL_REMOTE_REQ_GET_CONFIG    (1<<3)
 
 static struct {
   u16_t tx_seqno;
@@ -60,8 +68,9 @@ static struct {
   bool comrad_busy;
   u8_t pair_state;
   u8_t pair_wait_cnt;
-  task_timer comm_timer;
-  task *comm_task;
+  task_timer tick_timer;
+  task *tick_task;
+  u32_t tick_count;
 } common;
 
 static u8_t const REPLY_OK[] = {ACK_OK};
@@ -69,6 +78,7 @@ static u8_t const REPLY_DENY[] = {ACK_DENY};
 
 
 // control ram
+static u32_t app_ctrl_remote_req = 0;
 #ifdef CONFIG_SPYBOT_VIDEO
 gcontext gctx;
 static task_timer ui_timer;
@@ -80,13 +90,18 @@ static u16_t joystick_h = 0x800;
 #endif
 
 // rover ram
+static u32_t app_rover_remote_req = 0;
 #ifdef CONFIG_I2C
 task_mutex i2c_mutex = TASK_MUTEX_INIT;
 
+#ifdef CONFIG_SPYBOT_LSM
 lsm303_dev lsm_dev;
 static task_timer lsm_timer;
 static task *lsm_task = NULL;
 static bool reading_lsm = FALSE;
+s16_t mag_extremes[3][2]; // x,y,z : min,max
+s16_t acc_extremes[3][2]; // x,y,z : min,max
+#endif
 #ifdef CONFIG_M24M01
 m24m01_dev eeprom_dev;
 #endif
@@ -102,8 +117,26 @@ static struct {
   s8_t lsm_heading;
   s8_t lsm_acc[3];
   s8_t motor_ctrl[2]; // steer vector : [0] hori, [1] vert
+  s8_t pan;
+  s8_t tilt;
+  s8_t radar;
+
 } remote;
 
+configuration_t app_cfg;
+
+// helpers
+
+static int app_tx(u8_t *data, u16_t len) {
+  if (common.comrad_busy) return R_COMM_PHY_TRY_LATER;
+  int res = COMRAD_send(data, len, TRUE);
+  if (res >= R_COMM_OK) {
+    common.tx_seqno = res;
+    common.tx_cmd = data[0];
+    common.comrad_busy = TRUE;
+  }
+  return res;
+}
 
 static void app_set_paired_state(bool paired) {
   if (!paired) {
@@ -118,6 +151,10 @@ static void app_set_paired_state(bool paired) {
 #endif
   } else {
     common.pair_state = PAIRING_OK;
+#ifdef CONFIG_SPYBOT_APP_MASTER
+    app_ctrl_remote_req |= (APP_CTRL_REMOTE_REQ_GET_CONFIG);
+#endif
+
   }
   COMRAD_report_paired(paired);
 }
@@ -132,32 +169,43 @@ static void app_set_paired_state(bool paired) {
 
 // rover eeprom config
 
-static void app_rover_cfg_cb(cfg_ee_state state, int res) {
-  // TODO
-  print("CFG EE CB state:%i res:%i\n", state, res);
+static void app_rover_cfg_cb(cfg_state state, cfg_ee_state ee_state, int res) {
+  // todo
+  DBG(D_APP, D_DEBUG,"CFG EE CB state:%i eestate:%i res:%i\n", state, ee_state, res);
+  if (state == LOAD_CFG && res == CFG_OK) {
+    int res = CFG_get_config(&app_cfg);
+    ASSERT(res == CFG_OK);
+  }
 }
 
 // rover lsm
-
+#ifdef CONFIG_SPYBOT_LSM
 static void app_rover_lsm_cb_task(u32_t ares, void *adev) {
   lsm303_dev *dev = (lsm303_dev *)dev;
   int res = (int)ares;
   if (res == I2C_ERR_LSM303_BAD_READ) {
-    print("lsm bad read\n");
+    DBG(D_APP, D_WARN, "lsm bad read\n");
   } else  if (res != I2C_OK) {
-    //print("lsm error %i\n", res);
+    DBG(D_APP, D_WARN, "lsm err %i\n", res);
     I2C_config(_I2C_BUS(0), 100000);
   }
   TASK_mutex_unlock(&i2c_mutex);
   reading_lsm = FALSE;
 
   u16_t heading_raw = lsm_get_heading(&lsm_dev);
-  //print("heading:%04x\n", heading_raw);
   s16_t *acc = lsm_get_acc_reading(&lsm_dev);
+  s16_t *mag = lsm_get_mag_reading(&lsm_dev);
   remote.lsm_heading = heading_raw >> 8;
   remote.lsm_acc[0] = acc[0] >> 4;
   remote.lsm_acc[1] = acc[1] >> 4;
   remote.lsm_acc[2] = acc[2] >> 4;
+  int i;
+  for (i = 0; i < 3; i++) {
+    acc_extremes[i][0] = MIN(acc_extremes[i][0], acc[i]);
+    acc_extremes[i][1] = MAX(acc_extremes[i][1], acc[i]);
+    mag_extremes[i][0] = MIN(mag_extremes[i][0], mag[i]);
+    mag_extremes[i][1] = MAX(mag_extremes[i][1], mag[i]);
+  }
 }
 
 static void app_rover_lsm_cb_irq(lsm303_dev *dev, int res) {
@@ -177,14 +225,14 @@ static void app_rover_lsm_task(u32_t a, void *b) {
   reading_lsm = TRUE;
   lsm_read_both(&lsm_dev);
 }
+#endif // CONFIG_SPYBOT_LSM
 #endif // CONFIG_I2C
 
 #ifdef CONFIG_SPYBOT_MOTOR
 static void app_rover_motor_task(u32_t a, void *b) {
   MOTOR_update();
 }
-
-#endif
+#endif // CONFIG_SPYBOT_MOTOR
 
 // rover common
 
@@ -205,7 +253,7 @@ static void app_rover_init(void) {
   TASK_start_timer(lsm_task, &lsm_timer, 0, 0, 500, 100, "lsm_read");
 
   CFG_init(&eeprom_dev, app_rover_cfg_cb);
-  CFG_load_settings();
+  CFG_load_config();
 
 #endif // CONFIG_I2C
 #ifdef CONFIG_SPYBOT_MOTOR
@@ -217,60 +265,141 @@ static void app_rover_init(void) {
 
 #define REPLY_MAX_LEN (COMM_LNK_MAX_DATA-COMM_H_SIZE-1)
 
-void app_rover_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_received) {
+static void app_rover_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_received) {
   u8_t reply[REPLY_MAX_LEN];
   u8_t reply_ix = 0;
+  reply[reply_ix++] = ACK_OK;
   switch (data[0]) {
-  case CMD_CONTROL:
-    reply[reply_ix++] = ACK_OK;
-    reply[reply_ix++] = data[4];
+
+
+  case CMD_CONTROL: {
+    u8_t act = (u8_t)data[6];
+    u8_t sr = (u8_t)data[7];
+
+    reply[reply_ix++] = sr;
     remote.motor_ctrl[0] = (s8_t)data[1];
     remote.motor_ctrl[1] = (s8_t)data[2];
 
     if (already_received) {
 
     }
-    // action_mask
-    if (data[3]) {
+    remote.pan = (s8_t)data[3];
+    remote.tilt = (s8_t)data[4];
+    remote.radar = (s8_t)data[5];
 
-    }
+    // action_mask
+    // todo
+    (void)act;
+
     // status_mask
-    if (data[4] & SPYBOT_SR_ACC) {
-      //DBG(D_APP, D_DEBUG, "ctrl wants acc data\n");
+    if (sr & SPYBOT_SR_ACC) {
       reply[reply_ix++] = remote.lsm_acc[0];
       reply[reply_ix++] = remote.lsm_acc[1];
       reply[reply_ix++] = remote.lsm_acc[2];
     }
-    if (data[4] & SPYBOT_SR_HEADING) {
-      //DBG(D_APP, D_DEBUG, "ctrl wants heading data\n");
+    if (sr & SPYBOT_SR_HEADING) {
       reply[reply_ix++] = remote.lsm_heading;
     }
-    if (data[4] & SPYBOT_SR_TEMP) {
-      DBG(D_APP, D_DEBUG, "ctrl wants temp data\n");
+    if (sr & SPYBOT_SR_TEMP) {
+      // todo
     }
-    if (data[4] & SPYBOT_SR_BATT) {
-      DBG(D_APP, D_DEBUG, "ctrl wants batt data\n");
+    if (sr & SPYBOT_SR_BATT) {
+      // todo
     }
-    if (data[4] & SPYBOT_SR_RADAR) {
-      DBG(D_APP, D_DEBUG, "ctrl wants radar data\n");
+    if (sr & SPYBOT_SR_RADAR) {
+      // todo
     }
     COMRAD_reply(reply, reply_ix);
 
 #ifdef CONFIG_SPYBOT_MOTOR
     MOTOR_control_vector(remote.motor_ctrl[0], remote.motor_ctrl[1]);
 #endif
+#ifdef CONFIG_SPYBOT_SERVO
+    // todo
+    //SERVO_control(SERVO_CAM_PAN, remote.pan);
+    //SERVO_control(SERVO_CAM_TILT, remote.tilt);
+    //SERVO_control(SERVO_CAM_RADAR, remote.radar);
+#endif
 
     break;
-  case CMD_SET_CONFIG:
+  }
+
+
+  case CMD_SET_CONFIG: {
+    int data_ix = 1;
+    while (data_ix < COMM_LNK_MAX_DATA && data[data_ix] != CFG_STOP) {
+      spybot_cfg cfg_type = data[data_ix];
+      s16_t cfg_val = (data[data_ix + 1] << 8) | (data[data_ix + 2]);
+      APP_cfg_set(cfg_type, cfg_val);
+      data_ix += 3;
+      DBG(D_APP, D_DEBUG, "rover remote update cfg %i = %i\n", cfg_type, cfg_val);
+    }
+    reply[reply_ix++] = 1; // ok
+    COMRAD_reply(reply, reply_ix);
     break;
+  }
+
+
   case CMD_STORE_CONFIG:
+#ifdef CONFIG_M24M01
+    CFG_set_config(&app_cfg);
+    CFG_store_config();
+    reply[reply_ix++] = 1; // ok
+    COMRAD_reply(reply, reply_ix);
+    DBG(D_APP, D_DEBUG, "rover stored config\n");
+#else
+    COMRAD_reply(REPLY_DENY, 1);
+#endif
+    // todo
     break;
+
+
   case CMD_LOAD_CONFIG:
+#ifdef CONFIG_M24M01
+    CFG_load_config();
+    COMRAD_reply(reply, reply_ix);
+    DBG(D_APP, D_DEBUG, "rover loaded config\n");
+#else
+    COMRAD_reply(REPLY_DENY, 1);
+#endif
     break;
+
+
+  case CMD_GET_CONFIG: {
+#ifdef CONFIG_M24M01
+    configuration_t cfg;
+    int res = CFG_get_config(&cfg);
+    if (res == CFG_OK) {
+      reply[reply_ix++] = 1; // ok, have config
+      reply[reply_ix++] = app_cfg.main.steer_adjust;
+      reply[reply_ix++] = app_cfg.main.radar_adjust;
+      reply[reply_ix++] = app_cfg.main.cam_pan_adjust;
+      reply[reply_ix++] = app_cfg.main.cam_tilt_adjust;
+      reply[reply_ix++] = app_cfg.main.common;
+      DBG(D_APP, D_DEBUG, "rover returned config\n");
+    } else {
+      reply[reply_ix++] = 0; // nok, no config yet - try later
+      DBG(D_APP, D_DEBUG, "rover no config to return\n");
+    }
+#else
+    reply[reply_ix++] = 0; // nok, no config ever
+#endif
+
+    COMRAD_reply(reply, reply_ix);
+    break;
+  }
+
+
   case CMD_LSM_MAG_EXTREMES:
+    // todo
     break;
+
+
   case CMD_LSM_ACC_EXTREMES:
+    // todo
     break;
+
+
   default:
     DBG(D_APP, D_WARN, "rover: unknown message %02x\n", data[0]);
     COMRAD_reply(REPLY_DENY, 1);
@@ -279,11 +408,29 @@ void app_rover_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_recei
   }
 }
 
-void app_rover_handle_ack(u8_t cmd, comm_arg *rx, u16_t len, u8_t *data) {
-
+static void app_rover_handle_ack(u8_t cmd, comm_arg *rx, u16_t len, u8_t *data) {
+  switch (cmd) {
+  case CMD_CHANNEL_CHANGE:
+    // todo
+    break;
+  }
 }
 
-
+static void app_rover_tick(void) {
+  // rover
+  if (common.pair_state == PAIRING_ROVER_SEND_ECHO) {
+    u32_t v = SPYBOT_VERSION;
+    u32_t b = SYS_build_number();
+    u8_t beacon_echo[] =
+    { CMD_PAIRING_ECHO ,
+        (v >> 24) & 0xff, (v >> 16) & 0xff, (v >> 8) & 0xff, (v & 0xff),
+        (b >> 24), (b >> 16), (b >> 8), (b & 0xff),
+    };
+    app_tx(beacon_echo, sizeof(beacon_echo));
+  } else if (common.pair_state == PAIRING_OK) {
+    // todo
+  }
+}
 
 ///////////////////
 // control funcs
@@ -324,17 +471,21 @@ static void app_control_init(void) {
 #ifdef CONFIG_SPLASH
   extern unsigned const char const img_modbla_car_bmp[14400/8];
 #endif
+
 #ifdef CONFIG_SPYBOT_VIDEO
   CVIDEO_init(HUD_vbl);
   CVIDEO_init_gcontext(&gctx);
   CVIDEO_set_effect(79);
 #endif
-#ifdef CONFIG_SPLASH
+
+  #ifdef CONFIG_SPLASH
   GFX_draw_image(&gctx, img_modbla_car_bmp, 7, 8, 120/8, 120);
 #endif
 
   // setup ui & input
+#ifdef CONFIG_SPYBOT_CONTROL
   INPUT_init();
+#endif
 
 #ifdef CONFIG_SPYBOT_VIDEO
   HUD_init(&gctx);
@@ -344,11 +495,28 @@ static void app_control_init(void) {
 #endif
 }
 
-void app_control_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_received) {
-
+static void app_control_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_received) {
+  //u8_t reply[REPLY_MAX_LEN];
+  //u8_t reply_ix = 0;
+  switch (data[0]) {
+  case CMD_RADAR_REPORT:
+    // todo
+    break;
+  case CMD_ALERT:
+    // todo
+    break;
+  case CMD_CHANNEL_CHANGE:
+    // todo
+    break;
+  default:
+    DBG(D_APP, D_WARN, "rover: unknown message %02x\n", data[0]);
+    COMRAD_reply(REPLY_DENY, 1);
+    app_set_paired_state(FALSE);
+    break;
+  }
 }
 
-void app_control_handle_ack(u8_t cmd, comm_arg *rx, u16_t len, u8_t *data) {
+static void app_control_handle_ack(u8_t cmd, comm_arg *rx, u16_t len, u8_t *data) {
   u8_t ix = 1;
   switch (cmd) {
   case CMD_CONTROL: {
@@ -364,44 +532,66 @@ void app_control_handle_ack(u8_t cmd, comm_arg *rx, u16_t len, u8_t *data) {
 
     break;
   }
+  case CMD_SET_CONFIG: {
+    if (data[1] == 0) {
+      DBG(D_APP, D_WARN, "rover denied setting config\n");
+    } else {
+      DBG(D_APP, D_INFO, "rover set config\n");
+    }
+    app_ctrl_remote_req &= ~(APP_CTRL_REMOTE_REQ_SET_CONFIG);
+    break;
   }
-}
-
-
-
-///////////////////
-// common funcs
-///////////////////
-
-
-
-static int app_tx(u8_t *data, u16_t len) {
-  if (common.comrad_busy) return R_COMM_PHY_TRY_LATER;
-  int res = COMRAD_send(data, len, TRUE);
-  if (res >= R_COMM_OK) {
-    common.tx_seqno = res;
-    common.tx_cmd = data[0];
-    common.comrad_busy = TRUE;
+  case CMD_STORE_CONFIG: {
+    if (data[1] == 0) {
+      DBG(D_APP, D_WARN, "rover denied storing config\n");
+    } else {
+      DBG(D_APP, D_INFO, "rover stored config\n");
+    }
+    app_ctrl_remote_req &= ~(APP_CTRL_REMOTE_REQ_STORE_CONFIG);
+    break;
   }
-  return res;
-}
-
-static void app_comm_task(u32_t a, void *p) {
-#ifdef CONFIG_SPYBOT_APP_CLIENT
-  // rover
-  if (common.pair_state == PAIRING_ROVER_SEND_ECHO) {
-    u8_t beacon_echo[] = { CMD_PAIRING_ECHO };
-    app_tx(beacon_echo, sizeof(beacon_echo));
-  } else if (common.pair_state == PAIRING_OK) {
+  case CMD_LOAD_CONFIG: {
+    DBG(D_APP, D_INFO, "rover loaded config\n");
+    app_ctrl_remote_req &= ~(APP_CTRL_REMOTE_REQ_LOAD_CONFIG);
+    break;
+  }
+  case CMD_GET_CONFIG: {
+    if (data[1]) {
+      DBG(D_APP, D_INFO, "got rover config\n");
+      APP_cfg_set(CFG_STEER_ADJUST, (s8_t)data[2]);
+      APP_cfg_set(CFG_RADAR_ADJUST, (s8_t)data[3]);
+      APP_cfg_set(CFG_CAM_PAN_ADJUST, (s8_t)data[4]);
+      APP_cfg_set(CFG_CAM_TILT_ADJUST, (s8_t)data[5]);
+      APP_cfg_set(CFG_COMMON, (u8_t)data[6]);
+      app_ctrl_remote_req &= ~(APP_CTRL_REMOTE_REQ_GET_CONFIG);
+    } else {
+      // rover has no config yet
+      DBG(D_APP, D_INFO, "rover has no config yet\n");
+    }
+    break;
+  }
+  case CMD_LSM_MAG_EXTREMES: {
     // todo
+    break;
   }
-#endif
+  case CMD_LSM_ACC_EXTREMES: {
+    // todo
+    break;
+  }
+  }
+}
 
-#ifdef CONFIG_SPYBOT_APP_MASTER
-  // control
+static void app_control_tick(void) {
   if (common.pair_state == PAIRING_CTRL_SEND_BEACON) {
-    TASK_set_timer_recurrence(&common.comm_timer, BEACON_RECURRENCE);
-    u8_t beacon[] = { CMD_PAIRING_BEACON };
+    TASK_set_timer_recurrence(&common.tick_timer, BEACON_RECURRENCE);
+
+    u32_t v = SPYBOT_VERSION;
+    u32_t b = SYS_build_number();
+
+    u8_t beacon[] = { CMD_PAIRING_BEACON,
+        (v >> 24) & 0xff, (v >> 16) & 0xff, (v >> 8) & 0xff, (v & 0xff),
+        (b >> 24), (b >> 16), (b >> 8), (b & 0xff),
+    };
     int res = app_tx(beacon, sizeof(beacon));
     if (res >= R_COMM_OK) {
       DBG(D_APP, D_DEBUG, "ctrl sent beacon: seq %04x\n", res);
@@ -415,14 +605,62 @@ static void app_comm_task(u32_t a, void *p) {
       app_set_paired_state(FALSE);
     }
   } else if (common.pair_state == PAIRING_OK) {
-    u8_t sr = SPYBOT_SR_ACC | SPYBOT_SR_HEADING;
-    s8_t left_motor = remote.motor_ctrl[0];
-    s8_t right_motor = remote.motor_ctrl[1];
-    u8_t ctrl[] = {
-        CMD_CONTROL, left_motor, right_motor, 0, sr
-    };
-    app_tx(ctrl, sizeof(ctrl));
+
+    if (app_ctrl_remote_req == 0 || (common.tick_count & 0x7) != 0) {
+      s8_t left_motor = remote.motor_ctrl[0];
+      s8_t right_motor = remote.motor_ctrl[1];
+      s8_t pan = remote.pan;
+      s8_t tilt  = remote.tilt;
+      s8_t radar  = remote.radar;
+      u8_t act = 0;
+      u8_t sr = SPYBOT_SR_ACC | SPYBOT_SR_HEADING;
+      u8_t msg[] = {
+          CMD_CONTROL, left_motor, right_motor, pan, tilt, radar, act, sr
+      };
+      app_tx(msg, sizeof(msg));
+    } else {
+      // order is of importance
+
+      if (app_ctrl_remote_req & APP_CTRL_REMOTE_REQ_SET_CONFIG) {
+        // todo
+      } else if (app_ctrl_remote_req & APP_CTRL_REMOTE_REQ_STORE_CONFIG) {
+        u8_t msg[] = {
+            CMD_STORE_CONFIG
+        };
+        app_tx(msg, sizeof(msg));
+        DBG(D_APP, D_INFO, "asking to save config\n");
+      } else if (app_ctrl_remote_req & APP_CTRL_REMOTE_REQ_LOAD_CONFIG) {
+        u8_t msg[] = {
+            CMD_LOAD_CONFIG
+        };
+        app_tx(msg, sizeof(msg));
+        DBG(D_APP, D_INFO, "asking to load config\n");
+      } else if (app_ctrl_remote_req & APP_CTRL_REMOTE_REQ_GET_CONFIG) {
+        u8_t msg[] = {
+            CMD_GET_CONFIG
+        };
+        app_tx(msg, sizeof(msg));
+        DBG(D_APP, D_INFO, "asking for config\n");
+      }
+    }
   }
+
+}
+
+
+///////////////////
+// common funcs
+///////////////////
+
+
+static void app_tick_task(u32_t a, void *p) {
+  common.tick_count++;
+#ifdef CONFIG_SPYBOT_APP_CLIENT
+  app_rover_tick();
+#endif
+
+#ifdef CONFIG_SPYBOT_APP_MASTER
+  app_control_tick();
 #endif
 }
 
@@ -470,7 +708,14 @@ void APP_comrad_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_received) {
       DBG(D_APP, D_DEBUG, "rover got pairing beacon\n");
       common.pair_state = PAIRING_ROVER_SEND_ECHO;
       COMRAD_reply(REPLY_OK, 1);
-      TASK_set_timer_recurrence(&common.comm_timer, BEACON_RECURRENCE);
+      TASK_set_timer_recurrence(&common.tick_timer, BEACON_RECURRENCE);
+      u32_t ctrl_version =
+          (data[1]<<24) | (data[2]<<16) | (data[3]<<8) | (data[4]);
+      u32_t ctrl_build =
+          (data[5]<<24) | (data[6]<<16) | (data[7]<<8) | (data[8]);
+      COMRAD_reply(REPLY_OK, 1);
+      DBG(D_APP, D_INFO, "ctrl version %08x, build %i\n", ctrl_version, ctrl_build);
+
     } else {
       // rover awaits pairing beacon cmd only
       DBG(D_APP, D_DEBUG, "rover awaits only pairing beacon\n");
@@ -485,7 +730,7 @@ void APP_comrad_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_received) {
       COMRAD_reply(REPLY_OK, 1);
     }
   }
-#endif
+#endif //CONFIG_SPYBOT_APP_CLIENT
 
 
 #ifdef CONFIG_SPYBOT_APP_MASTER
@@ -494,8 +739,13 @@ void APP_comrad_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_received) {
     if (data[0] == CMD_PAIRING_ECHO) {
       DBG(D_APP, D_DEBUG, "ctrl got beacon echo, pairing ok\n");
       app_set_paired_state(TRUE);
-      TASK_set_timer_recurrence(&common.comm_timer, COMM_RECURRENCE);
+      TASK_set_timer_recurrence(&common.tick_timer, COMM_RECURRENCE);
+      u32_t rover_version =
+          (data[1]<<24) | (data[2]<<16) | (data[3]<<8) | (data[4]);
+      u32_t rover_build =
+          (data[5]<<24) | (data[6]<<16) | (data[7]<<8) | (data[8]);
       COMRAD_reply(REPLY_OK, 1);
+      DBG(D_APP, D_INFO, "rover version %08x, build %i\n", rover_version, rover_build);
     } else {
       DBG(D_APP, D_DEBUG, "ctrl awaits beacon echo only\n");
       COMRAD_reply(REPLY_DENY, 1);
@@ -505,7 +755,7 @@ void APP_comrad_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_received) {
     DBG(D_APP, D_DEBUG, "ctrl awaits no message\n");
     COMRAD_reply(REPLY_DENY, 1);
   }
-#endif
+#endif // CONFIG_SPYBOT_APP_MASTER
 }
 
 void APP_comrad_ack(comm_arg *rx, u16_t seq_no, u16_t len, u8_t *data) {
@@ -520,7 +770,7 @@ void APP_comrad_ack(comm_arg *rx, u16_t seq_no, u16_t len, u8_t *data) {
   if (len == 0 || data[0] != ACK_OK) {
     DBG(D_APP, D_DEBUG, "app got denial on ack\n");
     app_set_paired_state(FALSE);
-    TASK_set_timer_recurrence(&common.comm_timer, BEACON_RECURRENCE);
+    TASK_set_timer_recurrence(&common.tick_timer, BEACON_RECURRENCE);
     return;
   }
 
@@ -528,7 +778,7 @@ void APP_comrad_ack(comm_arg *rx, u16_t seq_no, u16_t len, u8_t *data) {
   if (common.pair_state == PAIRING_ROVER_SEND_ECHO) {
     DBG(D_APP, D_DEBUG, "rover got ack on beacon echo, pairing ok\n");
     app_set_paired_state(TRUE);
-    TASK_set_timer_recurrence(&common.comm_timer, COMM_RECURRENCE);
+    TASK_set_timer_recurrence(&common.tick_timer, COMM_RECURRENCE);
   } else if (common.pair_state == PAIRING_OK) {
     app_rover_handle_ack(common.tx_cmd, rx, len, data);
   }
@@ -564,6 +814,16 @@ void APP_init(void) {
   memset(&remote, 0, sizeof(remote));
   COMRAD_init();
 
+  #ifdef CONFIG_SPYBOT_LSM
+  int i;
+  for (i = 0; i < 3; i++) {
+    acc_extremes[i][0] = S16_MAX;
+    acc_extremes[i][1] = S16_MIN;
+    mag_extremes[i][0] = S16_MAX;
+    mag_extremes[i][1] = S16_MIN;
+  }
+#endif
+
 #ifdef CONFIG_SPYBOT_TEST
   app_rover_init();
   app_control_init();
@@ -574,8 +834,9 @@ void APP_init(void) {
 #ifdef CONFIG_SPYBOT_ROVER
   app_rover_init();
 #endif
-  common.comm_task = TASK_create(app_comm_task, TASK_STATIC);
-  TASK_start_timer(common.comm_task, &common.comm_timer, 0, 0, 1000, 1000, "comm");
+
+  common.tick_task = TASK_create(app_tick_task, TASK_STATIC);
+  TASK_start_timer(common.tick_task, &common.tick_timer, 0, 0, 50, 1000, "apptick");
   //print("priogroup to stop at critical context:%i\n",
   //  NVIC_EncodePriority(8 - __NVIC_PRIO_BITS, 1, 0));
 }
@@ -587,7 +848,105 @@ s8_t *APP_remote_get_acc(void) {
   return &remote.lsm_acc[0];
 }
 
+#ifdef CONFIG_SPYBOT_LSM
+
+void APP_get_acc_extremes(s16_t x[3][2], bool reset) {
+  memcpy(&x, acc_extremes, sizeof(s16)*3*2);
+  if (reset) {
+    int i;
+    for (i = 0; i < 3; i++) {
+      acc_extremes[i][0] = S16_MAX;
+      acc_extremes[i][1] = S16_MIN;
+    }
+  }
+}
+
+void APP_get_mag_extremes(s16_t x[3][2], bool reset) {
+  memcpy(&x, mag_extremes, sizeof(s16)*3*2);
+  if (reset) {
+    int i;
+    for (i = 0; i < 3; i++) {
+      mag_extremes[i][0] = S16_MAX;
+      mag_extremes[i][1] = S16_MIN;
+    }
+  }
+}
+
+#endif
+
 void APP_remote_set_motor_ctrl(s8_t horizontal, s8_t vertical) {
   remote.motor_ctrl[0] = horizontal;
   remote.motor_ctrl[1] = vertical;
+}
+
+void APP_remote_load_config(void) {
+  app_ctrl_remote_req |=
+      APP_CTRL_REMOTE_REQ_LOAD_CONFIG  |
+      APP_CTRL_REMOTE_REQ_GET_CONFIG;
+}
+
+const configuration_t *APP_cfg_get(void) {
+  return &app_cfg;
+}
+
+void APP_cfg_set(spybot_cfg c, s16_t val) {
+  switch (c) {
+  case CFG_STEER_ADJUST:
+    app_cfg.main.steer_adjust = val;
+  break;
+  case CFG_RADAR_ADJUST:
+    app_cfg.main.radar_adjust = val;
+  break;
+  case CFG_CAM_PAN_ADJUST:
+    app_cfg.main.cam_pan_adjust = val;
+  break;
+  case CFG_CAM_TILT_ADJUST:
+    app_cfg.main.cam_tilt_adjust = val;
+  break;
+  case CFG_COMMON:
+    app_cfg.main.common = val;
+  break;
+  case CFG_RADIO_CHANNEL:
+    app_cfg.radio.radio_channel = val;
+  break;
+  case CFG_LSM_MAG_X_MIN:
+    app_cfg.magneto.mag_x_min = val;
+  break;
+  case CFG_LSM_MAG_X_MAX:
+    app_cfg.magneto.mag_x_max = val;
+  break;
+  case CFG_LSM_MAG_Y_MIN:
+    app_cfg.magneto.mag_y_min = val;
+  break;
+  case CFG_LSM_MAG_Y_MAX:
+    app_cfg.magneto.mag_y_max = val;
+  break;
+  case CFG_LSM_MAG_Z_MIN:
+    app_cfg.magneto.mag_z_min = val;
+  break;
+  case CFG_LSM_MAG_Z_MAX:
+    app_cfg.magneto.mag_z_max = val;
+  break;
+  case CFG_LSM_ACC_X_MIN:
+    app_cfg.accel.acc_x_min = val;
+  break;
+  case CFG_LSM_ACC_X_MAX:
+    app_cfg.accel.acc_x_max = val;
+  break;
+  case CFG_LSM_ACC_Y_MIN:
+    app_cfg.accel.acc_y_min = val;
+  break;
+  case CFG_LSM_ACC_Y_MAX:
+    app_cfg.accel.acc_y_max = val;
+  break;
+  case CFG_LSM_ACC_Z_MIN:
+    app_cfg.accel.acc_z_min = val;
+  break;
+  case CFG_LSM_ACC_Z_MAX:
+    app_cfg.accel.acc_z_max = val;
+  break;
+  default:
+    ASSERT(FALSE);
+    break;
+  }
 }

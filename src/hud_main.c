@@ -33,6 +33,28 @@ const s16_t const base_plane_pts[8][3] = {
     {  0,  0, 15}, //7
 };
 
+static u8_t acc_buf[64];
+static u8_t acc_buf_ix = 0;
+
+static void hud_graph_draw(gcontext *ctx, u8_t *data, u8_t start_ix, u8_t len, u8_t height, u8_t x, u8_t y) {
+  GFX_draw_vertical_line(ctx, x,y,y+height+2, COL_SET);
+  GFX_draw_horizontal_line(ctx, x,x+len+2,y+height+2, COL_SET);
+  int i;
+  u8_t spl = data[start_ix];
+  for (i = 1; i < len; i++) {
+    u8_t new_spl;
+    if (start_ix + i >= len) {
+      new_spl = data[start_ix + i - len];
+    } else {
+      new_spl = data[start_ix + i];
+    }
+    GFX_draw_line(ctx, x+i, y+height-spl,
+                       x+1+i, y+height-new_spl,
+                       COL_SET);
+    spl = new_spl;
+  }
+}
+
 static void hud_plane_draw(gcontext *ctx, gcolor col) {
   GFX_draw_line(ctx, mhud.plane_pts[2][0], mhud.plane_pts[2][1], mhud.plane_pts[4][0], mhud.plane_pts[4][1], col);
   GFX_draw_line(ctx, mhud.plane_pts[3][0], mhud.plane_pts[3][1], mhud.plane_pts[5][0], mhud.plane_pts[5][1], col);
@@ -108,10 +130,6 @@ void hud_paint_main(gcontext *ctx, bool init) {
   s16_t dy = (sin_table(mhud.heading_ang)*14) >> 15;
   GFX_draw_line(ctx, x, y, x+dx, y+dy, COL_SET);
 
-  memset(txt, 0, 16);
-  sprint(txt, "DIR:%4i%c", (heading_raw * 360) >> 16, 186);
-  GFX_printn(ctx, txt, 0, 28 - strlen(txt), 12, COL_OVER);
-
   // accelerometer
   s8_t ax,ay,az;
   ax = acc[0];
@@ -125,9 +143,12 @@ void hud_paint_main(gcontext *ctx, bool init) {
   s32_t ayn = (ay<<15)/ad;
   s32_t azn = (az<<15)/ad;
 
-  memset(txt, 0, 16);
-  sprint(txt, "ACC:%4i ", ad>>(15-14));
-  GFX_printn(ctx, txt, 0, 28 - strlen(txt), 13, COL_OVER);
+  acc_buf[acc_buf_ix++] = ad>>2;
+  if (acc_buf_ix >= sizeof(acc_buf)) {
+    acc_buf_ix = 0;
+  }
+  hud_graph_draw(ctx, acc_buf, (acc_buf_ix + sizeof(acc_buf)) % sizeof(acc_buf),
+      sizeof(acc_buf), 32, 150, 90);
 
   s32_t axzn = _sqrt(axn*axn + azn*azn);
   s32_t ayzn = _sqrt(ayn*ayn + azn*azn);

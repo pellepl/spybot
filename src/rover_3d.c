@@ -290,6 +290,10 @@ static void rover_reset_transform(gcontext *ctx, s16_t (*t)[3]) {
 void ROVER_paint(gcontext *ctx) {
   rover_reset_transform(ctx, transform);
   int i;
+  cam.cax = ((cam.cax + PI_TRIG_T) % (2*PI_TRIG_T)) - PI_TRIG_T;
+  cam.cay = ((cam.cay + PI_TRIG_T) % (2*PI_TRIG_T)) - PI_TRIG_T;
+  cam.caz = ((cam.caz + PI_TRIG_T) % (2*PI_TRIG_T)) - PI_TRIG_T;
+
   s16_t cosx = cos_table(cam.cax);
   s16_t sinx = sin_table(cam.cax);
   s16_t cosy = cos_table(cam.cay);
@@ -311,6 +315,13 @@ void ROVER_paint(gcontext *ctx) {
   s16_t cam_dax = cam.ax-cam.cax;
   s16_t cam_day = cam.ay-cam.cay;
   s16_t cam_daz = cam.az-cam.caz;
+
+  if (cam_dax < -PI_TRIG_T) cam_dax += PI_TRIG_T * 2;
+  if (cam_day < -PI_TRIG_T) cam_day += PI_TRIG_T * 2;
+  if (cam_daz < -PI_TRIG_T) cam_daz += PI_TRIG_T * 2;
+  if (cam_dax > PI_TRIG_T) cam_dax -= PI_TRIG_T * 2;
+  if (cam_day > PI_TRIG_T) cam_day -= PI_TRIG_T * 2;
+  if (cam_daz > PI_TRIG_T) cam_daz -= PI_TRIG_T * 2;
 
   if (ABS(cam_dx) < 8) cam.cx += SIGN(cam_dx);
   else cam.cx += (cam_dx>>2);
@@ -357,9 +368,10 @@ void ROVER_view(s16_t x, s16_t y, s16_t z, s16_t ax, s16_t ay, s16_t az, bool di
     cam.x = x;
     cam.y = y;
     cam.z = z;
-    cam.ax = ax;
-    cam.ay = ay;
-    cam.az = az;
+    cam.ax = ((ax + PI_TRIG_T) % (2*PI_TRIG_T)) - PI_TRIG_T;
+    cam.ay = ((ay + PI_TRIG_T) % (2*PI_TRIG_T)) - PI_TRIG_T;
+    cam.az = ((az + PI_TRIG_T) % (2*PI_TRIG_T)) - PI_TRIG_T;
+
   }
 }
 

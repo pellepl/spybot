@@ -53,7 +53,7 @@
 // internal flash protection/unprotection for firmware
 #define FLASH_PROTECT     FLASH_WRProt_AllPages
 // internal flash total size in bytes
-#define FLASH_TOTAL_SIZE  (64*1024) // md
+#define FLASH_TOTAL_SIZE  (128*1024) // md
 
 /** UART **/
 
@@ -253,9 +253,6 @@ typedef u16_t system_counter_type;
 // enable or disable tracing
 #define DBG_TRACE_MON
 #define TRACE_SIZE            (64)
-
-// enable os thread led blinky
-#define DBG_OS_THREAD_BLINKY
 
 #define VALID_RAM(x) \
   (((void*)(x) >= RAM_BEGIN && (void*)(x) < RAM_END))
