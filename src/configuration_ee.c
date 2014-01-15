@@ -9,6 +9,7 @@
 #include "app.h"
 #include "m24m01_driver.h"
 #include "taskq.h"
+#include "configuration_ee.h"
 
 #define CFG_EE_ADDRESS    0x00000000
 #define CFG_EE_LEN        (16*1024)
@@ -18,21 +19,10 @@
 #define CFG_EE_MAGIC_UPD  0xdeadc0de
 #define CFG_EE_NO_ADDR    0xffffffff
 
-#define CFG_OK            0
-#define ERR_CFG_NOT_FOUND -120392
-
 typedef struct {
   u32_t magic;
   configuration_t cfg;
 } ee_cfg;
-
-typedef enum {
-  CFG_EE_IDLE = 0,
-  CFG_EE_FIND_MAGIC,
-} cfg_ee_state;
-
-
-typedef void (*cfg_ee_cb)(cfg_ee_state state, int res);
 
 static struct {
   cfg_ee_cb ee_cb;
@@ -50,11 +40,14 @@ static void cfg_ee_read(u32_t addr, u8_t *buf, u32_t len);
 
 static void cfg_ee_read_task_fn(u32_t arg, void *argp) {
   if (!TASK_mutex_lock(&i2c_mutex)) {
+    print("cfg_ee read stalled\n");
     return;
   }
+  print("cfg_ee read exe %08x %i\n", cfg.ee_cur_addr, cfg.ee_len);
   int res = m24m01_read(cfg.ee_dev, cfg.ee_cur_addr, cfg.ee_buf, cfg.ee_len);
   if (res != I2C_OK) {
     TASK_mutex_unlock(&i2c_mutex);
+    print("cfg_ee read failed %i\n", res);
     if (cfg.ee_cb) {
       cfg.ee_cb(cfg.ee_cur_state, res);
     }
@@ -64,6 +57,8 @@ static void cfg_ee_read_task_fn(u32_t arg, void *argp) {
 
 static void cfg_ee_cb_irq(m24m01_dev *dev, int res) {
   TASK_mutex_unlock(&i2c_mutex);
+  print("cfg_ee cb res %i\n", res);
+
   if (res < I2C_OK) {
     if (cfg.ee_cb) {
       cfg.ee_cb(cfg.ee_cur_state, res);
@@ -80,6 +75,7 @@ static void cfg_ee_cb_irq(m24m01_dev *dev, int res) {
       }
     } else {
       cfg.ee_cur_addr += CFG_EE_BLOCK_LEN;
+
       if (cfg.ee_cur_addr >= CFG_EE_ADDRESS + CFG_EE_LEN) {
         if (cfg.ee_cb) {
           cfg.ee_cb(cfg.ee_cur_state, ERR_CFG_NOT_FOUND);
@@ -95,13 +91,13 @@ static void cfg_ee_cb_irq(m24m01_dev *dev, int res) {
     ASSERT(FALSE);
     break;
   }
-  // todo check res again
 }
 
 static void cfg_ee_read(u32_t addr, u8_t *buf, u32_t len) {
-  cfg.ee_cur_addr = CFG_EE_ADDRESS;
+  cfg.ee_cur_addr = addr;
   cfg.ee_buf = buf;
   cfg.ee_len = len;
+  print("cfg_ee read request %08x %i\n", addr, len);
   task *t = TASK_create(cfg_ee_read_task_fn, 0);
   ASSERT(t);
   TASK_run(t, 0, 0);
@@ -119,4 +115,8 @@ void CFG_init(m24m01_dev *ee_dev, cfg_ee_cb cb) {
   cfg.ee_dev = ee_dev;
   cfg.ee_cur_state_addr = CFG_EE_NO_ADDR;
   m24m01_open(cfg.ee_dev, _I2C_BUS(0), FALSE, FALSE, cfg_ee_cb_irq);
+}
+
+void CFG_load_settings(void) {
+  cfg_find_magic(CFG_EE_MAGIC_OK);
 }

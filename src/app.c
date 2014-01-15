@@ -38,6 +38,10 @@
 #include "motor.h"
 #endif
 
+#ifdef CONFIG_M24M01
+#include "configuration_ee.h"
+#endif
+
 #define PAIRING_CTRL_SEND_BEACON    0
 #define PAIRING_CTRL_AWAIT_ECHO     1
 #define PAIRING_ROVER_AWAIT_BEACON  0
@@ -83,10 +87,10 @@ lsm303_dev lsm_dev;
 static task_timer lsm_timer;
 static task *lsm_task = NULL;
 static bool reading_lsm = FALSE;
-
+#ifdef CONFIG_M24M01
 m24m01_dev eeprom_dev;
-
 #endif
+#endif // CONFIG_I2C
 
 #ifdef CONFIG_SPYBOT_MOTOR
 static task_timer motor_timer;
@@ -126,8 +130,12 @@ static void app_set_paired_state(bool paired) {
 
 #ifdef CONFIG_I2C
 
-// rover eeprom
+// rover eeprom config
 
+static void app_rover_cfg_cb(cfg_ee_state state, int res) {
+  // TODO
+  print("CFG EE CB state:%i res:%i\n", state, res);
+}
 
 // rover lsm
 
@@ -196,7 +204,8 @@ static void app_rover_init(void) {
   lsm_task = TASK_create(app_rover_lsm_task, TASK_STATIC);
   TASK_start_timer(lsm_task, &lsm_timer, 0, 0, 500, 100, "lsm_read");
 
-  //m24m01_open(&eeprom_dev, _I2C_BUS(0), FALSE, FALSE, app_rover_eeprom_cb_irq);
+  CFG_init(&eeprom_dev, app_rover_cfg_cb);
+  CFG_load_settings();
 
 #endif // CONFIG_I2C
 #ifdef CONFIG_SPYBOT_MOTOR
