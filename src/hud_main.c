@@ -112,9 +112,14 @@ void hud_paint_main(gcontext *ctx, bool init) {
     GFX_printn(ctx, "\022", 0, 3, 0, COL_OVER);
   }
 
-
   if (APP_pair_status() != 2) {
     return;
+  }
+
+  if (APP_get_joystick_control() == APP_JOYSTICK_CONTROL_MOTOR) {
+    GFX_printn(ctx, "\020", 0, 5, 0, COL_OVER);
+  } else {
+    GFX_printn(ctx, "\021", 0, 5, 0, COL_OVER);
   }
 
   // heading

@@ -8,6 +8,7 @@
 #include "input.h"
 #include "hud.h"
 #include "gpio.h"
+#include "app.h"
 
 #define ADC_LEVEL_HIGH    0xe00
 #define ADC_LEVEL_LOW     0x100
@@ -19,6 +20,7 @@ static void input_main(input_type in, bool change) {
   // check joystick long-press
   if (in & IN_PRESS) {
     if (change || press_time == 0) {
+      APP_set_joystick_control(!APP_get_joystick_control());
       press_time = SYS_get_time_ms();
     } else {
       if (SYS_get_time_ms()-press_time > 2000) {

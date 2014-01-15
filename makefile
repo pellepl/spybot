@@ -189,9 +189,6 @@ ifeq ($(CONFIG_SPYBOT_TEST),1)
 FLAGS += -DCONFIG_SPYBOT_TEST
 endif
 
-
-
-
 # common spybot files
 
 SFILES 		+= stm32f10x_it_h.s
@@ -213,9 +210,11 @@ endif
 ifeq ($(CONFIG_SPYBOT_MOTOR),1)
 CFILES 		+= motor.c
 endif
-
 ifeq ($(CONFIG_M24M01), 1)
 CFILES		+= configuration_ee.c
+endif
+ifeq ($(CONFIG_SPYBOT_SERVO), 1)
+CFILES		+= servo.c
 endif
 
 # spybot controller files

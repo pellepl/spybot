@@ -327,54 +327,6 @@ static void I2C_config() {
 
 static void SERVO_config() {
 #ifdef CONFIG_SPYBOT_SERVO
-  gpio_config(PORTB, PIN6, CLK_50MHZ, AF, AF0, PUSHPULL, NOPULL);
-  gpio_config(PORTB, PIN7, CLK_50MHZ, AF, AF0, PUSHPULL, NOPULL);
-  gpio_config(PORTB, PIN8, CLK_50MHZ, AF, AF0, PUSHPULL, NOPULL);
-  gpio_config(PORTB, PIN9, CLK_50MHZ, AF, AF0, PUSHPULL, NOPULL);
-
-  // 0xffff => 20ms = 1/50
-  // 1/(50*65535) = 1/(72000000/x) => x = 72000000/(50*65535) => 22
-  // 72000000/22 = 3272727
-  // 3272727 / 65535 = 49.94
-  // 3277 ~= 1ms
-  // 4915 ~= 1.5ms
-  // 6554 ~= 2ms
-
-  TIM_TimeBaseInitTypeDef  TIM_TimeBaseStructure;
-  TIM_TimeBaseStructure.TIM_Period = 0xffff;
-  TIM_TimeBaseStructure.TIM_Prescaler = 22-1;
-  TIM_TimeBaseStructure.TIM_ClockDivision = 0;
-  TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
-  TIM_TimeBaseInit(TIM4, &TIM_TimeBaseStructure);
-
-  TIM_OCInitTypeDef  TIM_OCInitStructure;
-  TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
-  TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
-  TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
-
-  TIM_OCInitStructure.TIM_Pulse = 2500-1;
-  TIM_OC1Init(TIM4, &TIM_OCInitStructure);
-  TIM_OC1PreloadConfig(TIM4, TIM_OCPreload_Enable);
-
-  TIM_OCInitStructure.TIM_Pulse = 5000-1;
-  TIM_OC2Init(TIM4, &TIM_OCInitStructure);
-  TIM_OC2PreloadConfig(TIM4, TIM_OCPreload_Enable);
-
-  TIM_OCInitStructure.TIM_Pulse = 7500-1;
-  TIM_OC3Init(TIM4, &TIM_OCInitStructure);
-  TIM_OC3PreloadConfig(TIM4, TIM_OCPreload_Enable);
-
-  TIM_OCInitStructure.TIM_Pulse = 4915;
-  TIM_OC4Init(TIM4, &TIM_OCInitStructure);
-  TIM_OC4PreloadConfig(TIM4, TIM_OCPreload_Enable);
-
-
-  TIM_ARRPreloadConfig(TIM4, ENABLE);
-
-
-  TIM_Cmd(TIM4, ENABLE);
-  TIM_CtrlPWMOutputs(TIM4, ENABLE);
-
 #endif // CONFIG_SPYBOT_SERVO
 }
 

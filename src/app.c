@@ -36,6 +36,10 @@
 #include "motor.h"
 #endif
 
+#ifdef CONFIG_SPYBOT_SERVO
+#include "servo.h"
+#endif
+
 #ifdef CONFIG_M24M01
 #include "configuration_ee.h"
 #endif
@@ -88,6 +92,7 @@ static task *ui_task = NULL;
 static u16_t joystick_v = 0x800;
 static u16_t joystick_h = 0x800;
 #endif
+static bool app_joy_ctrl;
 
 // rover ram
 static u32_t app_rover_remote_req = 0;
@@ -107,10 +112,8 @@ m24m01_dev eeprom_dev;
 #endif
 #endif // CONFIG_I2C
 
-#ifdef CONFIG_SPYBOT_MOTOR
-static task_timer motor_timer;
-static task *motor_task = NULL;
-#endif
+static task_timer mech_timer;
+static task *mech_task = NULL;
 
 // ram updated over RF
 static struct {
@@ -228,11 +231,14 @@ static void app_rover_lsm_task(u32_t a, void *b) {
 #endif // CONFIG_SPYBOT_LSM
 #endif // CONFIG_I2C
 
+static void app_rover_mech_task(u32_t a, void *b) {
 #ifdef CONFIG_SPYBOT_MOTOR
-static void app_rover_motor_task(u32_t a, void *b) {
   MOTOR_update();
-}
 #endif // CONFIG_SPYBOT_MOTOR
+#ifdef CONFIG_SPYBOT_SERVO
+  SERVO_update();
+#endif // CONFIG_SPYBOT_SERVO
+}
 
 // rover common
 
@@ -258,8 +264,11 @@ static void app_rover_init(void) {
 #endif // CONFIG_I2C
 #ifdef CONFIG_SPYBOT_MOTOR
   MOTOR_init();
-  motor_task = TASK_create(app_rover_motor_task, TASK_STATIC);
-  TASK_start_timer(motor_task, &motor_timer, 0, 0, 0, 20, "motor");
+  mech_task = TASK_create(app_rover_mech_task, TASK_STATIC);
+  TASK_start_timer(mech_task, &mech_timer, 0, 0, 0, 20, "mech");
+#endif
+#ifdef CONFIG_SPYBOT_SERVO
+  SERVO_init();
 #endif
 }
 
@@ -315,10 +324,9 @@ static void app_rover_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool alread
     MOTOR_control_vector(remote.motor_ctrl[0], remote.motor_ctrl[1]);
 #endif
 #ifdef CONFIG_SPYBOT_SERVO
-    // todo
-    //SERVO_control(SERVO_CAM_PAN, remote.pan);
-    //SERVO_control(SERVO_CAM_TILT, remote.tilt);
-    //SERVO_control(SERVO_CAM_RADAR, remote.radar);
+    SERVO_control(SERVO_CAM_PAN, remote.pan);
+    SERVO_control(SERVO_CAM_TILT, remote.tilt);
+    SERVO_control(SERVO_RADAR, remote.radar);
 #endif
 
     break;
@@ -446,6 +454,36 @@ static void app_control_adc_cb(u16_t ch1, u16_t ch2) {
 }
 #endif
 
+bool APP_get_joystick_control(void) {
+  return app_joy_ctrl;
+}
+void APP_set_joystick_control(bool c) {
+  app_joy_ctrl = c;
+}
+
+static void app_ctrl_update_camera_ctrl(s8_t h, s8_t v) {
+#define CAM_DELTA 4
+  if (h < -110) {
+    if (remote.pan > -128+CAM_DELTA) {
+      remote.pan -= CAM_DELTA;
+    }
+  } else if (h > 110) {
+    if (remote.pan < 127-CAM_DELTA) {
+      remote.pan += CAM_DELTA;
+    }
+  }
+  if (v < -110) {
+    if (remote.tilt > -128+CAM_DELTA) {
+      remote.tilt -= CAM_DELTA;
+    }
+  } else if (v > 110) {
+    if (remote.tilt < 127-CAM_DELTA) {
+      remote.tilt += CAM_DELTA;
+    }
+  }
+}
+
+
 // control ui
 
 #ifdef CONFIG_SPYBOT_VIDEO
@@ -458,7 +496,15 @@ static void app_control_ui_task(u32_t a, void *b) {
 #ifdef CONFIG_SPYBOT_JOYSTICK
   INPUT_read(joystick_v, joystick_h);
   if (HUD_get_state() == HUD_MAIN) {
-    APP_remote_set_motor_ctrl((u16_t)(joystick_h >> 4) - 128, (u16_t)(joystick_v >> 4) - 128);
+    s8_t hori = (u16_t)(joystick_h >> 4) - 128;
+    s8_t vert = (u16_t)(joystick_v >> 4) - 128;
+    if (APP_get_joystick_control() == APP_JOYSTICK_CONTROL_MOTOR) {
+      APP_remote_set_motor_ctrl(hori, vert);
+    } else {
+      APP_remote_set_motor_ctrl(0,0);
+      app_ctrl_update_camera_ctrl(hori, vert);
+    }
+
   }
 #endif // CONFIG_SPYBOT_JOYSTICK
 }
@@ -493,6 +539,10 @@ static void app_control_init(void) {
   ui_task = TASK_create(app_control_ui_task, TASK_STATIC);
   TASK_start_timer(ui_task, &ui_timer, 0, 0, 0, 50, "ui_upd");
 #endif
+
+  APP_remote_set_camera_ctrl(0, 0);
+
+  app_joy_ctrl = APP_JOYSTICK_CONTROL_MOTOR;
 }
 
 static void app_control_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_received) {
@@ -877,6 +927,11 @@ void APP_get_mag_extremes(s16_t x[3][2], bool reset) {
 void APP_remote_set_motor_ctrl(s8_t horizontal, s8_t vertical) {
   remote.motor_ctrl[0] = horizontal;
   remote.motor_ctrl[1] = vertical;
+}
+
+void APP_remote_set_camera_ctrl(s8_t horizontal, s8_t vertical) {
+  remote.pan = horizontal;
+  remote.tilt = vertical;
 }
 
 void APP_remote_load_config(void) {
