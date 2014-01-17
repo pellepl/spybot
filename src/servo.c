@@ -16,8 +16,8 @@ typedef struct {
 } servo_pinmap;
 
 const static servo_pinmap hw_map[_SERVO_CNT] = {
-    {.port = PORTB, .pin = PIN9, .oc_channel = 4}, // pan
-    {.port = PORTB, .pin = PIN8, .oc_channel = 3}, // tilt
+    {.port = PORTB, .pin = PIN8, .oc_channel = 3}, // pan
+    {.port = PORTB, .pin = PIN9, .oc_channel = 4}, // tilt
     {.port = PORTB, .pin = PIN7, .oc_channel = 2}, // radar
 };
 

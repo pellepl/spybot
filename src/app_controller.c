@@ -122,8 +122,8 @@ static void app_control_ui_task(u32_t a, void *b) {
 #ifdef CONFIG_SPYBOT_JOYSTICK
   INPUT_read(joystick_v, joystick_h);
   if (HUD_get_state() == HUD_MAIN) {
-    s8_t hori = (u16_t)(joystick_h >> 4) - 128;
-    s8_t vert = (u16_t)(joystick_v >> 4) - 128;
+    s8_t hori, vert;
+    APP_get_joystick_reading(&hori, &vert);
     if (APP_get_joystick_control() == APP_JOYSTICK_CONTROL_MOTOR) {
       APP_remote_set_motor_ctrl(hori, vert);
     } else {
