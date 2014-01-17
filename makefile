@@ -204,6 +204,9 @@ CFILES		+= comm_radio.c
 CFILES		+= app.c
 
 # spybot rover files
+ifeq ($(CONFIG_SPYBOT_APP_CLIENT),1)
+CFILES		+= app_rover.c
+endif
 ifeq ($(CONFIG_SPYBOT_HCSR),1)
 CFILES 		+= range_sens_hcsr04_driver.c
 endif
@@ -218,7 +221,9 @@ CFILES		+= servo.c
 endif
 
 # spybot controller files
-
+ifeq ($(CONFIG_SPYBOT_APP_MASTER),1)
+CFILES		+= app_controller.c
+endif
 ifeq ($(CONFIG_SPYBOT_VIDEO),1)
 CFILES		+= cvideo.c
 CFILES		+= gfx_bitmap.c

@@ -40,6 +40,8 @@ DOWN  -5/-9  -7/-9  -9/-9    -9/-7   -9/-5
 
 #include "motor.h"
 #include "gpio.h"
+#include "app.h"
+#include "configuration.h"
 
 #define MOTORA_PORT     PORTB
 #define MOTORB_PORT     PORTB
@@ -73,6 +75,7 @@ static struct {
 } motor;
 
 static void motor_stop(void) {
+  memset(&motor, 0, sizeof(motor));
   gpio_disable(MOTORA_PORT, MOTORAIN1_PIN);
   gpio_disable(MOTORA_PORT, MOTORAIN2_PIN);
   gpio_disable(MOTORB_PORT, MOTORBIN1_PIN);
@@ -138,64 +141,7 @@ static s8_t motor_lin_squash(s8_t v, u8_t threshold) {
   return v < 0 ? -vp : vp;
 }
 
-void MOTOR_init(void) {
-  motor_stop();
-  memset(&motor, 0, sizeof(motor));
-}
-
-void MOTOR_go(s8_t x) {
-  if (x == 0) {
-    motor_stop();
-    return;
-  } else if (x > 0) {
-    gpio_enable(MOTORA_PORT, MOTORAIN1_PIN);
-    gpio_disable(MOTORA_PORT, MOTORAIN2_PIN);
-    gpio_enable(MOTORB_PORT, MOTORBIN1_PIN);
-    gpio_disable(MOTORB_PORT, MOTORBIN2_PIN);
-  } else if (x < 0) {
-    gpio_disable(MOTORA_PORT, MOTORAIN1_PIN);
-    gpio_enable(MOTORA_PORT, MOTORAIN2_PIN);
-    gpio_disable(MOTORB_PORT, MOTORBIN1_PIN);
-    gpio_enable(MOTORB_PORT, MOTORBIN2_PIN);
-    x = -x;
-  }
-  set_motora_pwm_duty_cycle((MOTOR_PERIOD*x)/128);
-  set_motorb_pwm_duty_cycle((MOTOR_PERIOD*x)/128);
-}
-
-void MOTOR_control_vector(s8_t hori, s8_t veri) {
-  s8_t motor_ctrl[2];
-  hori = motor_lin_squash(hori, 10);
-  veri = motor_lin_squash(veri, 10);
-  motor_translate(hori, veri, motor_ctrl);
-  motor.target[0] = motor_ctrl[0];
-  motor.target[1] = motor_ctrl[1];
-
-}
-
-void MOTOR_update(void) {
-  s16_t motor_d[2];
-  motor_d[0] = motor.target[0] - motor.current[0];
-  motor_d[1] = motor.target[1] - motor.current[1];
-  int i;
-  for (i = 0; i < 2; i++) {
-    if (motor_d[i] == 0) {
-      continue;
-    } else if (ABS(motor_d[i]) < MOTOR_DELTA) {
-      motor.current[i] = motor.target[i];
-    } else {
-      if (motor_d[i] < 0) {
-        motor.current[i] -= MOTOR_DELTA;
-      } else {
-        motor.current[i] += MOTOR_DELTA;
-      }
-    }
-  }
-
-  MOTOR_control(motor.current[0], motor.current[1]);
-}
-
-void MOTOR_control(s8_t left, s8_t right) {
+static void motor_set(s8_t left, s8_t right) {
   if (left == 0) {
     gpio_disable(MOTORA_PORT, MOTORAIN1_PIN);
     gpio_disable(MOTORA_PORT, MOTORAIN2_PIN);
@@ -226,5 +172,87 @@ void MOTOR_control(s8_t left, s8_t right) {
     }
     set_motorb_pwm_duty_cycle((MOTOR_PERIOD*right)/128);
   }
+}
+
+
+
+void MOTOR_init(void) {
+  motor_stop();
+  memset(&motor, 0, sizeof(motor));
+}
+
+void MOTOR_go(s8_t x) {
+  if (x == 0) {
+    motor_stop();
+    return;
+  } else if (x > 0) {
+    gpio_enable(MOTORA_PORT, MOTORAIN1_PIN);
+    gpio_disable(MOTORA_PORT, MOTORAIN2_PIN);
+    gpio_enable(MOTORB_PORT, MOTORBIN1_PIN);
+    gpio_disable(MOTORB_PORT, MOTORBIN2_PIN);
+  } else if (x < 0) {
+    gpio_disable(MOTORA_PORT, MOTORAIN1_PIN);
+    gpio_enable(MOTORA_PORT, MOTORAIN2_PIN);
+    gpio_disable(MOTORB_PORT, MOTORBIN1_PIN);
+    gpio_enable(MOTORB_PORT, MOTORBIN2_PIN);
+    x = -x;
+  }
+  set_motora_pwm_duty_cycle((MOTOR_PERIOD*x)/128);
+  set_motorb_pwm_duty_cycle((MOTOR_PERIOD*x)/128);
+}
+
+void MOTOR_control(s8_t hori, s8_t veri) {
+  s8_t motor_ctrl[2];
+  hori = motor_lin_squash(hori, 10);
+  veri = motor_lin_squash(veri, 10);
+  motor_translate(hori, veri, motor_ctrl);
+
+  s16_t adj = APP_cfg_get_val(CFG_STEER_ADJUST);
+  s8_t left = motor_ctrl[0];
+  s8_t right = motor_ctrl[1];
+
+  if (adj < 0) {
+    adj = -adj;
+    adj >>= 2;
+    adj = 128-adj;
+    right = (s8_t)((s32_t)(adj*right)/128);
+  } else if (adj > 0) {
+    adj >>= 2;
+    adj = 128-adj;
+    left = (s8_t)((s32_t)(adj*right)/128);
+  }
+
+  if (APP_cfg_get_val(CFG_COMMON) & CFG_COMMON_LEFT_INVERT) {
+    left = -left;
+  }
+  if (APP_cfg_get_val(CFG_COMMON) & CFG_COMMON_RIGHT_INVERT) {
+    right = -right;
+  }
+
+  motor.target[0] = left;
+  motor.target[1] = right;
+
+}
+
+void MOTOR_update(void) {
+  s16_t motor_d[2];
+  motor_d[0] = motor.target[0] - motor.current[0];
+  motor_d[1] = motor.target[1] - motor.current[1];
+  int i;
+  for (i = 0; i < 2; i++) {
+    if (motor_d[i] == 0) {
+      continue;
+    } else if (ABS(motor_d[i]) < MOTOR_DELTA) {
+      motor.current[i] = motor.target[i];
+    } else {
+      if (motor_d[i] < 0) {
+        motor.current[i] -= MOTOR_DELTA;
+      } else {
+        motor.current[i] += MOTOR_DELTA;
+      }
+    }
+  }
+
+  motor_set(motor.current[0], motor.current[1]);
 }
 

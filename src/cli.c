@@ -157,6 +157,13 @@ static int f_hud_in(int i);
 
 static int f_comrad_init(void);
 static int f_comrad_tx(char *str, int ack);
+static int f_comrad_dbg_bad_link(u8_t badness);
+
+#ifdef CONFIG_SPYBOT_APP_MASTER
+static int f_app_cfg_update(int conf, int val, bool urg);
+static int f_app_cfg_store(void);
+#endif
+static int f_app_cfg_dump(void);
 
 static void cli_print_app_name(void);
 
@@ -339,7 +346,24 @@ static cmd c_tbl[] = {
     },
     { .name = "comrad_tx", .fn = (func) f_comrad_tx,
         .help = "Transmit packet\n"
-        "comrad_tx <data> <ack>\n"
+        "comrad_tx <data> <reqack>\n"
+    },
+    { .name = "comrad_emul_bad_link", .fn = (func) f_comrad_dbg_bad_link,
+        .help = "Emulates bad radio link\n"
+        "comrad_emul_bad_link <0-255>\n"
+    },
+
+
+#ifdef CONFIG_SPYBOT_APP_MASTER
+    { .name = "app_cfg_upd", .fn = (func) f_app_cfg_update,
+        .help = "Update remote configuration (cfg, value, urgent)\n"
+    },
+    { .name = "app_cfg_store", .fn = (func) f_app_cfg_store,
+        .help = "Store remote configuration\n"
+    },
+#endif
+    { .name = "app_cfg_dump", .fn = (func) f_app_cfg_dump,
+        .help = "List remote configuration\n"
     },
 
     { .name = "dbg", .fn = (func) f_dbg,
@@ -380,6 +404,29 @@ static cmd c_tbl[] = {
   };
 
 /////////////////////////////////////////////////////////////////////////////////////////////
+
+#ifdef CONFIG_SPYBOT_APP_MASTER
+
+static int f_app_cfg_update(int conf, int val, bool urg) {
+  if (_argc < 3) return -1;
+  APP_remote_update_config(conf, val, urg);
+  return 0;
+}
+
+static int f_app_cfg_store(void) {
+  APP_remote_store_config();
+  return 0;
+}
+
+#endif
+
+static int f_app_cfg_dump(void) {
+  int i;
+  for (i = 0; i < _CFG_END; i++) {
+    print("cfg %i = %i [%x]\n", i, APP_cfg_get_val(i), APP_cfg_get_val(i));
+  }
+  return 0;
+}
 
 static int f_rand() {
   print("%08x\n", rand_next());
@@ -990,6 +1037,13 @@ static int f_comrad_tx(char *str, int ack) {
     print("seq:%03x\n", res);
 
   }
+  return 0;
+}
+
+static int f_comrad_dbg_bad_link(u8_t badness) {
+  if (_argc < 1)
+    return -1;
+  COMRAD_dbg_pkt_drop_rate(badness);
   return 0;
 }
 

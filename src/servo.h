@@ -19,9 +19,9 @@ typedef enum {
 
 void SERVO_init(void);
 
-void SERVO_set(servo_out servo, s16_t pwm);
-
 void SERVO_control(servo_out servo, s8_t value);
+
+void SERVO_control_radar(s8_t value);
 
 void SERVO_update(void);
 

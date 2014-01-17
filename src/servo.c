@@ -7,6 +7,7 @@
 
 #include "servo.h"
 #include "gpio.h"
+#include "app.h"
 
 typedef struct {
   gpio_port port;
@@ -20,8 +21,11 @@ const static servo_pinmap hw_map[_SERVO_CNT] = {
     {.port = PORTB, .pin = PIN7, .oc_channel = 2}, // radar
 };
 
-s16_t servo_cur_pwm[_SERVO_CNT];
-s16_t servo_set_pwm[_SERVO_CNT];
+static s16_t servo_cur_pwm[_SERVO_CNT];
+static s16_t servo_set_pwm[_SERVO_CNT];
+static s16_t radar_pos = 0;
+static s16_t radar_speed = 512;
+static s16_t radar_dir = 1;
 
 #define SERVO_TIM   TIM4
 
@@ -58,6 +62,97 @@ static void servo_set_channel_duty(s16_t duty, u8_t channel) {
   }
 }
 
+static void servo_set(servo_out servo, s16_t pwm) {
+  ASSERT(servo < _SERVO_CNT);
+  servo_cur_pwm[servo] = pwm;
+  servo_set_channel_duty(pwm, hw_map[servo].oc_channel);
+}
+
+static s16_t server_get_adjust(servo_out servo) {
+  s16_t adj = 0;
+  switch (servo) {
+    case SERVO_CAM_PAN:
+      adj = APP_cfg_get_val(CFG_CAM_PAN_ADJUST);
+      break;
+    case SERVO_CAM_TILT:
+      adj = APP_cfg_get_val(CFG_CAM_TILT_ADJUST);
+      break;
+    case SERVO_RADAR:
+      adj = APP_cfg_get_val(CFG_RADAR_ADJUST);
+      break;
+  }
+  return adj;
+}
+
+void SERVO_control(servo_out servo, s8_t value) {
+  ASSERT(servo < _SERVO_CNT);
+  s32_t pwm_val;
+  s16_t adj = server_get_adjust(servo);
+
+  pwm_val = value << 8;
+  pwm_val = 6*pwm_val / 7;
+  pwm_val += 1*(adj<<8) / 7;
+
+  if (servo == SERVO_CAM_PAN && (APP_cfg_get_val(CFG_COMMON) & CFG_COMMON_PAN_INVERT)) {
+    pwm_val = -pwm_val;
+  } else if (servo == SERVO_CAM_TILT && (APP_cfg_get_val(CFG_COMMON) & CFG_COMMON_TILT_INVERT)) {
+    pwm_val = -pwm_val;
+  }
+
+  servo_set_pwm[servo] = pwm_val;
+}
+
+void SERVO_control_radar(s8_t value) {
+  if (value == RADAR_CTRL_STILL) {
+    radar_speed = 0;
+    radar_pos = 0;
+  } else {
+    radar_speed = value << 7;
+  }
+}
+
+void SERVO_update(void) {
+#define MAX_D   512
+  int i;
+
+  if (radar_dir < 0) {
+    if (radar_pos <= S16_MIN + radar_speed) {
+      radar_pos = S16_MIN;
+      radar_dir = 1;
+    }
+  } else if (radar_dir > 0) {
+    if (radar_pos >= S16_MAX - radar_speed) {
+      radar_pos = S16_MAX;
+      radar_dir = -1;
+    }
+  }
+  radar_pos += radar_dir * radar_speed;
+  SERVO_control(SERVO_RADAR, radar_pos >> 8);
+
+  for (i = 0; i < _SERVO_CNT; i++) {
+    s16_t d = servo_set_pwm[i] - servo_cur_pwm[i];
+    if (ABS(d) > MAX_D * 20) {
+      servo_cur_pwm[i] = servo_set_pwm[0];
+      servo_set(i, servo_cur_pwm[i]);
+    } else {
+      if (d < 0) {
+        if (d <= -MAX_D) {
+          servo_set(i, servo_cur_pwm[i] - MAX_D);
+        } else if (d > -MAX_D) {
+          servo_set(i, servo_cur_pwm[i] - 1);
+        }
+      } else if (d > 0) {
+        if (d >= MAX_D) {
+          servo_set(i, servo_cur_pwm[i] + MAX_D);
+        } else if (d < MAX_D) {
+          servo_set(i, servo_cur_pwm[i] + 1);
+        }
+      }
+    }
+  }
+}
+
+
 void SERVO_init(void) {
   int i;
 
@@ -88,6 +183,10 @@ void SERVO_init(void) {
     servo_set_channel_duty(0, hw_map[i].oc_channel);
   }
 
+  radar_pos = 0;
+  radar_dir = 1;
+  radar_speed = 512;
+
   TIM_ARRPreloadConfig(TIM4, ENABLE);
 
   TIM_Cmd(TIM4, ENABLE);
@@ -98,39 +197,4 @@ void SERVO_init(void) {
   }
 }
 
-void SERVO_set(servo_out servo, s16_t pwm) {
-  ASSERT(servo < _SERVO_CNT);
-  servo_cur_pwm[servo] = pwm;
-  servo_set_channel_duty(pwm, hw_map[servo].oc_channel);
-}
 
-void SERVO_control(servo_out servo, s8_t value) {
-  ASSERT(servo < _SERVO_CNT);
-  servo_set_pwm[servo] = value << 8;
-}
-
-void SERVO_update(void) {
-#define MAX_D   512
-  int i;
-  for (i = 0; i < _SERVO_CNT; i++) {
-    s16_t d = servo_set_pwm[i] - servo_cur_pwm[i];
-    if (ABS(d) > MAX_D * 20) {
-      servo_cur_pwm[i] = servo_set_pwm[0];
-    } else {
-      if (d < 0) {
-        if (d <= -MAX_D) {
-          SERVO_set(i, servo_cur_pwm[i] - MAX_D);
-        } else if (d > -MAX_D) {
-          SERVO_set(i, servo_cur_pwm[i] - 1);
-        }
-      } else if (d > 0) {
-        if (d >= MAX_D) {
-          SERVO_set(i, servo_cur_pwm[i] + MAX_D);
-        } else if (d < MAX_D) {
-          SERVO_set(i, servo_cur_pwm[i] + 1);
-        }
-      }
-    }
-  }
-
-}

@@ -38,6 +38,8 @@ typedef enum {
   CFG_LSM_ACC_Z_MIN,
   CFG_LSM_ACC_Z_MAX,
 
+  _CFG_END,
+
   CFG_STOP = 0xff,
 } spybot_cfg;
 

@@ -10,20 +10,27 @@
 #include "gpio.h"
 #include "app.h"
 
-#define ADC_LEVEL_HIGH    0xe00
+#define ADC_LEVEL_HIGH    0xeff
 #define ADC_LEVEL_LOW     0x100
 
 static input_type cur_input = IN_IDLE;
 static time press_time = 0;
+static bool cam_reset = FALSE;
 
 static void input_main(input_type in, bool change) {
   // check joystick long-press
+  time now = SYS_get_time_ms();
   if (in & IN_PRESS) {
     if (change || press_time == 0) {
       APP_set_joystick_control(!APP_get_joystick_control());
-      press_time = SYS_get_time_ms();
+      press_time = now;
+      cam_reset = FALSE;
     } else {
-      if (SYS_get_time_ms()-press_time > 2000) {
+      if (!cam_reset && now-press_time > 1000) {
+        APP_remote_set_camera_ctrl(0,0);
+        cam_reset = TRUE;
+      }
+      if (now-press_time > 2000) {
         press_time = 0;
         HUD_state(HUD_CONFIG);
       }

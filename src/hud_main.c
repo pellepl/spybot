@@ -91,28 +91,23 @@ void hud_paint_main(gcontext *ctx, bool init) {
   }
 
   // upper status bar
-  static time last_comm_check;
-  static u8_t last_squal;
-  if (now - last_comm_check >= 500) {
-    last_comm_check = now;
-    last_squal = COMRAD_stats();
-  }
+  u8_t lqual = COMRAD_get_link_qual();
 
-  if (last_squal > 192) {
+  if (lqual >= COMM_RADIO_LQUAL_PERFECT) {
     GFX_printn(ctx, "\010\011", 0, 0, 0, COL_OVER);
-  } else if (last_squal > 128) {
+  } else if (lqual >= COMM_RADIO_LQUAL_GOOD) {
     GFX_printn(ctx, "\006\007", 0, 0, 0, COL_OVER);
-  } else if (last_squal > 64) {
+  } else if (lqual >= COMM_RADIO_LQUAL_WEAK) {
     GFX_printn(ctx, "\004\005", 0, 0, 0, COL_OVER);
   } else {
     GFX_printn(ctx, "\002\003", 0, 0, 0, COL_OVER);
   }
 
-  if ((APP_pair_status() == 1 && ((now>>8)&1)) || APP_pair_status() == 2) {
+  if ((APP_pair_status() == PAIRING_STAGE_TWO && ((now>>8)&1)) || APP_pair_status() == PAIRING_OK) {
     GFX_printn(ctx, "\022", 0, 3, 0, COL_OVER);
   }
 
-  if (APP_pair_status() != 2) {
+  if (APP_pair_status() != PAIRING_OK) {
     return;
   }
 

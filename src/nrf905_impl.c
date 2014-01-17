@@ -173,7 +173,7 @@ int NRF905_IMPL_conf(nrf905_config *c, bool force) {
     spybot_conf.hfreq_pll = NRF905_CFG_HFREQ_433;
     spybot_conf.out_clk_enable = NRF905_CFG_OUT_CLK_OFF;
     spybot_conf.out_clk_freq = NRF905_CFG_OUT_CLK_FREQ_1MHZ;
-    spybot_conf.pa_pwr= NRF905_CFG_PA_PWR_6;
+    spybot_conf.pa_pwr= NRF905_CFG_PA_PWR_m2;
 #ifdef SECONDARY
     spybot_conf.rx_address = 0x9ce3aed2;
 #else
@@ -258,6 +258,12 @@ int NRF905_IMPL_tx(u8_t *data, u8_t len) {
   if (res != NRF905_OK) DBG(D_RADIO, D_WARN, "nrf tx %i\n", res);
   return res;
 }
+
+bool NRF905_IMPL_listening(void) {
+  nrf905_state st = NRF905_get_state(&radio.nrf);
+  return st == NRF905_POWERDOWN || st == NRF905_STANDBY || st == NRF905_RX_LISTEN;
+}
+
 
 int NRF905_IMPL_carrier(void) {
   int res = NRF905_OK;

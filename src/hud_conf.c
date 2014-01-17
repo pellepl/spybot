@@ -17,12 +17,12 @@ typedef enum {
    CONF_STEER,
    CONF_RADAR,
    CONF_CAMERA,
-   CONF_GENERAL,
+   CONF_COMMON,
    CONF_EXIT
 } conf_state;
 
 static const char * const(MAIN_MENU[]) =  {
-  "CONFIG MAIN",
+    "CONFIG MAIN",
   "STEERING",
   "RADAR",
   "CAMERA",
@@ -31,8 +31,18 @@ static const char * const(MAIN_MENU[]) =  {
   NULL
 };
 
+static const char * const(COMMON_MENU[]) =  {
+    "CONFIG COMMON",
+  "INV LEFT MOTOR",
+  "INV RIGHT MOTOR",
+  "INV CAMERA PAN",
+  "INV CAMERA TILT",
+  "BACK",
+  NULL
+};
+
 static const char * const(EXIT_MENU[]) =  {
-  "EXIT CONFIG",
+    "EXIT CONFIG",
   "CANCEL",
   "SAVE & EXIT",
   "DISCARD & EXIT",
@@ -65,7 +75,7 @@ static void hud_conf_set_current(void) {
 }
 
 static void hud_conf_apply(void) {
-
+  APP_remote_store_config();
 }
 
 static void hud_conf_discard(void) {
@@ -111,6 +121,14 @@ static void hud_conf_paint_setting_bar(gcontext *ctx, bool ver_else_hor, s16_t x
     }
   }
 }
+
+static void hud_conf_paint_checkbox(gcontext *ctx, s16_t x, s16_t y, bool ticked) {
+    GFX_rect(ctx, x-2,y-2,10,10, COL_SET);
+    if (ticked) {
+      GFX_fill(ctx, x,y,7,7,COL_SET);
+    }
+}
+
 
 static void hud_conf_paint_title(gcontext *ctx, const char *title) {
   char txt[14];
@@ -232,6 +250,9 @@ static void hud_conf_input_main(input_type in, bool change) {
     if (conf.state == CONF_EXIT) {
       hud_conf_set_menu(EXIT_MENU);
     }
+    if (conf.state == CONF_COMMON) {
+      hud_conf_set_menu(COMMON_MENU);
+    }
   }
 }
 
@@ -247,18 +268,22 @@ static void hud_conf_paint_steer(gcontext *ctx) {
 }
 
 static void hud_conf_input_steer(input_type in, bool change) {
-  if (in & IN_UP) {
-  } else if (in & IN_DOWN) {
-  }
   if (in & IN_LEFT) {
     conf.dirty = TRUE;
-    conf.remote.steer_adjust -=1; // TODO
+    conf.remote.steer_adjust -=1;
   } else if (in & IN_RIGHT) {
     conf.dirty = TRUE;
-    conf.remote.steer_adjust +=1; // TODO
+    conf.remote.steer_adjust +=1;
   }
+
   if ((in & IN_PRESS) && change) {
+    APP_remote_set_motor_ctrl(0,0);
     conf.state = CONF_MAIN;
+  } else {
+    s8_t vert;
+    APP_get_joystick_reading(NULL, &vert);
+    APP_remote_set_motor_ctrl(0, vert);
+    APP_remote_update_config(CFG_STEER_ADJUST, conf.remote.steer_adjust, TRUE);
   }
 }
 
@@ -277,6 +302,7 @@ static void hud_conf_paint_radar(gcontext *ctx) {
 }
 
 static void hud_conf_input_radar(input_type in, bool change) {
+  APP_remote_set_radar_ctrl(RADAR_CTRL_STILL);
   if (in & IN_UP) {
   } else if (in & IN_DOWN) {
   }
@@ -288,8 +314,10 @@ static void hud_conf_input_radar(input_type in, bool change) {
     conf.remote.radar_adjust +=1; // TODO
   }
   if ((in & IN_PRESS) && change) {
+    APP_remote_set_radar_ctrl(RADAR_CTRL_NORMAL);
     conf.state = CONF_MAIN;
   }
+  APP_remote_update_config(CFG_RADAR_ADJUST, conf.remote.radar_adjust, TRUE);
 }
 
 
@@ -328,12 +356,11 @@ static void hud_conf_input_camera(input_type in, bool change) {
   if ((in & IN_PRESS) && change) {
     conf.state = CONF_MAIN;
   }
+  APP_remote_update_config(CFG_CAM_PAN_ADJUST, conf.remote.cam_pan_adjust, TRUE);
+  APP_remote_update_config(CFG_CAM_TILT_ADJUST, conf.remote.cam_tilt_adjust, TRUE);
 }
-////////////////////////////////////////////////////// GENERAL CONFIG
+////////////////////////////////////////////////////// EXIT CONFIG
 
-// TODO
-
-////////////////////////////////////////////////////// EXIT
 
 static void hud_conf_paint_exit(gcontext *ctx) {
   if (!conf.dirty) {
@@ -397,6 +424,65 @@ static void hud_conf_input_exit(input_type in, bool change) {
   }
 }
 
+
+////////////////////////////////////////////////////// COMMON
+
+static void hud_conf_paint_common(gcontext *ctx) {
+  ROVER_view(230,200,230, 0, 0, -4*PI_TRIG_T/5, FALSE);
+  hud_conf_paint_menu(ctx);
+  hud_conf_paint_checkbox(ctx, 200, 8*4, conf.remote.common & CFG_COMMON_LEFT_INVERT);
+  hud_conf_paint_checkbox(ctx, 200, 8*6, conf.remote.common & CFG_COMMON_RIGHT_INVERT);
+  hud_conf_paint_checkbox(ctx, 200, 8*8, conf.remote.common & CFG_COMMON_PAN_INVERT);
+  hud_conf_paint_checkbox(ctx, 200, 8*10, conf.remote.common & CFG_COMMON_TILT_INVERT);
+}
+
+static void hud_conf_input_common(input_type in, bool change) {
+  if (!change) {
+    return;
+  }
+
+  if (in & IN_UP) {
+    if (conf.menu_sel_ix == 0) {
+      conf.menu_sel_ix = 4;
+    } else {
+      conf.menu_sel_ix--;
+    }
+    conf.last_selection = SYS_get_time_ms();
+  } else if (in & IN_DOWN) {
+    if (conf.menu_sel_ix == 4) {
+      conf.menu_sel_ix = 0;
+    } else {
+      conf.menu_sel_ix++;
+    }
+    conf.last_selection = SYS_get_time_ms();
+  }
+  if (in & IN_PRESS) {
+    switch (conf.menu_sel_ix) {
+    case 0:
+      conf.dirty = TRUE;
+      conf.remote.common ^= CFG_COMMON_LEFT_INVERT;
+      break;
+    case 1:
+      conf.dirty = TRUE;
+      conf.remote.common ^= CFG_COMMON_RIGHT_INVERT;
+      break;
+    case 2:
+      conf.dirty = TRUE;
+      conf.remote.common ^= CFG_COMMON_PAN_INVERT;
+      break;
+    case 3:
+      conf.dirty = TRUE;
+      conf.remote.common ^= CFG_COMMON_TILT_INVERT;
+      break;
+    default:
+      conf.state = CONF_MAIN;
+      hud_conf_set_menu(MAIN_MENU);
+      break;
+    }
+    APP_remote_update_config(CFG_COMMON, conf.remote.common, TRUE);
+  }
+}
+
 //////////////////////////////////////////////////////
 
 
@@ -432,7 +518,9 @@ void hud_paint_config(gcontext *ctx, bool init) {
   case CONF_CAMERA:
     hud_conf_paint_camera(ctx);
     break;
-  case CONF_GENERAL:
+  case CONF_COMMON:
+    hud_conf_paint_common(ctx);
+    break;
   case CONF_EXIT:
     hud_conf_paint_exit(ctx);
     break;
@@ -453,7 +541,9 @@ void HUD_input(input_type in, bool change) {
   case CONF_CAMERA:
     hud_conf_input_camera(in, change);
     break;
-  case CONF_GENERAL:
+  case CONF_COMMON:
+    hud_conf_input_common(in, change);
+    break;
   case CONF_EXIT:
     hud_conf_input_exit(in, change);
     break;

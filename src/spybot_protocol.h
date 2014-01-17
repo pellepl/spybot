@@ -17,6 +17,9 @@
 #define SPYBOT_SR_BATT      (1<<3)
 #define SPYBOT_SR_RADAR     (1<<7)
 
+#define ACK_OK                      0x01
+#define ACK_DENY                    0x00
+
 typedef enum {
   // [rover <-> ctrl]
   // arg: null term string

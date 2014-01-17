@@ -29,5 +29,6 @@ int NRF905_IMPL_rx(void);
 int NRF905_IMPL_tx(u8_t *data, u8_t len);
 int NRF905_IMPL_carrier(void);
 bool NRF905_IMPL_lbt_check_rts(u32_t ms);
+bool NRF905_IMPL_listening(void);
 
 #endif /* NRF905_IMPL_H_ */
