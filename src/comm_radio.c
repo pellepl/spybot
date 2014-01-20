@@ -179,7 +179,7 @@ void COMRAD_init(void) {
   //
   // radio setup
   //
-  comrad.rad_pa = NRF905_CFG_PA_PWR_m2;
+  comrad.rad_pa = NRF905_CFG_PA_PWR_6;
   // callbacks
   NRF905_IMPL_init(comrad_rad_on_rx, comrad_rad_on_tx, comrad_rad_on_cfg, comrad_rad_on_err);
   // config
@@ -380,7 +380,7 @@ static void comrad_rad_super_task_f(u32_t arg, void *arg_p) {
     DBG(D_COMM, D_INFO, "COMRAD avg lqual: %i\n", avg_lqual);
     comrad.sum_lqual = 0;
     comrad.lqual_samples = 0;
-
+#ifdef CONFIG_SPYBOT_ADJUST_PA
     // check if bad
     if (avg_lqual >= COMM_RADIO_LQUAL_PERFECT) {
       comrad.lost_pair = FALSE; // never mind, good enough
@@ -402,6 +402,7 @@ static void comrad_rad_super_task_f(u32_t arg, void *arg_p) {
       }
     }
     comrad.lost_pair = FALSE;
+#endif
   }
 }
 

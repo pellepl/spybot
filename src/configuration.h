@@ -15,6 +15,8 @@
 #define CFG_COMMON_RIGHT_INVERT   (1<<1)
 #define CFG_COMMON_PAN_INVERT     (1<<2)
 #define CFG_COMMON_TILT_INVERT    (1<<3)
+#define CFG_COMMON_JOY_H_INVERT   (1<<4)
+#define CFG_COMMON_JOY_V_INVERT   (1<<5)
 
 typedef enum {
   CFG_STEER_ADJUST = 0,

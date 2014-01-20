@@ -12,6 +12,7 @@
 #include "miniutils.h"
 #include "comm_radio.h"
 #include "app.h"
+#include "adc.h"
 
 static struct {
   s32_t heading_ang;
@@ -35,6 +36,8 @@ const s16_t const base_plane_pts[8][3] = {
 
 static u8_t acc_buf[64];
 static u8_t acc_buf_ix = 0;
+
+static u8_t audio_buf[64];
 
 static void hud_graph_draw(gcontext *ctx, u8_t *data, u8_t start_ix, u8_t len, u8_t height, u8_t x, u8_t y) {
   GFX_draw_vertical_line(ctx, x,y,y+height+2, COL_SET);
@@ -72,6 +75,9 @@ static void hud_plane_reset(gcontext *ctx) {
 void hud_paint_main(gcontext *ctx, bool init) {
   char txt[28];
   memset(txt,0,28);
+  time now = SYS_get_time_ms();
+  bool blink = (now/500) & 1;
+
   sprint(txt, "%s %i", APP_NAME, SYS_build_number());
   GFX_printn(ctx, txt, 0,  0, 16, COL_OVER);
 
@@ -83,8 +89,7 @@ void hud_paint_main(gcontext *ctx, bool init) {
     GFX_printn(ctx, txt, 0,  17, 16, COL_OVER);
   }
 
-  time now = SYS_get_time_ms();
-  if ((now / 500) & 1) {
+  if (blink) {
     GFX_printn(ctx, " ", 0, 27, 16, COL_OVER);
   } else {
     GFX_printn(ctx, "\001",0, 27, 16, COL_OVER);
@@ -111,11 +116,18 @@ void hud_paint_main(gcontext *ctx, bool init) {
     return;
   }
 
+  // paired state
+
+  // joystick control
   if (APP_get_joystick_control() == APP_JOYSTICK_CONTROL_MOTOR) {
     GFX_printn(ctx, "\020", 0, 5, 0, COL_OVER);
   } else {
     GFX_printn(ctx, "\021", 0, 5, 0, COL_OVER);
   }
+
+  // audio
+  ADC_sample_sound(NULL, audio_buf, sizeof(audio_buf));
+  hud_graph_draw(ctx, audio_buf, 0, sizeof(audio_buf), 32, 150, 50);
 
   // heading
   s16_t x = ctx->width/2;
@@ -132,9 +144,11 @@ void hud_paint_main(gcontext *ctx, bool init) {
 
   // accelerometer
   s8_t ax,ay,az;
+  static s16_t avg_az = 0;
   ax = acc[0];
   ay = acc[1];
   az = acc[2];
+  avg_az = 15*(avg_az)/16 + 1*(az << 8)/16;
   s32_t ax2 = ax*ax;
   s32_t ay2 = ay*ay;
   s32_t az2 = az*az;
@@ -172,7 +186,18 @@ void hud_paint_main(gcontext *ctx, bool init) {
       GFX_rotate_z_3d(&mhud.plane_pts[i][0], yplane_cos, -yplane_sin);
       GFX_project_3d(&mhud.plane_pts[i][0], _W, _H, _X, _Y);
     }
-    hud_plane_draw(ctx, COL_SET);
+
+    if (blink) {
+      if (avg_az < 0) {
+        GFX_printn(ctx, "ROLL", 4, 0, 13, COL_OVER);
+      } else if (avg_az < (40<<8)) {
+        GFX_printn(ctx, "TILT", 4, 0, 13, COL_OVER);
+      } else {
+        hud_plane_draw(ctx, COL_SET);
+      }
+    } else {
+      hud_plane_draw(ctx, COL_SET);
+    }
 
     // accelerometer bars
 #undef _W

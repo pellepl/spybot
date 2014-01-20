@@ -33,6 +33,8 @@ static const char * const(MAIN_MENU[]) =  {
 
 static const char * const(COMMON_MENU[]) =  {
     "CONFIG COMMON",
+  "INV JOYSTICK H",
+  "INV JOYSTICK V",
   "INV LEFT MOTOR",
   "INV RIGHT MOTOR",
   "INV CAMERA PAN",
@@ -430,10 +432,12 @@ static void hud_conf_input_exit(input_type in, bool change) {
 static void hud_conf_paint_common(gcontext *ctx) {
   ROVER_view(230,200,230, 0, 0, -4*PI_TRIG_T/5, FALSE);
   hud_conf_paint_menu(ctx);
-  hud_conf_paint_checkbox(ctx, 200, 8*4, conf.remote.common & CFG_COMMON_LEFT_INVERT);
-  hud_conf_paint_checkbox(ctx, 200, 8*6, conf.remote.common & CFG_COMMON_RIGHT_INVERT);
-  hud_conf_paint_checkbox(ctx, 200, 8*8, conf.remote.common & CFG_COMMON_PAN_INVERT);
-  hud_conf_paint_checkbox(ctx, 200, 8*10, conf.remote.common & CFG_COMMON_TILT_INVERT);
+  hud_conf_paint_checkbox(ctx, 200, 8*4, conf.remote.common & CFG_COMMON_JOY_H_INVERT);
+  hud_conf_paint_checkbox(ctx, 200, 8*6, conf.remote.common & CFG_COMMON_JOY_V_INVERT);
+  hud_conf_paint_checkbox(ctx, 200, 8*8, conf.remote.common & CFG_COMMON_LEFT_INVERT);
+  hud_conf_paint_checkbox(ctx, 200, 8*10, conf.remote.common & CFG_COMMON_RIGHT_INVERT);
+  hud_conf_paint_checkbox(ctx, 200, 8*12, conf.remote.common & CFG_COMMON_PAN_INVERT);
+  hud_conf_paint_checkbox(ctx, 200, 8*14, conf.remote.common & CFG_COMMON_TILT_INVERT);
 }
 
 static void hud_conf_input_common(input_type in, bool change) {
@@ -443,13 +447,13 @@ static void hud_conf_input_common(input_type in, bool change) {
 
   if (in & IN_UP) {
     if (conf.menu_sel_ix == 0) {
-      conf.menu_sel_ix = 4;
+      conf.menu_sel_ix = 6;
     } else {
       conf.menu_sel_ix--;
     }
     conf.last_selection = SYS_get_time_ms();
   } else if (in & IN_DOWN) {
-    if (conf.menu_sel_ix == 4) {
+    if (conf.menu_sel_ix == 6) {
       conf.menu_sel_ix = 0;
     } else {
       conf.menu_sel_ix++;
@@ -460,17 +464,25 @@ static void hud_conf_input_common(input_type in, bool change) {
     switch (conf.menu_sel_ix) {
     case 0:
       conf.dirty = TRUE;
-      conf.remote.common ^= CFG_COMMON_LEFT_INVERT;
+      conf.remote.common ^= CFG_COMMON_JOY_H_INVERT;
       break;
     case 1:
       conf.dirty = TRUE;
-      conf.remote.common ^= CFG_COMMON_RIGHT_INVERT;
+      conf.remote.common ^= CFG_COMMON_JOY_V_INVERT;
       break;
     case 2:
       conf.dirty = TRUE;
-      conf.remote.common ^= CFG_COMMON_PAN_INVERT;
+      conf.remote.common ^= CFG_COMMON_LEFT_INVERT;
       break;
     case 3:
+      conf.dirty = TRUE;
+      conf.remote.common ^= CFG_COMMON_RIGHT_INVERT;
+      break;
+    case 4:
+      conf.dirty = TRUE;
+      conf.remote.common ^= CFG_COMMON_PAN_INVERT;
+      break;
+    case 5:
       conf.dirty = TRUE;
       conf.remote.common ^= CFG_COMMON_TILT_INVERT;
       break;

@@ -1015,7 +1015,7 @@ static int f_ee_write(int addr, char *s) {
 
 #ifdef CONFIG_ADC
 static int f_adc(void) {
-  ADC_sample(NULL);
+  ADC_sample_joystick(NULL);
   return 0;
 }
 #endif // CONFIG_ADC

@@ -4,16 +4,26 @@
 
 #ifdef CONFIG_ADC
 
-#define ADC_IDLE    0
-#define ADC_FIRST   1
-#define ADC_SECOND  2
+#define ADC_IDLE          0
+#define ADC_JOYST_FIRST   1
+#define ADC_JOYST_SECOND  2
+#define ADC_AUDIO         3
 
-static volatile u8_t state;
-static u16_t spl1, spl2;
-static adc_cb adc_finished_cb;
+static struct {
+  volatile u8_t state;
+  u8_t *buf;
+  u32_t len;
+  adc_cb adc_finished_cb;
+} adc1;
+static struct {
+  volatile u8_t state;
+  u16_t spl1, spl2;
+  adc_cb adc_finished_cb;
+} adc2;
 
 void ADC_init() {
-  state = ADC_IDLE;
+  adc2.state = ADC_IDLE;
+  adc1.state = ADC_IDLE;
 
   ADC_InitTypeDef  ADC_InitStructure;
 
@@ -23,51 +33,86 @@ void ADC_init() {
   ADC_InitStructure.ADC_ExternalTrigConv = ADC_ExternalTrigConv_None;
   ADC_InitStructure.ADC_DataAlign = ADC_DataAlign_Right;
   ADC_InitStructure.ADC_NbrOfChannel = 1;
+  ADC_Init(ADC1, &ADC_InitStructure);
   ADC_Init(ADC2, &ADC_InitStructure);
 
+  ADC_ITConfig(ADC1, ADC_IT_EOC, ENABLE);
   ADC_ITConfig(ADC2, ADC_IT_EOC, ENABLE);
 
+  ADC_Cmd(ADC1, ENABLE);
   ADC_Cmd(ADC2, ENABLE);
+
+  // reset calibration
+  ADC_ResetCalibration(ADC1);
+  while(ADC_GetResetCalibrationStatus(ADC1));
+  // recalibrate
+  ADC_StartCalibration(ADC1);
+  while(ADC_GetCalibrationStatus(ADC2));
 
   // reset calibration
   ADC_ResetCalibration(ADC2);
   while(ADC_GetResetCalibrationStatus(ADC2));
-
   // recalibrate
   ADC_StartCalibration(ADC2);
   while(ADC_GetCalibrationStatus(ADC2));
-
-  state = ADC_IDLE;
 }
 
-s32_t ADC_sample(adc_cb cb) {
-  if (state != ADC_IDLE) {
+s32_t ADC_sample_joystick(adc_cb cb) {
+  if (adc2.state != ADC_IDLE) {
     return ADC_ERR_BUSY;
   }
-  adc_finished_cb = cb;
-  state = ADC_FIRST;
+  adc2.adc_finished_cb = cb;
+  adc2.state = ADC_JOYST_FIRST;
   ADC_RegularChannelConfig(ADC2, ADC_Channel_8, 1, ADC_SampleTime_239Cycles5);
   ADC_SoftwareStartConvCmd(ADC2, ENABLE);
 
   return ADC_OK;
 }
 
+s32_t ADC_sample_sound(adc_cb cb, u8_t *buf, u32_t len) {
+  if (adc1.state != ADC_IDLE) {
+    return ADC_ERR_BUSY;
+  }
+  adc1.adc_finished_cb = cb;
+  adc1.buf = buf;
+  adc1.len = len;
+  adc1.state = ADC_AUDIO;
+  ADC_RegularChannelConfig(ADC1, ADC_Channel_4, 1, ADC_SampleTime_239Cycles5);
+  ADC_SoftwareStartConvCmd(ADC1, ENABLE);
+
+  return ADC_OK;
+}
+
 
 void ADC_irq(void) {
+  if (ADC_GetITStatus(ADC1, ADC_IT_EOC) != RESET) {
+    ADC_ClearITPendingBit(ADC1, ADC_IT_EOC);
+    *adc1.buf = (ADC_GetConversionValue(ADC1) >> (4+3));
+    adc1.buf++;
+    if (--adc1.len) {
+      ADC_SoftwareStartConvCmd(ADC1, ENABLE);
+    } else {
+      adc1.state = ADC_IDLE;
+      if (adc1.adc_finished_cb) {
+        adc1.adc_finished_cb(0,0);
+      }
+    }
+  }
+
   if (ADC_GetITStatus(ADC2, ADC_IT_EOC) != RESET) {
     ADC_ClearITPendingBit(ADC2, ADC_IT_EOC);
-    if (state == ADC_FIRST) {
-      state = ADC_SECOND;
-      spl1 = ADC_GetConversionValue(ADC2);
+    if (adc2.state == ADC_JOYST_FIRST) {
+      adc2.state = ADC_JOYST_SECOND;
+      adc2.spl1 = ADC_GetConversionValue(ADC2);
       ADC_RegularChannelConfig(ADC2, ADC_Channel_9, 1, ADC_SampleTime_239Cycles5);
       ADC_SoftwareStartConvCmd(ADC2, ENABLE);
     } else {
-      spl2 = ADC_GetConversionValue(ADC2);
-      state = ADC_IDLE;
-      if (adc_finished_cb) {
-        adc_finished_cb(spl1, spl2);
+      adc2.spl2 = ADC_GetConversionValue(ADC2);
+      adc2.state = ADC_IDLE;
+      if (adc2.adc_finished_cb) {
+        adc2.adc_finished_cb(adc2.spl1, adc2.spl2);
       } else {
-        DBG(D_APP, D_INFO, "ADC: %04x %04x\n", spl1, spl2);
+        DBG(D_APP, D_INFO, "ADC: %04x %04x\n", adc2.spl1, adc2.spl2);
       }
     }
   }

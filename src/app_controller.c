@@ -68,6 +68,12 @@ void app_control_set_paired(bool paired) {
 static void app_control_adc_cb(u16_t ch1, u16_t ch2) {
   joystick_v = ch1;
   joystick_h = ch2;
+  if (APP_cfg_get_val(CFG_COMMON) & CFG_COMMON_JOY_H_INVERT) {
+    joystick_h = 0xfff-joystick_h;
+  }
+  if (APP_cfg_get_val(CFG_COMMON) & CFG_COMMON_JOY_V_INVERT) {
+    joystick_v = 0xfff-joystick_v;
+  }
 }
 #endif
 
@@ -116,7 +122,7 @@ void APP_get_joystick_reading(s8_t *hori, s8_t *vert) {
 static void app_control_ui_task(u32_t a, void *b) {
   APP_remote_set_motor_ctrl(0, 0);
 #ifdef CONFIG_SPYBOT_JOYSTICK
-  ADC_sample(app_control_adc_cb);
+  ADC_sample_joystick(app_control_adc_cb);
 #endif // CONFIG_SPYBOT_JOYSTICK
   HUD_paint();
 #ifdef CONFIG_SPYBOT_JOYSTICK

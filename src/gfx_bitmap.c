@@ -206,7 +206,7 @@ static inline void _gfx_draw_vertical_line(gcontext *ctx, s16_t y, s16_t h, s16_
   }
 }
 
-static u8_t gfx_clip_code(gcontext *ctx, s16_t x, s16_t y) {
+static u8_t gfx_clip_code(gcontext *ctx, s32_t x, s32_t y) {
   u8_t code;
 
   code = INSIDE;
@@ -224,11 +224,17 @@ static u8_t gfx_clip_code(gcontext *ctx, s16_t x, s16_t y) {
   return code;
 }
 
-void GFX_draw_line(gcontext *ctx, s16_t x1, s16_t y1, s16_t x2, s16_t y2, gcolor col) {
-  s16_t dx = x2 - x1;
-  s16_t dy = y2 - y1;
-  s32_t fkx = (dx << 8) / (dy == 0 ? 1 : dy);
-  s32_t fky = (dy << 8) / (dx == 0 ? 1 : dx);
+#define LINE_ACC    14
+#define LINE_ROUND  ((1<<(LINE_ACC-1))-1)
+void GFX_draw_line(gcontext *ctx, s16_t xq1, s16_t yq1, s16_t xq2, s16_t yq2, gcolor col) {
+  s32_t x1 = xq1;
+  s32_t y1 = yq1;
+  s32_t x2 = xq2;
+  s32_t y2 = yq2;
+  s32_t dx = x2 - x1;
+  s32_t dy = y2 - y1;
+  s32_t fkx = ((dx << LINE_ACC) + LINE_ROUND) / (dy == 0 ? 1 : dy);
+  s32_t fky = ((dy << LINE_ACC) + LINE_ROUND) / (dx == 0 ? 1 : dx);
 
   { // cohen sutherland clipping
     u8_t clip1 = gfx_clip_code(ctx, x1, y1);
@@ -241,19 +247,19 @@ void GFX_draw_line(gcontext *ctx, s16_t x1, s16_t y1, s16_t x2, s16_t y2, gcolor
       } else if (clip1 & clip2) {
         break;
       } else {
-        s16_t x = 0, y = 0;
+        s32_t x = 0, y = 0;
         u8_t clip = clip1 ? clip1 : clip2;
         if (clip & TOP) {
-          x = x1 + (((ctx->height-1 - y1) * fkx) >> 8);
+          x = x1 + (((ctx->height-1 - y1) * fkx) >> LINE_ACC);
           y = ctx->height-1;
         } else if (clip & BOTTOM) {
-          x = x1 + (((0 - y1) * fkx) >> 8);
+          x = x1 + (((0 - y1) * fkx) >> LINE_ACC);
           y = 0;
         } else if (clip & RIGHT) {
-          y = y1 + (((ctx->width-1 - x1) * fky) >> 8);
+          y = y1 + (((ctx->width-1 - x1) * fky) >> LINE_ACC);
           x = ctx->width-1;
         } else if (clip & LEFT) {
-          y = y1 + (((0 - x1) * fky) >> 8);
+          y = y1 + (((0 - x1) * fky) >> LINE_ACC);
           x = 0;
         }
         if (clip == clip1) {
@@ -270,6 +276,15 @@ void GFX_draw_line(gcontext *ctx, s16_t x1, s16_t y1, s16_t x2, s16_t y2, gcolor
     if (!accept) return;
   }
 
+  if (dx == 0) {
+    _gfx_draw_vertical_line(ctx, MIN(y1,y2), MAX(y1,y2)-MIN(y1,y2), x1, col);
+    return;
+  }
+  if (dy == 0) {
+    _gfx_draw_horizontal_line(ctx, MIN(x1,x2), MAX(x1,x2)-MIN(x1,x2), y1, col);
+    return;
+  }
+
   dx = ABS(dx);
   dy = ABS(dy);
   fkx = ABS(fkx);
@@ -278,52 +293,60 @@ void GFX_draw_line(gcontext *ctx, s16_t x1, s16_t y1, s16_t x2, s16_t y2, gcolor
   if (dx >= dy) {
     // non-steep
     u32_t fx1, fx2;
-    s16_t ys, yd;
+    s32_t ys, yd;
     if (x1 < x2) {
-      fx1 = (x1 << 8);
-      fx2 = (x2 << 8);
+      fx1 = (x1 << LINE_ACC);
+      fx2 = (x2 << LINE_ACC);
       ys = y1;
       yd = y2 > y1 ? 1 : -1;
     } else {
-      fx1 = (x2 << 8);
-      fx2 = (x1 << 8);
+      fx1 = (x2 << LINE_ACC);
+      fx2 = (x1 << LINE_ACC);
       ys = y2;
       yd = y1 > y2 ? 1 : -1;
     }
-    fx1 += 0x7f;
-    fx2 += 0x7f;
-    u32_t ox = fx1>>8;
-    while (fx1 < fx2) {
+    //fx1 += LINE_ROUND;
+    //fx2 += LINE_ROUND;
+    u32_t ox = fx1>>LINE_ACC;
+    while (fx1 <= fx2) {
       fx1 += fkx;
-      if (fx1 > fx2) fx1 = fx2;
-      _gfx_draw_horizontal_line(ctx, ox, (fx1 >> 8) - ox, ys, col);
+      if (fx1 > fx2 || fkx == 0) {
+        fx1 = fx2;
+        _gfx_draw_horizontal_line(ctx, ox, ((fx1+LINE_ROUND) >> LINE_ACC) - ox, ys, col);
+        return;
+      }
+      _gfx_draw_horizontal_line(ctx, ox, ((fx1+LINE_ROUND) >> LINE_ACC) - ox, ys, col);
       ys += yd;
-      ox = fx1 >> 8;
+      ox = (fx1+LINE_ROUND) >> LINE_ACC;
     }
   } else {
     // steep
     u32_t fy1, fy2;
-    s16_t xs, xd;
+    s32_t xs, xd;
     if (y1 < y2) {
-      fy1 = (y1 << 8);
-      fy2 = (y2 << 8);
+      fy1 = (y1 << LINE_ACC);
+      fy2 = (y2 << LINE_ACC);
       xs = x1;
       xd = x2 > x1 ? 1 : -1;
     } else {
-      fy1 = (y2 << 8);
-      fy2 = (y1 << 8);
+      fy1 = (y2 << LINE_ACC);
+      fy2 = (y1 << LINE_ACC);
       xs = x2;
       xd = x1 > x2 ? 1 : -1;
     }
-    fy1 += 0x7f;
-    fy2 += 0x7f;
-    u32_t oy = fy1>>8;
-    while (fy1 < fy2) {
+    //fy1 += LINE_ROUND;
+    //fy2 += LINE_ROUND;
+    u32_t oy = fy1>>LINE_ACC;
+    while (fy1 <= fy2) {
       fy1 += fky;
-      if (fy1 > fy2) fy1 = fy2;
-      _gfx_draw_vertical_line(ctx, oy, (fy1 >> 8) - oy, xs, col);
+      if (fy1 > fy2 || fky == 0) {
+        fy1 = fy2;
+        _gfx_draw_vertical_line(ctx, oy, ((fy1+LINE_ROUND) >> LINE_ACC) - oy, xs, col);
+        return;
+      }
+      _gfx_draw_vertical_line(ctx, oy, ((fy1+LINE_ROUND) >> LINE_ACC) - oy, xs, col);
       xs += xd;
-      oy = fy1 >> 8;
+      oy = (fy1+LINE_ROUND) >> LINE_ACC;
     }
   }
 }
