@@ -13,6 +13,9 @@ static struct {
   volatile u8_t state;
   u8_t *buf;
   u32_t len;
+  u32_t ix;
+  bool trig_upper;
+  bool trig_lower;
   adc_cb adc_finished_cb;
 } adc1;
 static struct {
@@ -63,7 +66,7 @@ s32_t ADC_sample_joystick(adc_cb cb) {
   }
   adc2.adc_finished_cb = cb;
   adc2.state = ADC_JOYST_FIRST;
-  ADC_RegularChannelConfig(ADC2, ADC_Channel_8, 1, ADC_SampleTime_239Cycles5);
+  ADC_RegularChannelConfig(ADC2, ADC_Channel_8, 1, ADC_SampleTime_71Cycles5);
   ADC_SoftwareStartConvCmd(ADC2, ENABLE);
 
   return ADC_OK;
@@ -76,7 +79,10 @@ s32_t ADC_sample_sound(adc_cb cb, u8_t *buf, u32_t len) {
   adc1.adc_finished_cb = cb;
   adc1.buf = buf;
   adc1.len = len;
+  adc1.ix = 0;
   adc1.state = ADC_AUDIO;
+  adc1.trig_upper = FALSE;
+  adc1.trig_lower = FALSE;
   ADC_RegularChannelConfig(ADC1, ADC_Channel_4, 1, ADC_SampleTime_239Cycles5);
   ADC_SoftwareStartConvCmd(ADC1, ENABLE);
 
@@ -87,9 +93,26 @@ s32_t ADC_sample_sound(adc_cb cb, u8_t *buf, u32_t len) {
 void ADC_irq(void) {
   if (ADC_GetITStatus(ADC1, ADC_IT_EOC) != RESET) {
     ADC_ClearITPendingBit(ADC1, ADC_IT_EOC);
-    *adc1.buf = (ADC_GetConversionValue(ADC1) >> (4+3));
-    adc1.buf++;
-    if (--adc1.len) {
+    u16_t val = ADC_GetConversionValue(ADC1);
+    if (!adc1.trig_upper) {
+      if (val > 2048+512) {
+        adc1.trig_upper = TRUE;
+        if (adc1.ix >= adc1.len / 4) {
+          adc1.ix = adc1.len / 4;
+        }
+      }
+    } else {
+      if (!adc1.trig_lower) {
+        if (val < 2048) {
+          adc1.trig_lower = TRUE;
+          if (adc1.ix >= adc1.len / 2) {
+            adc1.ix = adc1.len / 2;
+          }
+        }
+      }
+    }
+    adc1.buf[adc1.ix++] = (val >> (4+3));
+    if (adc1.ix < adc1.len) {
       ADC_SoftwareStartConvCmd(ADC1, ENABLE);
     } else {
       adc1.state = ADC_IDLE;
