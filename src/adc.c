@@ -50,7 +50,7 @@ void ADC_init() {
   while(ADC_GetResetCalibrationStatus(ADC1));
   // recalibrate
   ADC_StartCalibration(ADC1);
-  while(ADC_GetCalibrationStatus(ADC2));
+  while(ADC_GetCalibrationStatus(ADC1));
 
   // reset calibration
   ADC_ResetCalibration(ADC2);
@@ -95,17 +95,19 @@ void ADC_irq(void) {
     ADC_ClearITPendingBit(ADC1, ADC_IT_EOC);
     u16_t val = ADC_GetConversionValue(ADC1);
     if (!adc1.trig_upper) {
-      if (val > 2048+512) {
+      if (val > 2048+256) {
         adc1.trig_upper = TRUE;
         if (adc1.ix >= adc1.len / 4) {
+          memcpy(&adc1.buf[0], &adc1.buf[adc1.ix - adc1.len / 4],  (adc1.len / 4)-1);
           adc1.ix = adc1.len / 4;
         }
       }
     } else {
       if (!adc1.trig_lower) {
-        if (val < 2048) {
+        if (val < 2048-256) {
           adc1.trig_lower = TRUE;
           if (adc1.ix >= adc1.len / 2) {
+            memcpy(&adc1.buf[0], &adc1.buf[adc1.ix - adc1.len / 2],  (adc1.len / 2)-1);
             adc1.ix = adc1.len / 2;
           }
         }

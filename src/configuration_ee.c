@@ -14,10 +14,10 @@
 #define CFG_EE_ADDRESS    0x00000000
 #define CFG_EE_LEN        (16*1024)
 #define CFG_EE_BLOCK_LEN  256
-#define CFG_EE_MAGIC_OK   0xfa1105a8
-#define CFG_EE_MAGIC_DEL  0xb08ed2d7
-#define CFG_EE_MAGIC_UPD  0xdeadc0de
-#define CFG_EE_NO_ADDR    0xffffffff
+#define CFG_EE_MAGIC_OK   (0xfa1105a8 ^ CONFIGURATION_VERSION)
+#define CFG_EE_MAGIC_DEL  (0xb08ed2d7 ^ CONFIGURATION_VERSION)
+#define CFG_EE_MAGIC_UPD  (0xdeadc0de ^ CONFIGURATION_VERSION)
+#define CFG_EE_NO_ADDR    (0xffffffff)
 
 #define EE_DBG(x, ...) DBG(D_APP, D_DEBUG, "CFGEE:"x, ## __VA_ARGS__)
 
@@ -109,7 +109,7 @@ static void cfg_ee_cb_irq(m24m01_dev *dev, int res) {
         cfg.cur_cfg_addr = CFG_EE_NO_ADDR;
         if (cfg.state == LOAD_CFG) {
           // tried load current setting, failed, so create default and store
-          CFG_store_default();
+          CFG_EE_store_default();
         } else {
           // magic not found, fail
           if (cfg.cb) {
@@ -179,7 +179,7 @@ static void cfg_find_magic(u32_t magic) {
   cfg_ee_read(CFG_EE_ADDRESS, (u8_t *)&cfg.config, sizeof(ee_cfg));
 }
 
-static void cfg_set_default(void) {
+static void cfg_ee_set_default(void) {
   cfg.config.cfg.main.cam_pan_adjust = 0;
   cfg.config.cfg.main.cam_tilt_adjust = 0;
   cfg.config.cfg.main.radar_adjust = 0;
@@ -203,7 +203,7 @@ static void cfg_set_default(void) {
   cfg.config.cfg.radio.radio_channel = 128;
 }
 
-void CFG_init(m24m01_dev *ee_dev, cfg_ee_cb cb) {
+void CFG_EE_init(m24m01_dev *ee_dev, cfg_ee_cb cb) {
   memset(&cfg, 0, sizeof(cfg));
   cfg.cb = cb;
   cfg.ee_dev = ee_dev;
@@ -211,13 +211,13 @@ void CFG_init(m24m01_dev *ee_dev, cfg_ee_cb cb) {
   m24m01_open(cfg.ee_dev, _I2C_BUS(0), FALSE, FALSE, cfg_ee_cb_irq);
 }
 
-void CFG_load_config(void) {
+void CFG_EE_load_config(void) {
   cfg.cur_cfg_addr = CFG_EE_NO_ADDR;
   cfg.state = LOAD_CFG;
   cfg_find_magic(CFG_EE_MAGIC_OK);
 }
 
-void CFG_store_config(void) {
+void CFG_EE_store_config(void) {
   cfg.state = STORE_CFG;
   u32_t addr;
   if (cfg.cur_cfg_addr == CFG_EE_NO_ADDR) {
@@ -237,11 +237,11 @@ void CFG_store_config(void) {
   cfg_ee_write(addr, (u8_t *)&cfg.config, sizeof(ee_cfg));
 }
 
-void CFG_set_config(configuration_t *c) {
+void CFG_EE_set_config(configuration_t *c) {
   memcpy(&cfg.config.cfg, c, sizeof(configuration_t));
 }
 
-int CFG_get_config(configuration_t *c) {
+int CFG_EE_get_config(configuration_t *c) {
   if (cfg.cur_cfg_addr == CFG_EE_NO_ADDR) {
     return ERR_CFG_NOT_LOADED;
   }
@@ -249,7 +249,7 @@ int CFG_get_config(configuration_t *c) {
   return CFG_OK;
 }
 
-void CFG_store_default(void) {
-  cfg_set_default();
-  CFG_store_config();
+void CFG_EE_store_default(void) {
+  cfg_ee_set_default();
+  CFG_EE_store_config();
 }

@@ -53,7 +53,7 @@ void HUD_dbg_print(gcontext *ctx, char *str) {
       dhud.dbg_cx = 0;
       dhud.dbg_cy++;
       CVIDEO_set_v_offset(((dhud.dbg_cy+1) * 8));
-      if (dhud.dbg_cy >= 17) {
+      if (dhud.dbg_cy >= (ctx->height/8)) {
         dhud.dbg_cy = 0;
       }
       GFX_fill(ctx, 0, dhud.dbg_cy * 8, ctx->width, 8, COL_RESET);

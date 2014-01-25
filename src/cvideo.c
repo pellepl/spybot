@@ -16,12 +16,20 @@
 //  Yellow: 8V
 //
 
+#define CVID_DISABLE_EFFECTS
+
 #define CVID_HALF_VERTICAL
 //#define CVID_DISPLAY_SYNCED_ONLY
 
-#define CVID_MIN_HSCANLINE      21
-#define CVID_MAX_HSCANLINE      (CVID_HSCANLINES+CVID_MIN_HSCANLINE)
+#ifdef NTSC
+#define CVID_MIN_HSCANLINE      18
+#define CVID_HSCANLINES         227
+#else
+#define CVID_MIN_HSCANLINE      23
 #define CVID_HSCANLINES         275
+#endif
+
+#define CVID_MAX_HSCANLINE      (CVID_HSCANLINES+CVID_MIN_HSCANLINE)
 #define CVID_HSCANLINE_BYTE_LEN 29
 
 #define CVID_GRAM_WIDTH         (CVID_HSCANLINE_BYTE_LEN * 8)-4
@@ -47,8 +55,10 @@ static struct {
   u16_t dbg_last_hsyncs;
   volatile s16_t v_offset;
   volatile s16_t v_scroll;
+#ifndef CVID_DISABLE_EFFECTS
   volatile s16_t effect_stage;
   u8_t effect;
+#endif
   gcontext *gctx;
   u8_t *cur_gram;
   volatile bool gram_switch;
@@ -79,9 +89,11 @@ static void cvideo_vsync_irq(gpio_pin pin) {
   if (vid.v_scroll != 0) {
     vid.v_offset += vid.v_scroll;
   }
+#ifndef CVID_DISABLE_EFFECTS
   if (vid.effect) {
     vid.effect_stage += 8;
   }
+#endif
 #ifdef CVID_DISPLAY_SYNCED_ONLY
   bool nsync = vid.cur_hsync == 320;
   if (nsync != vid.in_sync) {
@@ -100,17 +112,30 @@ static void cvideo_vsync_irq(gpio_pin pin) {
 #endif
   vid.in_sync = nsync;
   vid.cur_hsync = 0;
+
+  // just in case, e.g. if getting a video signal with less scanlines than defined
+  if (vid.gram_switch && vid.gram_dblbuf) {
+    vid.gram_switch = FALSE;
+    vid.cur_gram = vid.cur_gram == cvideo_gram_1 ? cvideo_gram_2 : cvideo_gram_1;
+    if (vid.gctx) {
+      vid.gctx->gram = vid.cur_gram;
+    }
+  }
 }
 
 static void cvideo_hsync_irq(gpio_pin)  __attribute__(( optimize(3) ));
 static void cvideo_hsync_irq(gpio_pin pin) {
   vid.cur_hsync++;
+#ifdef CVID_DISPLAY_SYNCED_ONLY
   if (!vid.in_sync) return;
-  if (vid.in_sync) {
+  if (vid.in_sync)
+#endif
+  {
     if (vid.cur_hsync >= CVID_MIN_HSCANLINE && vid.cur_hsync < CVID_MAX_HSCANLINE) {
       DMA1_Channel5->CCR &= (u16_t)(~DMA_CCR1_EN);
       DMA1_Channel5->CNDTR = CVID_HSCANLINE_BYTE_LEN;
       u32_t scanline = vid.cur_hsync - CVID_MIN_HSCANLINE;
+#ifndef CVID_DISABLE_EFFECTS
       s16_t sc = scanline;
       if (vid.effect > 64) {
         sc = (sc & 0xffe0) + (32 - (sc & 0x1f));
@@ -200,6 +225,7 @@ static void cvideo_hsync_irq(gpio_pin pin) {
             vid.effect = 0;
         };
       }
+#endif
 
 #ifdef CVID_HALF_VERTICAL
       scanline /= 2;
@@ -238,8 +264,10 @@ void CVIDEO_set_v_scroll(s16_t speed) {
 }
 
 void CVIDEO_set_effect(u8_t effect) {
+#ifndef CVID_DISABLE_EFFECTS
   vid.effect_stage = 0;
   vid.effect = effect;
+#endif
 }
 
 

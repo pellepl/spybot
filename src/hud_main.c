@@ -34,8 +34,10 @@ const s16_t const base_plane_pts[8][3] = {
     {  0,  0, 15}, //7
 };
 
+#ifdef ACC_GRAPH
 static u8_t acc_buf[64];
 static u8_t acc_buf_ix = 0;
+#endif
 
 static u8_t audio_buf[64];
 
@@ -73,26 +75,28 @@ static void hud_plane_reset(gcontext *ctx) {
 }
 
 void hud_paint_main(gcontext *ctx, bool init) {
+  const u8_t max_ychar = (ctx->height/8)-1;
   char txt[28];
   memset(txt,0,28);
   time now = SYS_get_time_ms();
   bool blink = (now/500) & 1;
 
+  // lower status line
   sprint(txt, "%s %i", APP_NAME, SYS_build_number());
-  GFX_printn(ctx, txt, 0,  0, 16, COL_OVER);
+  GFX_printn(ctx, txt, 0,  0, max_ychar, COL_OVER);
 
   {
     u8_t h, m, s;
     u16_t ms;
     SYS_get_time(NULL, &h, &m, &s, &ms);
     sprint(txt, "%02i:%02i:%02i.%i ", h,m,s,ms/100);
-    GFX_printn(ctx, txt, 0,  17, 16, COL_OVER);
+    GFX_printn(ctx, txt, 0,  17, max_ychar, COL_OVER);
   }
 
   if (blink) {
-    GFX_printn(ctx, " ", 0, 27, 16, COL_OVER);
+    GFX_printn(ctx, " ", 0, 27, max_ychar, COL_OVER);
   } else {
-    GFX_printn(ctx, "\001",0, 27, 16, COL_OVER);
+    GFX_printn(ctx, "\001",0, 27, max_ychar, COL_OVER);
   }
 
   // upper status bar
@@ -127,11 +131,11 @@ void hud_paint_main(gcontext *ctx, bool init) {
 
   // audio
   ADC_sample_sound(NULL, audio_buf, sizeof(audio_buf));
-  hud_graph_draw(ctx, audio_buf, 0, sizeof(audio_buf), 32, 150, 50);
+  hud_graph_draw(ctx, audio_buf, 0, sizeof(audio_buf), 32, 150, ctx->height-12-32);
 
   // heading
   s16_t x = ctx->width/2;
-  s16_t y = 110;
+  s16_t y = ctx->height - 14 - 12;
 
   u8_t heading_raw = APP_remote_get_heading();
   s8_t *acc = APP_remote_get_acc();
@@ -144,11 +148,11 @@ void hud_paint_main(gcontext *ctx, bool init) {
 
   // accelerometer
   s8_t ax,ay,az;
-  static s16_t avg_az = 0;
+  static s16_t lp_az = 64<<8;
   ax = acc[0];
   ay = acc[1];
   az = acc[2];
-  avg_az = 15*(avg_az)/16 + 1*(az << 8)/16;
+  lp_az = 15*(lp_az)/16 + 1*(az << 8)/16;
   s32_t ax2 = ax*ax;
   s32_t ay2 = ay*ay;
   s32_t az2 = az*az;
@@ -157,12 +161,14 @@ void hud_paint_main(gcontext *ctx, bool init) {
   s32_t ayn = (ay<<15)/ad;
   s32_t azn = (az<<15)/ad;
 
+#ifdef ACC_GRAPH
   acc_buf[acc_buf_ix++] = ad>>2;
   if (acc_buf_ix >= sizeof(acc_buf)) {
     acc_buf_ix = 0;
   }
   hud_graph_draw(ctx, acc_buf, (acc_buf_ix + sizeof(acc_buf)) % sizeof(acc_buf),
       sizeof(acc_buf), 32, 150, 90);
+#endif
 
   s32_t axzn = _sqrt(axn*axn + azn*azn);
   s32_t ayzn = _sqrt(ayn*ayn + azn*azn);
@@ -178,20 +184,20 @@ void hud_paint_main(gcontext *ctx, bool init) {
 #define _H 32
 #define _W 40
 #define _X 17
-#define _Y 99
+#define _Y (ctx->height - 12)
 
     int i;
     for (i = 0; i < 8; i++) {
       GFX_rotate_x_3d(&mhud.plane_pts[i][0], -xplane_cos, xplane_sin);
       GFX_rotate_z_3d(&mhud.plane_pts[i][0], yplane_cos, -yplane_sin);
-      GFX_project_3d(&mhud.plane_pts[i][0], _W, _H, _X, _Y);
+      GFX_project_3d(&mhud.plane_pts[i][0], _W, _H, _X, _Y-_H/2);
     }
 
     if (blink) {
-      if (avg_az < 0) {
-        GFX_printn(ctx, "ROLL", 4, 0, 13, COL_OVER);
-      } else if (avg_az < (40<<8)) {
-        GFX_printn(ctx, "TILT", 4, 0, 13, COL_OVER);
+      if (lp_az < 0) {
+        GFX_printn(ctx, "ROLL", 4, 0, max_ychar - 2, COL_OVER);
+      } else if (lp_az < (46<<8)) {
+        GFX_printn(ctx, "TILT", 4, 0, max_ychar - 2, COL_OVER);
       } else {
         hud_plane_draw(ctx, COL_SET);
       }
@@ -206,7 +212,7 @@ void hud_paint_main(gcontext *ctx, bool init) {
 #undef _Y
 #define _W 32
 #define _X 0
-#define _Y 120
+#define _Y (ctx->height - 12)
       GFX_rect(ctx, _X, _Y, _W, 2, COL_SET);
       GFX_draw_horizontal_line(ctx, _X+1, _X+1+_W-1, _Y+1, COL_RESET);
       GFX_draw_horizontal_line(ctx,
@@ -220,7 +226,7 @@ void hud_paint_main(gcontext *ctx, bool init) {
 
 #define _H 24
 #define _X 32
-#define _Y 96
+#define _Y (ctx->height - 12 - _H)
       GFX_rect(ctx, _X, _Y, 2, _H, COL_SET);
       GFX_draw_vertical_line(ctx, _X+1, _Y+1, _Y+1+_H-1, COL_RESET);
       GFX_draw_vertical_line(ctx,

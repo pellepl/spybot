@@ -92,6 +92,13 @@ typedef enum {
   //      u8 common config
   CMD_GET_CONFIG,
 
+  // [rover --> ctrl]
+  // arg: u8 channel [0xff == no change]
+  // arg: u8 pa power scheme [0xff == no change]
+  // ack: [0x00=deny, 0x01=accept]
+  //      [0x00=deny radio config, 0x01=accept radio config]
+  CMD_SET_RADIO_CONFIG,
+
   // [rover <-- ctrl]
   // arg: u8 reset [1 = reset mag extremes, 0 = keep mag extremes]
   // ack: [0x00=deny, 0x01=accept]
@@ -108,11 +115,6 @@ typedef enum {
   //      s16 lsm_acc_z_min, s16 lsm_acc_z_max
   CMD_LSM_ACC_EXTREMES,
 
-  // [rover --> ctrl]
-  // arg: u8 channel
-  // ack: [0x00=deny, 0x01=accept]
-  //      [0x00=deny channel change, 0x01=accept channel change]
-  CMD_CHANNEL_CHANGE,
 
 } spybot_cmd;
 

@@ -30,14 +30,23 @@
 #define PAIRING_CTRL_SEND_BEACON    PAIRING_STAGE_ONE
 #define PAIRING_CTRL_AWAIT_ECHO     PAIRING_STAGE_TWO
 
-// control ram
+// current common app state of controller
 static app_common *common;
+// data constantly updated from rover
 static app_remote *remote;
+// controller's view of rover's current configuration
 static configuration_t *app_cfg;
 
-static u32_t app_ctrl_cfg_update = 0;
-static u32_t app_ctrl_cfg_update_sent = 0;
+// bitfield indicating which configurations are altered on controller's side
+// and should be sent to rover for update
+static u32_t app_ctrl_cfg_dirty = 0;
+// bitfield indicating which dirty configurations have been sent to rover
+// (i.e. which dirty flags can be cleared upon message update-config ack)
+static u32_t app_ctrl_cfg_dirty_sent = 0;
+// bitfield indicating which pending remote requests there are from
+// controller to rover (being any of APP_CTRL_REMOTE_REQ_*)
 static u32_t app_ctrl_remote_req = 0;
+
 #ifdef CONFIG_SPYBOT_VIDEO
 gcontext gctx;
 static task_timer ui_timer;
@@ -47,6 +56,7 @@ static task *ui_task = NULL;
 static u16_t joystick_v = 0x800;
 static u16_t joystick_h = 0x800;
 #endif
+// whether joystick is controlling motors (TRUE) or camera (FALSE)
 static bool app_joy_ctrl;
 
 static void app_control_clr_remote_req(u32_t req) {
@@ -145,8 +155,10 @@ static void app_control_ui_task(u32_t a, void *b) {
 // control common
 
 static void app_control_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_received) {
-  //u8_t reply[REPLY_MAX_LEN];
-  //u8_t reply_ix = 0;
+  u8_t reply[REPLY_MAX_LEN];
+  u8_t reply_ix = 0;
+  reply[reply_ix++] = ACK_OK;
+
   switch (data[0]) {
   case CMD_RADAR_REPORT:
     // todo
@@ -154,8 +166,11 @@ static void app_control_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool alre
   case CMD_ALERT:
     // todo
     break;
-  case CMD_CHANNEL_CHANGE:
-    // todo
+  case CMD_SET_RADIO_CONFIG:
+    print("radio ch:%02x\n", data[1]);
+    print("radio pa:%02x\n", data[2]);
+    reply[reply_ix++] = 1; // ok
+    COMRAD_reply(reply, reply_ix);
     break;
   default:
     DBG(D_APP, D_WARN, "rover: unknown message %02x\n", data[0]);
@@ -185,7 +200,7 @@ static void app_control_handle_ack(u8_t cmd, comm_arg *rx, u16_t len, u8_t *data
     if (data[1] == 0) {
       DBG(D_APP, D_WARN, "rover denied setting config\n");
     } else {
-      app_ctrl_cfg_update &= ~app_ctrl_cfg_update_sent;
+      app_ctrl_cfg_dirty &= ~app_ctrl_cfg_dirty_sent;
       DBG(D_APP, D_INFO, "rover set config\n");
     }
     app_control_clr_remote_req(APP_CTRL_REMOTE_REQ_SET_CONFIG);
@@ -231,19 +246,20 @@ static void app_control_handle_ack(u8_t cmd, comm_arg *rx, u16_t len, u8_t *data
   }
 }
 
+// send over updated configuration to rover
 static void app_control_dispatch_config(void) {
-  app_ctrl_cfg_update_sent = 0;
+  app_ctrl_cfg_dirty_sent = 0;
   u8_t msg[REPLY_MAX_LEN];
   u8_t msg_ix = 0;
   u8_t cfg_bit_ix = 0;
   msg[msg_ix++] = CMD_SET_CONFIG;
   while (cfg_bit_ix < 32 && msg_ix < REPLY_MAX_LEN-2) {
-    if (app_ctrl_cfg_update & (1<<cfg_bit_ix)) {
+    if (app_ctrl_cfg_dirty & (1<<cfg_bit_ix)) {
       s16_t val = APP_cfg_get_val(cfg_bit_ix);
       msg[msg_ix++] = cfg_bit_ix;
       msg[msg_ix++] = (val >> 8) & 0xff;
       msg[msg_ix++] = (val & 0xff);
-      app_ctrl_cfg_update_sent |= (1<<cfg_bit_ix);
+      app_ctrl_cfg_dirty_sent |= (1<<cfg_bit_ix);
     }
     cfg_bit_ix++;
   }
@@ -271,21 +287,26 @@ static void app_control_tick(void) {
     // order is of importance
 
     if (app_ctrl_remote_req & APP_CTRL_REMOTE_REQ_SET_CONFIG) {
+      // sends updated configurations to rover
       app_control_dispatch_config();
-      DBG(D_APP, D_INFO, "update config, mask 0b%032b\n", app_ctrl_cfg_update_sent);
+      DBG(D_APP, D_INFO, "update config, mask 0b%032b\n", app_ctrl_cfg_dirty_sent);
     } else if (app_ctrl_remote_req & APP_CTRL_REMOTE_REQ_STORE_CONFIG) {
+      // request to store volatile static config on rover side
       u8_t msg[] = {
           CMD_STORE_CONFIG
       };
       APP_tx(msg, sizeof(msg));
       DBG(D_APP, D_INFO, "asking to save config\n");
     } else if (app_ctrl_remote_req & APP_CTRL_REMOTE_REQ_LOAD_CONFIG) {
+      // request to load latest stored configuration on rover side
+      // and use that as volatile static config
       u8_t msg[] = {
           CMD_LOAD_CONFIG
       };
       APP_tx(msg, sizeof(msg));
       DBG(D_APP, D_INFO, "asking to load config\n");
     } else if (app_ctrl_remote_req & APP_CTRL_REMOTE_REQ_GET_CONFIG) {
+      // request to get current volatile static config from rover
       u8_t msg[] = {
           CMD_GET_CONFIG
       };
@@ -350,21 +371,26 @@ void APP_control_init(void) {
 
 
 void APP_remote_load_config(void) {
+  // will first load stored config at rover and
+  // then send config over to controller
   app_control_set_remote_req(
       APP_CTRL_REMOTE_REQ_LOAD_CONFIG  |
       APP_CTRL_REMOTE_REQ_GET_CONFIG);
 }
 
 void APP_remote_store_config(void) {
+  // will first store current config at rover and
+  // then send config over to controller
   app_control_set_remote_req(
       APP_CTRL_REMOTE_REQ_STORE_CONFIG |
       APP_CTRL_REMOTE_REQ_GET_CONFIG);
 }
 
 void APP_remote_update_config(spybot_cfg cfg, s16_t val, bool urgent) {
+  // will set configuration value at rover
   APP_cfg_set(cfg, val);
   app_control_set_remote_req(APP_CTRL_REMOTE_REQ_SET_CONFIG);
-  app_ctrl_cfg_update |= (1<<cfg);
+  app_ctrl_cfg_dirty |= (1<<cfg);
   if (urgent) {
     app_control_set_remote_req(APP_REMOTE_REQ_URGENT);
   }

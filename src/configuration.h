@@ -10,6 +10,7 @@
 
 #include "system.h"
 
+#define CONFIGURATION_VERSION     0x00020000
 
 #define CFG_COMMON_LEFT_INVERT    (1<<0)
 #define CFG_COMMON_RIGHT_INVERT   (1<<1)
@@ -53,8 +54,16 @@ typedef struct __attribute__ (( packed )) {
   u8_t common;
 } configuration_main_t;
 
+#define CFG_RADIO_PA_SCHEME_STATIC_10     0
+#define CFG_RADIO_PA_SCHEME_STATIC_6      1
+#define CFG_RADIO_PA_SCHEME_STATIC_m2     2
+#define CFG_RADIO_PA_SCHEME_STATIC_m10    3
+#define CFG_RADIO_PA_SCHEME_DYNAMIC_FAST  4
+#define CFG_RADIO_PA_SCHEME_DYNAMIC_SLOW  4
+
 typedef struct __attribute__ (( packed )) {
   u8_t radio_channel;
+  u8_t pa_scheme;
 } configuration_radio_t;
 
 typedef struct __attribute__ (( packed )) {
@@ -80,7 +89,6 @@ typedef struct __attribute__ (( packed )) {
   configuration_radio_t radio;
   configuration_mag_t magneto;
   configuration_acc_t accel;
-
 } configuration_t;
 
 #endif /* CONFIGURATION_H_ */

@@ -34,13 +34,19 @@
 #define PAIRING_ROVER_AWAIT_BEACON  PAIRING_STAGE_ONE
 #define PAIRING_ROVER_SEND_ECHO     PAIRING_STAGE_TWO
 
+// current common app state of rover
 static app_common *common;
+// data constantly updated to controller
 static app_remote *remote;
+// configuration that is currently used by rover
 static configuration_t *app_cfg;
 
 static time last_ctrl = 0;
 
+// bitfield indicating which pending remote requests there are from
+// rover to controller (being any of APP_CTRL_REMOTE_REQ_*)
 static u32_t app_rover_remote_req = 0;
+
 #ifdef CONFIG_I2C
 task_mutex i2c_mutex = TASK_MUTEX_INIT;
 
@@ -82,7 +88,9 @@ void app_rover_set_paired(bool paired) {
 static void app_rover_cfg_cb(cfg_state state, cfg_ee_state ee_state, int res) {
   DBG(D_APP, D_DEBUG,"CFG EE CB state:%i eestate:%i res:%i\n", state, ee_state, res);
   if (state == LOAD_CFG && res == CFG_OK) {
-    int res = CFG_get_config(app_cfg);
+    // loaded stored configuration successfully
+    // start using it by copying loaded config to volatile static config
+    int res = CFG_EE_get_config(app_cfg);
     ASSERT(res == CFG_OK);
   }
 }
@@ -154,6 +162,7 @@ static void app_rover_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool alread
   switch (data[0]) {
 
   case CMD_CONTROL: {
+    // general rover control
     u8_t act = (u8_t)data[6];
     u8_t sr = (u8_t)data[7];
 
@@ -206,6 +215,7 @@ static void app_rover_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool alread
 
 
   case CMD_SET_CONFIG: {
+    // sets volatile static configuration on rover side
     int data_ix = 1;
     while (data_ix < COMM_LNK_MAX_DATA && data[data_ix] != CFG_STOP) {
       spybot_cfg cfg_type = data[data_ix];
@@ -221,9 +231,10 @@ static void app_rover_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool alread
 
 
   case CMD_STORE_CONFIG:
+    // stores current volatile static configuration
 #ifdef CONFIG_M24M01
-    CFG_set_config(app_cfg);
-    CFG_store_config();
+    CFG_EE_set_config(app_cfg);
+    CFG_EE_store_config();
     reply[reply_ix++] = 1; // ok
     COMRAD_reply(reply, reply_ix);
     DBG(D_APP, D_DEBUG, "rover stored config\n");
@@ -234,8 +245,10 @@ static void app_rover_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool alread
 
 
   case CMD_LOAD_CONFIG:
+    // loads latest stored configuration (and will start using it by
+    // copying it to volatile static configuration)
 #ifdef CONFIG_M24M01
-    CFG_load_config();
+    CFG_EE_load_config();
     COMRAD_reply(reply, reply_ix);
     DBG(D_APP, D_DEBUG, "rover loaded config\n");
 #else
@@ -247,7 +260,7 @@ static void app_rover_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool alread
   case CMD_GET_CONFIG: {
 #ifdef CONFIG_M24M01
     configuration_t cfg;
-    int res = CFG_get_config(&cfg);
+    int res = CFG_EE_get_config(&cfg);
     if (res == CFG_OK) {
       reply[reply_ix++] = 1; // ok, have config
       reply[reply_ix++] = app_cfg->main.steer_adjust;
@@ -289,7 +302,7 @@ static void app_rover_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool alread
 
 static void app_rover_handle_ack(u8_t cmd, comm_arg *rx, u16_t len, u8_t *data) {
   switch (cmd) {
-  case CMD_CHANNEL_CHANGE:
+  case CMD_SET_RADIO_CONFIG:
     // todo
     break;
   }
@@ -301,6 +314,7 @@ static void app_rover_tick(void) {
       last_ctrl = SYS_get_time_ms();
     } else {
       if (SYS_get_time_ms() - last_ctrl > 2000) {
+        // no message from controller in a while, consider us unpaired
         APP_set_paired_state(FALSE);
       }
     }
@@ -327,8 +341,8 @@ static void app_rover_setup(app_common *com, app_remote *rem, configuration_t *c
   lsm_task = TASK_create(app_rover_lsm_task, TASK_STATIC);
   TASK_start_timer(lsm_task, &lsm_timer, 0, 0, 500, 100, "lsm_read");
 
-  CFG_init(&eeprom_dev, app_rover_cfg_cb);
-  CFG_load_config();
+  CFG_EE_init(&eeprom_dev, app_rover_cfg_cb);
+  CFG_EE_load_config();
 
 #endif // CONFIG_I2C
 #ifdef CONFIG_SPYBOT_MOTOR

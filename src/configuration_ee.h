@@ -31,17 +31,17 @@ typedef enum {
 
 typedef void (*cfg_ee_cb)(cfg_state state, cfg_ee_state ee_state, int res);
 
-void CFG_init(m24m01_dev *ee_dev, cfg_ee_cb cb);
+void CFG_EE_init(m24m01_dev *ee_dev, cfg_ee_cb cb);
 
-int CFG_get_config(configuration_t *c);
+int CFG_EE_get_config(configuration_t *c);
 
-void CFG_set_config(configuration_t *c);
+void CFG_EE_set_config(configuration_t *c);
 
-void CFG_load_config(void);
+void CFG_EE_load_config(void);
 
-void CFG_store_config(void);
+void CFG_EE_store_config(void);
 
-void CFG_store_default(void);
+void CFG_EE_store_default(void);
 
 
 

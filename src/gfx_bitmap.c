@@ -500,6 +500,7 @@ void GFX_put_pixel(gcontext *ctx, s16_t x, s16_t y, gcolor c) {
 
 
 void GFX_fill(gcontext *ctx, s16_t x, s16_t y, u16_t w, u16_t h, gcolor c) {
+  if (y > ctx->height || x > ctx->width) return;
   if (x < 0) {
     w += x;
     x = 0;

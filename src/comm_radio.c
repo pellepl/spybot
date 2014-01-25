@@ -52,10 +52,12 @@ static struct radio_s {
   u8_t lqual;
   // radio pending configuration
   u8_t rad_cfg;
-  // current radio pa setting
-  nrf905_cfg_pa_pwr rad_pa;
-  // current radio channel freq setting
-  u16_t rad_ch_freq;
+  struct {
+    // current radio pa setting
+    nrf905_cfg_pa_pwr pa;
+    // current radio channel freq setting
+    u16_t ch_freq;
+  } rad_config;
   // radio pa adjustment scheme vars
   bool paired;
   bool lost_pair;
@@ -179,20 +181,21 @@ void COMRAD_init(void) {
   //
   // radio setup
   //
-  comrad.rad_pa = NRF905_CFG_PA_PWR_6;
+  comrad.rad_config.pa = NRF905_CFG_PA_PWR_10;
+  comrad.rad_config.ch_freq = 128; // 435.227MHz
   // callbacks
   NRF905_IMPL_init(comrad_rad_on_rx, comrad_rad_on_tx, comrad_rad_on_cfg, comrad_rad_on_err);
   // config
   nrf905_config spybot_conf;
   spybot_conf.auto_retransmit = NRF905_CFG_AUTO_RETRAN_OFF;
-  spybot_conf.channel_freq = 128; // 435.227MHz
+  spybot_conf.channel_freq = comrad.rad_config.ch_freq;
   spybot_conf.crc_en = NRF905_CFG_CRC_ON;
   spybot_conf.crc_mode = NRF905_CFG_CRC_MODE_16BIT;
   spybot_conf.crystal_frequency = NRF905_CFG_XTAL_FREQ_16MHZ;
   spybot_conf.hfreq_pll = NRF905_CFG_HFREQ_433;
   spybot_conf.out_clk_enable = NRF905_CFG_OUT_CLK_OFF;
   spybot_conf.out_clk_freq = NRF905_CFG_OUT_CLK_FREQ_1MHZ;
-  spybot_conf.pa_pwr= comrad.rad_pa;
+  spybot_conf.pa_pwr= comrad.rad_config.pa;
 #ifdef SECONDARY
   spybot_conf.rx_address = 0x9ce3aed2;
 #else
@@ -250,19 +253,20 @@ static u8_t comrad_rad_client_rxed_packets_ratio(void) {
 #endif
 
 
+// updates given configuration, where cfg may be any of COMRAD_RAD_CFG_*
 static void comrad_rad_update_cfg(u8_t cfg, bool force) {
   int res = NRF905_OK;
   if (cfg == COMRAD_RAD_CFG_PA) {
-    res = NRF905_IMPL_conf_pa(comrad.rad_pa, force);
+    res = NRF905_IMPL_conf_pa(comrad.rad_config.pa, force);
   }
   if (cfg == COMRAD_RAD_CFG_CH) {
-    res = NRF905_IMPL_conf_channel(comrad.rad_ch_freq, force);
+    res = NRF905_IMPL_conf_channel(comrad.rad_config.ch_freq, force);
   }
   if (res == NRF905_OK) {
-    comrad.rad_cfg &= ~(1<<cfg);
+    comrad.rad_cfg &= ~(1<<cfg); // clear radio setting request
     IF_DBG(D_COMM, D_INFO) {
       if (cfg == COMRAD_RAD_CFG_PA) {
-        switch (comrad.rad_pa) {
+        switch (comrad.rad_config.pa) {
         case NRF905_CFG_PA_PWR_10:
           DBG(D_COMM, D_INFO, "comRAD: pa = 10dB\n");
           break;
@@ -280,11 +284,11 @@ static void comrad_rad_update_cfg(u8_t cfg, bool force) {
           break;
         }
       }
-    }
-    else if (cfg == COMRAD_RAD_CFG_CH) {
-      // (422.4 + CH_NOd /10)*(1+HFREQ_PLLd)
-      u32_t freq = 4224 + comrad.rad_ch_freq;
-      DBG(D_COMM, D_INFO, "comRAD: ch freq = %i.%i\n", freq/10, freq % 10);
+      else if (cfg == COMRAD_RAD_CFG_CH) {
+        // (422.4 + CH_NOd /10)*(1+HFREQ_PLLd)
+        u32_t freq = 4224 + comrad.rad_config.ch_freq;
+        DBG(D_COMM, D_INFO, "comRAD: ch freq = %i.%i\n", freq/10, freq % 10);
+      }
     }
   } else {
     DBG(D_COMM, D_WARN, "comRAD failed config request for cfg %i, err %i\n", cfg, res);
@@ -387,17 +391,17 @@ static void comrad_rad_super_task_f(u32_t arg, void *arg_p) {
     }
     if (avg_lqual < (COMM_RADIO_LQUAL_GOOD + COMM_RADIO_LQUAL_PERFECT)/2 || comrad.lost_pair) {
       // need to amplify more
-      DBG(D_COMM, D_WARN, "link is bad (%i), try to up PA (%i)\n", avg_lqual, comrad.rad_pa);
-      if (comrad.rad_pa != NRF905_CFG_PA_PWR_10) {
-        comrad.rad_pa++;
+      DBG(D_COMM, D_WARN, "link is bad (%i), try to up PA (%i)\n", avg_lqual, comrad.pa);
+      if (comrad.pa != NRF905_CFG_PA_PWR_10) {
+        comrad.pa++;
         comrad_rad_request_cfg_update(COMRAD_RAD_CFG_PA);
       }
     }
     else if (avg_lqual > COMM_RADIO_LQUAL_PERFECT) {
       // amplify less
-      DBG(D_COMM, D_WARN, "link is perfect (%i), try to lower PA (%i)\n", avg_lqual, comrad.rad_pa);
-      if (comrad.rad_pa != NRF905_CFG_PA_PWR_m10) {
-        comrad.rad_pa--;
+      DBG(D_COMM, D_WARN, "link is perfect (%i), try to lower PA (%i)\n", avg_lqual, comrad.pa);
+      if (comrad.pa != NRF905_CFG_PA_PWR_m10) {
+        comrad.pa--;
         comrad_rad_request_cfg_update(COMRAD_RAD_CFG_PA);
       }
     }
@@ -406,6 +410,9 @@ static void comrad_rad_super_task_f(u32_t arg, void *arg_p) {
   }
 }
 
+// flags that given radio setting is dirty and need to be changed
+// as soon as radio is idle
+// cfg may be any of COMRAD_RAD_CFG_*
 static void comrad_rad_request_cfg_update(u8_t cfg) {
   comrad.rad_cfg |= (1<<cfg);
   if (NRF905_IMPL_listening()) {

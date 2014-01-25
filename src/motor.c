@@ -57,6 +57,10 @@ DOWN  -5/-9  -7/-9  -9/-9    -9/-7   -9/-5
 
 #define MOTOR_DELTA     25
 
+#define MOTOR_CONTROL_VECTOR_SQUASH       10
+
+#define MOTOR_PWM_CYCLE_STRETCH           40
+
 #if INVERSE
 const static s8_t ctrl_map[3][3][2] = {
     {
@@ -146,12 +150,41 @@ static void motor_translate(s8_t h, s8_t v, s8_t motor[2]) {
   motor_interpolate(o00, o10, o01, o11, h, v, motor);
 }
 
+/*                1
+ *                |        -
+ *                |       -
+ *                |      -
+ *   -1  ---======0======--- +1
+ *         -      |
+ *        -       |
+ *       -        |
+ *                -1
+ *          |---thres---|
+ */
 static s8_t motor_lin_squash(s8_t v, u8_t threshold) {
   if ((v < 0 && v > -threshold) || (v >= 0 && v < threshold)) {
     return 0;
   }
   u32_t vp = ABS(v);
   vp = ((vp - threshold) * 128) / (128-threshold);
+  return v < 0 ? -vp : vp;
+}
+
+/*                1
+ *                |     ----
+ *                |-----        -
+ *                |             |
+ *   -1  ---------0--------- +1 thres
+ *                |             |
+ *           -----|             -
+ *       ----     |
+ *                -1
+ *
+ */
+static s8_t motor_lin_stretch(s8_t v, u8_t threshold) {
+  if (v == 0) return 0;
+  u32_t vp = ABS(v);
+  vp = ((vp-threshold) * 128) / (128-threshold);
   return v < 0 ? -vp : vp;
 }
 
@@ -188,8 +221,6 @@ static void motor_set(s8_t left, s8_t right) {
   }
 }
 
-
-
 void MOTOR_init(void) {
   motor_stop();
   memset(&motor, 0, sizeof(motor));
@@ -217,8 +248,11 @@ void MOTOR_go(s8_t x) {
 
 void MOTOR_control(s8_t hori, s8_t veri) {
   s8_t motor_ctrl[2];
-  hori = motor_lin_squash(hori, 10);
-  veri = motor_lin_squash(veri, 10);
+
+  // squash control vector around origin
+  hori = motor_lin_squash(hori, MOTOR_CONTROL_VECTOR_SQUASH);
+  veri = motor_lin_squash(veri, MOTOR_CONTROL_VECTOR_SQUASH);
+
   motor_translate(hori, veri, motor_ctrl);
 
   s16_t adj = APP_cfg_get_val(CFG_STEER_ADJUST);
@@ -267,6 +301,9 @@ void MOTOR_update(void) {
     }
   }
 
-  motor_set(motor.current[0], motor.current[1]);
-}
+  // stretch motor pwm cycle from origo, too low duty cycles will not make motors run
+  s8_t left_stretch = motor_lin_stretch(motor.current[0], MOTOR_PWM_CYCLE_STRETCH);
+  s8_t right_stretch = motor_lin_stretch(motor.current[1], MOTOR_PWM_CYCLE_STRETCH);
 
+  motor_set(left_stretch, right_stretch);
+}
