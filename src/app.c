@@ -12,6 +12,7 @@
 #include "taskq.h"
 #include "comm_radio.h"
 #include "miniutils.h"
+#include "led.h"
 
 
 #ifdef CONFIG_SPYBOT_CONTROLLER
@@ -43,6 +44,7 @@ int APP_tx(u8_t *data, u16_t len) {
 }
 
 void APP_set_paired_state(bool paired) {
+  common.err_count = 0;
   if (!paired) {
     common.pair_state = PAIRING_STAGE_ONE;
   } else {
@@ -52,8 +54,14 @@ void APP_set_paired_state(bool paired) {
   COMRAD_report_paired(paired);
 }
 
-
 static void app_tick_task(u32_t a, void *p) {
+  if (common.pair_state == PAIRING_STAGE_ONE) {
+    LED_set(LED_MAIN, (common.tick_count & 3) == 0);
+  } else if (common.pair_state == PAIRING_STAGE_TWO) {
+    LED_set(LED_MAIN, (common.tick_count & 1) == 0);
+  } else {
+    LED_disable(LED_MAIN);
+  }
   common.tick_count++;
 #ifdef CONFIG_SPYBOT_APP_MASTER
   if (common.pair_state == PAIRING_STAGE_ONE) {
@@ -196,6 +204,8 @@ void APP_comrad_ack(comm_arg *rx, u16_t seq_no, u16_t len, u8_t *data) {
     return;
   }
 
+  common.err_count = 0;
+
   // bad ack or denied ack
   if (len == 0 || data[0] != ACK_OK) {
     DBG(D_APP, D_DEBUG, "app got denial on ack\n");
@@ -230,7 +240,11 @@ void APP_comrad_err(u16_t seq_no, int err) {
   DBG(D_APP, D_WARN, "comrad err: seq:%04x (%04x) %i\n", seq_no, common.tx_seqno, err);
   if (seq_no == common.tx_seqno) {
     common.comrad_busy = FALSE;
-    APP_set_paired_state(FALSE);
+    common.err_count++; // count errorenous txed messages
+    if (APP_pair_status() == PAIRING_OK && common.err_count > 3) {
+      // unpair after three consecutive bad msgs
+      APP_set_paired_state(FALSE);
+    }
   }
 }
 
@@ -240,11 +254,12 @@ u8_t APP_pair_status(void) {
 
 
 void APP_init(void) {
-  SYS_dbg_mask_enable(D_APP);
+  SYS_dbg_mask_enable(D_APP); // todo remove
   // common
   memset(&common, 0, sizeof(common));
   memset(&remote, 0, sizeof(remote));
   COMRAD_init();
+  LED_init();
 
 #ifdef CONFIG_SPYBOT_CONTROLLER
   APP_control_init();
@@ -311,6 +326,9 @@ s16_t APP_cfg_get_val(spybot_cfg c) {
   case CFG_RADIO_CHANNEL:
     return (s16_t) app_cfg.radio.radio_channel ;
   break;
+  case CFG_RADIO_PA:
+    return (s16_t) app_cfg.radio.pa_scheme;
+  break;
   case CFG_LSM_MAG_X_MIN:
     return (s16_t) app_cfg.magneto.mag_x_min ;
   break;
@@ -373,6 +391,9 @@ void APP_cfg_set(spybot_cfg c, s16_t val) {
   break;
   case CFG_RADIO_CHANNEL:
     app_cfg.radio.radio_channel = val;
+  break;
+  case CFG_RADIO_PA:
+    app_cfg.radio.pa_scheme = val;
   break;
   case CFG_LSM_MAG_X_MIN:
     app_cfg.magneto.mag_x_min = val;

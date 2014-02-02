@@ -32,7 +32,7 @@
 #define PAIRING_OK                  2
 
 #ifdef CONFIG_SPYBOT_ROVER
-#define BEACON_RECURRENCE           409
+#define BEACON_RECURRENCE           109
 #define COMM_RECURRENCE             113
 #define COMM_OTHER_RECURRENCE       97
 #else
@@ -53,6 +53,7 @@ typedef struct {
   u16_t tx_seqno;
   u8_t tx_cmd;
   bool comrad_busy;
+  u8_t err_count;
   u8_t pair_state;
   u8_t pair_wait_cnt;
   task_timer tick_timer;
