@@ -184,7 +184,7 @@ static s8_t motor_lin_squash(s8_t v, u8_t threshold) {
 static s8_t motor_lin_stretch(s8_t v, u8_t threshold) {
   if (v == 0) return 0;
   u32_t vp = ABS(v);
-  vp = ((vp-threshold) * 128) / (128-threshold);
+  vp = ((vp * (128-threshold)) / 128) + threshold;
   return v < 0 ? -vp : vp;
 }
 
@@ -246,18 +246,23 @@ void MOTOR_go(s8_t x) {
   set_motorb_pwm_duty_cycle((MOTOR_PERIOD*x)/128);
 }
 
-void MOTOR_control(s8_t hori, s8_t veri) {
+void MOTOR_control(s8_t ohori, s8_t overi) {
   s8_t motor_ctrl[2];
 
   // squash control vector around origin
-  hori = motor_lin_squash(hori, MOTOR_CONTROL_VECTOR_SQUASH);
-  veri = motor_lin_squash(veri, MOTOR_CONTROL_VECTOR_SQUASH);
+  s8_t hori = motor_lin_squash(ohori, MOTOR_CONTROL_VECTOR_SQUASH);
+  s8_t veri = motor_lin_squash(overi, MOTOR_CONTROL_VECTOR_SQUASH);
+//  print("motor control  : hor:%+03i->%+03i ver:%+03i->%+03i\n",
+//        ohori, hori, overi, veri);
 
   motor_translate(hori, veri, motor_ctrl);
 
   s16_t adj = APP_cfg_get_val(CFG_STEER_ADJUST);
   s8_t left = motor_ctrl[0];
   s8_t right = motor_ctrl[1];
+
+//  print("motor translate: left:%+03i right:%+03i\n",
+//      left, right);
 
   if (adj < 0) {
     adj = -adj;
@@ -276,6 +281,10 @@ void MOTOR_control(s8_t hori, s8_t veri) {
   if (APP_cfg_get_val(CFG_COMMON) & CFG_COMMON_RIGHT_INVERT) {
     right = -right;
   }
+
+//  print("motor adjust   : left:%+03i right:%+03i (adj:%+03i)\n",
+//      left, right, adj);
+
 
   motor.target[0] = left;
   motor.target[1] = right;
@@ -304,6 +313,9 @@ void MOTOR_update(void) {
   // stretch motor pwm cycle from origo, too low duty cycles will not make motors run
   s8_t left_stretch = motor_lin_stretch(motor.current[0], MOTOR_PWM_CYCLE_STRETCH);
   s8_t right_stretch = motor_lin_stretch(motor.current[1], MOTOR_PWM_CYCLE_STRETCH);
+
+//  print("motor update   : left:%+03i->%+03i right:%+03i->%+03i\n",
+//      motor.current[0], left_stretch, motor.current[1], right_stretch);
 
   motor_set(left_stretch, right_stretch);
 }

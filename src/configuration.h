@@ -10,7 +10,7 @@
 
 #include "system.h"
 
-#define CONFIGURATION_VERSION     0x00020000
+#define CONFIGURATION_VERSION     0x00020001
 
 #define CFG_COMMON_LEFT_INVERT    (1<<0)
 #define CFG_COMMON_RIGHT_INVERT   (1<<1)
@@ -27,6 +27,7 @@ typedef enum {
   CFG_COMMON,
 
   CFG_RADIO_CHANNEL,
+  CFG_RADIO_PA,
 
   CFG_LSM_MAG_X_MIN,
   CFG_LSM_MAG_X_MAX,
