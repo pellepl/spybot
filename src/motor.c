@@ -272,7 +272,7 @@ void MOTOR_control(s8_t ohori, s8_t overi) {
   } else if (adj > 0) {
     adj >>= 2;
     adj = 128-adj;
-    left = (s8_t)((s32_t)(adj*right)/128);
+    left = (s8_t)((s32_t)(adj*left)/128);
   }
 
   if (APP_cfg_get_val(CFG_COMMON) & CFG_COMMON_LEFT_INVERT) {
