@@ -147,9 +147,12 @@ void hud_paint_main(gcontext *ctx, bool init) {
   s16_t y = ctx->height - 4 - 17;
 
   u8_t heading_raw = APP_remote_get_heading();
+  heading_raw = 128 - heading_raw;
   static u8_t comp_heading = 0;
-  if (ABS(comp_heading - heading_raw) > 4) {
-    comp_heading += (heading_raw - comp_heading)/2;
+  u8_t d_head = ABS(comp_heading - heading_raw);
+  if (d_head > 4) {
+    s8_t comp = ((s8_t)(heading_raw - comp_heading))/2;
+    comp_heading += comp;
   }
   s8_t *acc = APP_remote_get_acc();
 
