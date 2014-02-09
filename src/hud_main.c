@@ -152,18 +152,27 @@ void hud_paint_main(gcontext *ctx, bool init) {
   u8_t d_head = ABS(comp_heading - heading_raw);
   if (d_head > 4) {
     s8_t comp = ((s8_t)(heading_raw - comp_heading))/2;
-    comp_heading += comp;
+    if (ABS(comp) > 16) {
+      if (comp > 0) {
+        comp_heading += 16;
+      } else {
+        comp_heading -= 16;
+      }
+    } else {
+      comp_heading += comp;
+    }
   }
   s8_t *acc = APP_remote_get_acc();
 
   mhud.heading_ang = (comp_heading << 1) - (PI_TRIG_T / 4);
-  s16_t dx = (cos_table(mhud.heading_ang)*16) >> 15;
-  s16_t dy = (sin_table(mhud.heading_ang)*8) >> 15;
-  s16_t dxb = (cos_table(mhud.heading_ang + PI_TRIG_T / 4)*3) >> 15;
+  s16_t dxp = (cos_table(mhud.heading_ang)*16) >> 15;
+  s16_t dyp = (sin_table(mhud.heading_ang)*8) >> 15;
+  s16_t dxb = (cos_table(mhud.heading_ang + PI_TRIG_T / 4)*4) >> 15;
   s16_t dyb = (sin_table(mhud.heading_ang + PI_TRIG_T / 4)*3) >> 15;
-  GFX_draw_line(ctx, x+dx, y+dy, x+dxb, y+dyb, COL_SET);
-  GFX_draw_line(ctx, x+dx, y+dy, x-dxb, y-dyb, COL_SET);
-  GFX_draw_line(ctx, x+dxb, y+dyb, x-dxb, y-dyb, COL_SET);
+  GFX_draw_line(ctx, x+dxp, y+dyp, x+dxb, y+dyb, COL_SET);
+  GFX_draw_line(ctx, x+dxp, y+dyp, x-dxb, y-dyb, COL_SET);
+  GFX_draw_line(ctx, x+dxb, y+dyb, x+dxp/4, y+dyp/4, COL_SET);
+  GFX_draw_line(ctx, x-dxb, y-dyb, x+dxp/4, y+dyp/4, COL_SET);
 
   GFX_draw_image(ctx, img_compass_bmp, ctx->width/2 - 20, ctx->height - 8 - 4, 40, 10, (comp_heading-12)&0xff, 0, 256/8);
   GFX_rect(ctx, ctx->width/2 - 20 - 1, ctx->height - 8 - 4 -1, 41, 11, COL_SET);

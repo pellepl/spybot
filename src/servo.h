@@ -23,6 +23,8 @@ void SERVO_control(servo_out servo, s8_t value);
 
 void SERVO_control_radar(s8_t value);
 
+s16_t SERVO_get_radar_position(void);
+
 void SERVO_update(void);
 
 

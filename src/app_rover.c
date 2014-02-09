@@ -215,7 +215,6 @@ static void app_rover_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool alread
       // todo
     }
     if (sr & SPYBOT_SR_RADAR) {
-      // todo
       app_rover_set_remote_req(APP_ROVER_REMOTE_REQ_RADAR_REPORT | APP_REMOTE_REQ_URGENT);
     }
     COMRAD_reply(reply, reply_ix);
@@ -368,7 +367,7 @@ static void app_rover_dispatch_radar_report(void) {
 
   while (msg_ix < REPLY_MAX_LEN-1 &&
       a < CONFIG_RADAR_ANGLES &&
-      ( radar.dirty_map[RADAR_ANG_TO_ENTRY(a)] & RADAR_ANG_TO_ENTRY_BIT(a)) != 0) {
+      ( radar.dirty_map[RADAR_ANG_TO_ENTRY(a)] & RADAR_ANG_TO_ENTRY_BIT(a) ) != 0) {
     // mark which radar values we're sending
     radar.dirty_sent_map[RADAR_ANG_TO_ENTRY(a)] |= RADAR_ANG_TO_ENTRY_BIT(a);
     msg[msg_ix++] = radar.vals[a];
@@ -402,6 +401,10 @@ static void app_rover_tick(void) {
     // dispatch radar report
     app_rover_dispatch_radar_report();
   }
+
+  //todo test
+  static u8_t sa = 0;
+  APP_report_radar_value((sa++)%127, rand_next());
 }
 
 static void app_rover_setup(app_common *com, app_remote *rem, configuration_t *cnf) {
@@ -492,6 +495,7 @@ void APP_get_mag_extremes(s16_t x[3][2], bool reset) {
 #ifdef CONFIG_SPYBOT_HCSR
 
 void APP_report_radar_value(u8_t a, s8_t value) {
+  if (a >= CONFIG_RADAR_ANGLES) return;
   radar.vals[a] = value;
   radar.dirty_map[RADAR_ANG_TO_ENTRY(a)] |= RADAR_ANG_TO_ENTRY_BIT(a);
   if ((radar.dirty_sent_map[RADAR_ANG_TO_ENTRY(a)] & RADAR_ANG_TO_ENTRY_BIT(a)) != 0) {
@@ -501,3 +505,6 @@ void APP_report_radar_value(u8_t a, s8_t value) {
 
 #endif
 
+s8_t *APP_get_radar_values(void) {
+  return radar.vals;
+}

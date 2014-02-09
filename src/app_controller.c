@@ -59,6 +59,10 @@ static u16_t joystick_h = 0x800;
 // whether joystick is controlling motors (TRUE) or camera (FALSE)
 static bool app_joy_ctrl;
 
+static struct {
+  s8_t vals[CONFIG_RADAR_ANGLES];
+} remote_radar;
+
 static void app_control_clr_remote_req(u32_t req) {
   app_ctrl_remote_req &= ~req;
 }
@@ -154,9 +158,19 @@ static void app_control_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool alre
   reply[reply_ix++] = ACK_OK;
 
   switch (data[0]) {
-  case CMD_RADAR_REPORT:
-    // todo
+  case CMD_RADAR_REPORT: {
+    // todo handle different, diff buffer
+    u8_t a = data[1];
+    u8_t len = data[2];
+    u8_t i = 0;
+    while (len--) {
+      remote_radar.vals[a++] = data[3 + i];
+      i++;
+    }
+    reply[reply_ix++] = 1; // ok
+    COMRAD_reply(reply, reply_ix);
     break;
+  }
   case CMD_ALERT:
     // todo
     break;
@@ -261,10 +275,20 @@ static void app_control_dispatch_config(void) {
   APP_tx(msg, msg_ix);
 }
 
+static bool await_radar_report = FALSE;
 
 static void app_control_tick(void) {
   u8_t msg_divider = (app_ctrl_remote_req & APP_REMOTE_REQ_URGENT) ? 1 : 7;
+  // primitive TDM
+
+  if (await_radar_report) {
+    // leave room for rxing radar report
+    await_radar_report = FALSE;
+    return;
+  }
+
   if ((app_ctrl_remote_req == 0 || (common->tick_count & msg_divider) != 0)) {
+    // plain request
     s8_t left_motor = remote->motor_ctrl[0];
     s8_t right_motor = remote->motor_ctrl[1];
     s8_t pan = remote->pan;
@@ -272,9 +296,11 @@ static void app_control_tick(void) {
     s8_t radar  = remote->radar;
     u8_t act = 0;
     u8_t sr = SPYBOT_SR_ACC | SPYBOT_SR_HEADING;
+    sr |= (common->tick_count & 7) ? 0 : SPYBOT_SR_RADAR;
     u8_t msg[] = {
         CMD_CONTROL, left_motor, right_motor, pan, tilt, radar, act, sr
     };
+    await_radar_report = sr & SPYBOT_SR_RADAR;
     APP_tx(msg, sizeof(msg));
   } else {
 
@@ -318,18 +344,10 @@ static void app_control_setup(app_common *com, app_remote *rem, configuration_t 
   app_cfg = cnf;
 
   // setup display
-#ifdef CONFIG_SPLASH
-  extern unsigned const char const img_modbla_car_bmp[14400/8];
-#endif
-
 #ifdef CONFIG_SPYBOT_VIDEO
   CVIDEO_init(HUD_vbl);
   CVIDEO_init_gcontext(&gctx);
   CVIDEO_set_effect(79);
-#endif
-
-  #ifdef CONFIG_SPLASH
-  GFX_draw_image(&gctx, img_modbla_car_bmp, 7, 8, 120/8, 120);
 #endif
 
   // setup ui & input
@@ -341,7 +359,7 @@ static void app_control_setup(app_common *com, app_remote *rem, configuration_t 
   HUD_init(&gctx);
   HUD_state(HUD_MAIN);
   ui_task = TASK_create(app_control_ui_task, TASK_STATIC);
-  TASK_start_timer(ui_task, &ui_timer, 0, 0, 0, 50, "ui_upd");
+  TASK_start_timer(ui_task, &ui_timer, 0, 0, 0, 35, "ui_upd");
 #endif
 
   APP_remote_set_camera_ctrl(0, 0);
@@ -388,4 +406,8 @@ void APP_remote_update_config(spybot_cfg cfg, s16_t val, bool urgent) {
   if (urgent) {
     app_control_set_remote_req(APP_REMOTE_REQ_URGENT);
   }
+}
+
+s8_t *APP_get_radar_values(void) {
+  return remote_radar.vals;
 }

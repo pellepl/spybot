@@ -91,6 +91,7 @@ s32_t ADC_sample_sound(adc_cb cb, u8_t *buf, u32_t len) {
 
 
 void ADC_irq(void) {
+  // audio
   if (ADC_GetITStatus(ADC1, ADC_IT_EOC) != RESET) {
     ADC_ClearITPendingBit(ADC1, ADC_IT_EOC);
     u16_t val = ADC_GetConversionValue(ADC1);
@@ -124,6 +125,7 @@ void ADC_irq(void) {
     }
   }
 
+  // joystick
   if (ADC_GetITStatus(ADC2, ADC_IT_EOC) != RESET) {
     ADC_ClearITPendingBit(ADC2, ADC_IT_EOC);
     if (adc2.state == ADC_JOYST_FIRST) {

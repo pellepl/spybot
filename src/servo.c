@@ -68,7 +68,7 @@ static void servo_set(servo_out servo, s16_t pwm) {
   servo_set_channel_duty(pwm, hw_map[servo].oc_channel);
 }
 
-static s16_t server_get_adjust(servo_out servo) {
+static s16_t servo_get_adjust(servo_out servo) {
   s16_t adj = 0;
   switch (servo) {
     case SERVO_CAM_PAN:
@@ -87,7 +87,7 @@ static s16_t server_get_adjust(servo_out servo) {
 void SERVO_control(servo_out servo, s8_t value) {
   ASSERT(servo < _SERVO_CNT);
   s32_t pwm_val;
-  s16_t adj = server_get_adjust(servo);
+  s16_t adj = servo_get_adjust(servo);
 
   pwm_val = value << 8;
   pwm_val = 6*pwm_val / 7;
@@ -152,6 +152,9 @@ void SERVO_update(void) {
   }
 }
 
+s16_t SERVO_get_radar_position(void) {
+  return radar_pos;
+}
 
 void SERVO_init(void) {
   int i;

@@ -167,4 +167,6 @@ void APP_get_mag_extremes(s16 x[3][2], bool reset);
 void APP_report_radar_value(u8_t angle, s8_t value);
 #endif
 
+s8_t *APP_get_radar_values(void);
+
 #endif /* APP_H_ */
