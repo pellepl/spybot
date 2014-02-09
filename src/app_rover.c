@@ -34,6 +34,13 @@
 #define PAIRING_ROVER_AWAIT_BEACON  PAIRING_STAGE_ONE
 #define PAIRING_ROVER_SEND_ECHO     PAIRING_STAGE_TWO
 
+typedef u32_t radar_bm_t;
+#define RADAR_BITMAP_ENTRY_SIZE   (sizeof(radar_bm_t)*8)
+#define RADAR_BITMAP_ENTRIES      (CONFIG_RADAR_ANGLES / RADAR_BITMAP_ENTRY_SIZE)
+#define RADAR_ANG_TO_ENTRY(a)     ((a)/RADAR_BITMAP_ENTRY_SIZE)
+#define RADAR_ANG_TO_ENTRY_BIT(a) (1<<((a) & (RADAR_BITMAP_ENTRY_SIZE-1)))
+
+
 // current common app state of rover
 static app_common *common;
 // data constantly updated to controller
@@ -65,6 +72,17 @@ m24m01_dev eeprom_dev;
 
 static task_timer mech_timer;
 static task *mech_task = NULL;
+
+static struct {
+  // radar values per angle
+  s8_t vals[CONFIG_RADAR_ANGLES];
+  // bitmap containing radar angles which are changed and unsent
+  radar_bm_t dirty_map[RADAR_BITMAP_ENTRIES];
+  // bitmap containing radar angles which are changed and while sending
+  radar_bm_t changed_sending_map[RADAR_BITMAP_ENTRIES];
+  // bitmap containing radar angles being sent
+  radar_bm_t dirty_sent_map[RADAR_BITMAP_ENTRIES];
+} radar;
 
 static void app_rover_clr_remote_req(u32_t req) {
   app_rover_remote_req &= ~req;
@@ -198,6 +216,7 @@ static void app_rover_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool alread
     }
     if (sr & SPYBOT_SR_RADAR) {
       // todo
+      app_rover_set_remote_req(APP_ROVER_REMOTE_REQ_RADAR_REPORT | APP_REMOTE_REQ_URGENT);
     }
     COMRAD_reply(reply, reply_ix);
 
@@ -305,10 +324,68 @@ static void app_rover_handle_ack(u8_t cmd, comm_arg *rx, u16_t len, u8_t *data) 
   case CMD_SET_RADIO_CONFIG:
     // todo
     break;
+  case CMD_RADAR_REPORT:
+  {
+    app_rover_clr_remote_req(APP_ROVER_REMOTE_REQ_RADAR_REPORT);
+    // clear dirty bits for all sent bits
+    // move changed when sending bits to dirty bits
+    // clear changed when sending bits
+    u32_t a;
+    for (a = 0; a < CONFIG_RADAR_ANGLES; a += RADAR_BITMAP_ENTRY_SIZE) {
+      radar.dirty_map[RADAR_ANG_TO_ENTRY(a)] =
+          (radar.dirty_map[RADAR_ANG_TO_ENTRY(a)] & ~radar.dirty_sent_map[RADAR_ANG_TO_ENTRY(a)])
+          | radar.changed_sending_map[RADAR_ANG_TO_ENTRY(a)];
+      radar.changed_sending_map[RADAR_ANG_TO_ENTRY(a)] = 0;
+    }
+    break;
+  }
   }
 }
 
+static void app_rover_dispatch_radar_report(void) {
+  memset(radar.dirty_sent_map, 0, sizeof(radar.dirty_sent_map));
+  u8_t msg[REPLY_MAX_LEN];
+  u8_t msg_ix = 0;
+  msg[msg_ix++] = CMD_RADAR_REPORT;
+  u32_t a = 0;
+  // find first dirty angle entry
+  while (a < CONFIG_RADAR_ANGLES && radar.dirty_map[RADAR_ANG_TO_ENTRY(a)] == 0) {
+    a += RADAR_BITMAP_ENTRY_SIZE;
+  }
+  if (a >= CONFIG_RADAR_ANGLES) {
+    // nothing to update, don't send anything - cancel request
+    app_rover_clr_remote_req(APP_ROVER_REMOTE_REQ_RADAR_REPORT);
+    return;
+  }
+  // find first dirty angle
+  while (a < CONFIG_RADAR_ANGLES &&
+      ( radar.dirty_map[RADAR_ANG_TO_ENTRY(a)] & RADAR_ANG_TO_ENTRY_BIT(a)) == 0 ) {
+    a++;
+  }
+  msg[msg_ix++] = a;  // start angle
+  u8_t nbr_angs = 0;   // number of angles
+  u8_t msg_nbr_angs_ix = msg_ix++; // store len index for later
+
+  while (msg_ix < REPLY_MAX_LEN-1 &&
+      a < CONFIG_RADAR_ANGLES &&
+      ( radar.dirty_map[RADAR_ANG_TO_ENTRY(a)] & RADAR_ANG_TO_ENTRY_BIT(a)) != 0) {
+    // mark which radar values we're sending
+    radar.dirty_sent_map[RADAR_ANG_TO_ENTRY(a)] |= RADAR_ANG_TO_ENTRY_BIT(a);
+    msg[msg_ix++] = radar.vals[a];
+    a++;
+    nbr_angs++;
+  }
+
+  // note how many radar values we're sending
+  msg[msg_nbr_angs_ix] = nbr_angs;
+
+  APP_tx(msg, msg_ix);
+}
+
 static void app_rover_tick(void) {
+  if (APP_pair_status() != PAIRING_OK) {
+    return;
+  }
   if (APP_pair_status() == PAIRING_OK) {
     if (last_ctrl == 0) {
       last_ctrl = SYS_get_time_ms();
@@ -316,8 +393,14 @@ static void app_rover_tick(void) {
       if (SYS_get_time_ms() - last_ctrl > 2000) {
         // no message from controller in a while, consider us unpaired
         APP_set_paired_state(FALSE);
+        return;
       }
     }
+  }
+
+  if (app_rover_remote_req & APP_ROVER_REMOTE_REQ_RADAR_REPORT) {
+    // dispatch radar report
+    app_rover_dispatch_radar_report();
   }
 }
 
@@ -405,3 +488,16 @@ void APP_get_mag_extremes(s16_t x[3][2], bool reset) {
 }
 
 #endif
+
+#ifdef CONFIG_SPYBOT_HCSR
+
+void APP_report_radar_value(u8_t a, s8_t value) {
+  radar.vals[a] = value;
+  radar.dirty_map[RADAR_ANG_TO_ENTRY(a)] |= RADAR_ANG_TO_ENTRY_BIT(a);
+  if ((radar.dirty_sent_map[RADAR_ANG_TO_ENTRY(a)] & RADAR_ANG_TO_ENTRY_BIT(a)) != 0) {
+    radar.changed_sending_map[RADAR_ANG_TO_ENTRY(a)] |= RADAR_ANG_TO_ENTRY_BIT(a);
+  }
+}
+
+#endif
+

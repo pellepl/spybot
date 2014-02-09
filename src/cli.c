@@ -167,8 +167,6 @@ static int f_app_cfg_dump(void);
 
 static void cli_print_app_name(void);
 
-#define HELP_UART_DEFS "uart - 0,1,2,3 - 0 is COMM, 1 is DBG, 2 is SPL, 3 is BT\n"
-
 /////////////////////////////////////////////////////////////////////////////////////////////
 
 static cmd c_tbl[] = {
@@ -184,20 +182,17 @@ static cmd c_tbl[] = {
     { .name = "uwrite", .fn = (func) f_uwrite,
         .help = "Writes to uart\n"
         "uwrite <uart> <string>\n"
-            HELP_UART_DEFS
             "ex: uwrite 2 \"foo\"\n"
     },
     { .name = "uread", .fn = (func) f_uread,
         .help = "Reads from uart\n"
         "uread <uart> (<numchars>)\n"
-            HELP_UART_DEFS
             "numchars - number of chars to read, if omitted uart is drained\n"
             "ex: uread 2 10\n"
     },
     { .name = "uconf", .fn = (func) f_uconf,
         .help = "Configure uart\n"
         "uconf <uart> <speed>\n"
-            HELP_UART_DEFS
             "ex: uconf 2 9600\n"
     },
 
@@ -650,23 +645,8 @@ static int f_uconf(int uart, int speed) {
   if (IS_STRING(uart) || IS_STRING(speed) || uart < 0 || uart >= CONFIG_UART_CNT) {
     return -1;
   }
-  USART_TypeDef *uart_hw = _UART(uart)->hw;
-
-  USART_Cmd(uart_hw, DISABLE);
-
-  USART_InitTypeDef USART_InitStructure;
-  USART_InitStructure.USART_BaudRate = speed;
-  USART_InitStructure.USART_WordLength = USART_WordLength_8b;
-  USART_InitStructure.USART_StopBits = USART_StopBits_1;
-  USART_InitStructure.USART_Parity = USART_Parity_No ;
-  USART_InitStructure.USART_HardwareFlowControl =
-      USART_HardwareFlowControl_None;
-  USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
-
-  /* Configure the USART */
-  USART_Init(uart_hw, &USART_InitStructure);
-
-  USART_Cmd(uart_hw, ENABLE);
+  UART_config(_UART(uart), speed,
+      UART_DATABITS_8, UART_STOPBITS_1, UART_PARITY_NONE, UART_FLOWCONTROL_NONE, TRUE);
 
   return 0;
 }

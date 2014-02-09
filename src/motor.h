@@ -14,7 +14,7 @@ void MOTOR_init(void);
 
 void MOTOR_go(s8_t x);
 
-void MOTOR_control(s8_t hori, s8_t veri);
+void MOTOR_control(s16_t hori, s16_t veri);
 
 void MOTOR_update(void);
 

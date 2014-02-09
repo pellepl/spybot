@@ -13,7 +13,7 @@
 typedef struct {
   u16_t width;
   u16_t height;
-  u16_t hscan;
+  u16_t hstride;
   u8_t *gram;
 } gcontext;
 
@@ -33,6 +33,10 @@ void GFX_draw_line(gcontext *ctx, s16_t x1, s16_t y1, s16_t x2, s16_t y2, gcolor
 void GFX_rect(gcontext *ctx, s16_t x, s16_t y, s16_t w, s16_t h, gcolor col);
 void GFX_draw_horizontal_line(gcontext *ctx, s16_t x1, s16_t x2, s16_t y, gcolor col);
 void GFX_draw_vertical_line(gcontext *ctx, s16_t x, s16_t y1, s16_t y2, gcolor col);
-void GFX_draw_image(gcontext *ctx, const u8_t const *img_data, u8_t cx, u8_t y, u16_t w, u16_t h);
+void GFX_draw_image_q(gcontext *ctx, const u8_t const *img_data, u8_t cx, u8_t y, u16_t w, u16_t h);
+void GFX_draw_image(gcontext *ctx, const u8_t *img,
+    s16_t x, s16_t y,
+    s16_t w, s16_t h,
+    s16_t img_offs_x, s16_t img_offs_y, u16_t img_stride);
 
 #endif /* GFX_BITMAP_H_ */

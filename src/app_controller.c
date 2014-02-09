@@ -78,12 +78,6 @@ void app_control_set_paired(bool paired) {
 static void app_control_adc_cb(u16_t ch1, u16_t ch2) {
   joystick_v = ch1;
   joystick_h = ch2;
-  if (APP_cfg_get_val(CFG_COMMON) & CFG_COMMON_JOY_H_INVERT) {
-    joystick_h = 0xfff-joystick_h;
-  }
-  if (APP_cfg_get_val(CFG_COMMON) & CFG_COMMON_JOY_V_INVERT) {
-    joystick_v = 0xfff-joystick_v;
-  }
 }
 #endif
 
@@ -387,7 +381,7 @@ void APP_remote_store_config(void) {
 }
 
 void APP_remote_update_config(spybot_cfg cfg, s16_t val, bool urgent) {
-  // will set configuration value at rover
+  // will eventually set same configuration value at rover
   APP_cfg_set(cfg, val);
   app_control_set_remote_req(APP_CTRL_REMOTE_REQ_SET_CONFIG);
   app_ctrl_cfg_dirty |= (1<<cfg);

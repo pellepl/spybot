@@ -237,6 +237,10 @@ typedef u16_t system_counter_type;
 
 #define CONFIG_MOTOR_PWM_FREQ     50000
 
+/** RADAR **/
+
+#define CONFIG_RADAR_ANGLES     128
+
 
 /** DEBUG **/
 

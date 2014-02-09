@@ -23,6 +23,10 @@
 #define APP_CTRL_REMOTE_REQ_LOAD_CONFIG   (1<<2)
 // controller tell rover to send back current configuration
 #define APP_CTRL_REMOTE_REQ_GET_CONFIG    (1<<3)
+
+// controller wants radar data
+#define APP_ROVER_REMOTE_REQ_RADAR_REPORT (1<<16)
+
 // indicates that current remote requests are urgent and should be
 // sent as soon as possible
 #define APP_REMOTE_REQ_URGENT             (1<<31)
@@ -159,6 +163,8 @@ void APP_get_mag_extremes(s16 x[3][2], bool reset);
 #endif
 
 
-
+#ifdef CONFIG_SPYBOT_HCSR
+void APP_report_radar_value(u8_t angle, s8_t value);
+#endif
 
 #endif /* APP_H_ */

@@ -55,7 +55,6 @@ typedef enum {
 
   // [rover --> ctrl]
   // arg: s8 angle_start, s8 len, [s8 value]*len
-  //      rest of arg is filled with status_mask results from requesting CMD_CONTROL
   // ack: [0x00=deny, 0x01=accept]
   CMD_RADAR_REPORT,
 

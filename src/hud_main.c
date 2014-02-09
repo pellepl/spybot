@@ -14,6 +14,8 @@
 #include "app.h"
 #include "adc.h"
 
+extern unsigned const char const img_compass_bmp[2560];
+
 static struct {
   s32_t heading_ang;
   s32_t xplane_cos;
@@ -80,40 +82,45 @@ void hud_paint_main(gcontext *ctx, bool init) {
   memset(txt,0,28);
   time now = SYS_get_time_ms();
   bool blink = (now/500) & 1;
+  bool show_init = now < 2000;
 
-  // lower status line
-  sprint(txt, "%s %i", APP_NAME, SYS_build_number());
-  GFX_printn(ctx, txt, 0,  0, max_ychar, COL_OVER);
+  // info status line
+  if (show_init) {
+    sprint(txt, "%s %i", APP_NAME, SYS_build_number());
+    GFX_printn(ctx, txt, 0,  0, 0, COL_OVER);
+  }
 
   {
     u8_t h, m, s;
     u16_t ms;
     SYS_get_time(NULL, &h, &m, &s, &ms);
     sprint(txt, "%02i:%02i:%02i.%i ", h,m,s,ms/100);
-    GFX_printn(ctx, txt, 0,  17, max_ychar, COL_OVER);
+    GFX_printn(ctx, txt, 0,  17, 0, COL_OVER);
   }
 
   if (blink) {
-    GFX_printn(ctx, " ", 0, 27, max_ychar, COL_OVER);
+    GFX_printn(ctx, " ", 0, 27, 0, COL_OVER);
   } else {
-    GFX_printn(ctx, "\001",0, 27, max_ychar, COL_OVER);
+    GFX_printn(ctx, "\001",0, 27, 0, COL_OVER);
   }
 
   // upper status bar
-  u8_t lqual = COMRAD_get_link_qual();
+  if (!show_init) {
+    u8_t lqual = COMRAD_get_link_qual();
 
-  if (lqual >= COMM_RADIO_LQUAL_PERFECT) {
-    GFX_printn(ctx, "\010\011", 0, 0, 0, COL_OVER);
-  } else if (lqual >= COMM_RADIO_LQUAL_GOOD) {
-    GFX_printn(ctx, "\006\007", 0, 0, 0, COL_OVER);
-  } else if (lqual >= COMM_RADIO_LQUAL_WEAK) {
-    GFX_printn(ctx, "\004\005", 0, 0, 0, COL_OVER);
-  } else {
-    GFX_printn(ctx, "\002\003", 0, 0, 0, COL_OVER);
-  }
+    if (lqual >= COMM_RADIO_LQUAL_PERFECT) {
+      GFX_printn(ctx, "\010\011", 0, 0, 0, COL_OVER);
+    } else if (lqual >= COMM_RADIO_LQUAL_GOOD) {
+      GFX_printn(ctx, "\006\007", 0, 0, 0, COL_OVER);
+    } else if (lqual >= COMM_RADIO_LQUAL_WEAK) {
+      GFX_printn(ctx, "\004\005", 0, 0, 0, COL_OVER);
+    } else {
+      GFX_printn(ctx, "\002\003", 0, 0, 0, COL_OVER);
+    }
 
-  if ((APP_pair_status() == PAIRING_STAGE_TWO && ((now>>8)&1)) || APP_pair_status() == PAIRING_OK) {
-    GFX_printn(ctx, "\022", 0, 3, 0, COL_OVER);
+    if ((APP_pair_status() == PAIRING_STAGE_TWO && ((now>>8)&1)) || APP_pair_status() == PAIRING_OK) {
+      GFX_printn(ctx, "\022", 0, 3, 0, COL_OVER);
+    }
   }
 
   if (APP_pair_status() != PAIRING_OK) {
@@ -123,28 +130,41 @@ void hud_paint_main(gcontext *ctx, bool init) {
   // paired state
 
   // joystick control
-  if (APP_get_joystick_control() == APP_JOYSTICK_CONTROL_MOTOR) {
-    GFX_printn(ctx, "\020", 0, 5, 0, COL_OVER);
-  } else {
-    GFX_printn(ctx, "\021", 0, 5, 0, COL_OVER);
+  if (!show_init) {
+    if (APP_get_joystick_control() == APP_JOYSTICK_CONTROL_MOTOR) {
+      GFX_printn(ctx, "\020", 0, 5, 0, COL_OVER);
+    } else {
+      GFX_printn(ctx, "\021", 0, 5, 0, COL_OVER);
+    }
   }
 
   // audio
   ADC_sample_sound(NULL, audio_buf, sizeof(audio_buf));
-  hud_graph_draw(ctx, audio_buf, 0, sizeof(audio_buf), 32, 150, ctx->height-12-32);
+  hud_graph_draw(ctx, audio_buf, 0, sizeof(audio_buf), 32, 150, ctx->height-32-4);
 
   // heading
   s16_t x = ctx->width/2;
-  s16_t y = ctx->height - 14 - 12;
+  s16_t y = ctx->height - 4 - 17;
 
   u8_t heading_raw = APP_remote_get_heading();
+  static u8_t comp_heading = 0;
+  if (ABS(comp_heading - heading_raw) > 4) {
+    comp_heading += (heading_raw - comp_heading)/2;
+  }
   s8_t *acc = APP_remote_get_acc();
 
-  mhud.heading_ang = (heading_raw << 1) - (PI_TRIG_T / 4);
+  mhud.heading_ang = (comp_heading << 1) - (PI_TRIG_T / 4);
+  s16_t dx = (cos_table(mhud.heading_ang)*16) >> 15;
+  s16_t dy = (sin_table(mhud.heading_ang)*8) >> 15;
+  s16_t dxb = (cos_table(mhud.heading_ang + PI_TRIG_T / 4)*3) >> 15;
+  s16_t dyb = (sin_table(mhud.heading_ang + PI_TRIG_T / 4)*3) >> 15;
+  GFX_draw_line(ctx, x+dx, y+dy, x+dxb, y+dyb, COL_SET);
+  GFX_draw_line(ctx, x+dx, y+dy, x-dxb, y-dyb, COL_SET);
+  GFX_draw_line(ctx, x+dxb, y+dyb, x-dxb, y-dyb, COL_SET);
 
-  s16_t dx = (cos_table(mhud.heading_ang)*17) >> 15;
-  s16_t dy = (sin_table(mhud.heading_ang)*14) >> 15;
-  GFX_draw_line(ctx, x, y, x+dx, y+dy, COL_SET);
+  GFX_draw_image(ctx, img_compass_bmp, ctx->width/2 - 20, ctx->height - 8 - 4, 40, 10, (comp_heading-12)&0xff, 0, 256/8);
+  GFX_rect(ctx, ctx->width/2 - 20 - 1, ctx->height - 8 - 4 -1, 41, 11, COL_SET);
+
 
   // accelerometer
   s8_t ax,ay,az;
@@ -184,7 +204,7 @@ void hud_paint_main(gcontext *ctx, bool init) {
 #define _H 32
 #define _W 40
 #define _X 17
-#define _Y (ctx->height - 12)
+#define _Y (ctx->height - 8)
 
     int i;
     for (i = 0; i < 8; i++) {
@@ -195,9 +215,9 @@ void hud_paint_main(gcontext *ctx, bool init) {
 
     if (blink) {
       if (lp_az < 0) {
-        GFX_printn(ctx, "ROLL", 4, 0, max_ychar - 2, COL_OVER);
+        GFX_printn(ctx, "ROLL", 4, 0, max_ychar - 1, COL_OVER);
       } else if (lp_az < (46<<8)) {
-        GFX_printn(ctx, "TILT", 4, 0, max_ychar - 2, COL_OVER);
+        GFX_printn(ctx, "TILT", 4, 0, max_ychar - 1, COL_OVER);
       } else {
         hud_plane_draw(ctx, COL_SET);
       }
@@ -212,7 +232,7 @@ void hud_paint_main(gcontext *ctx, bool init) {
 #undef _Y
 #define _W 32
 #define _X 0
-#define _Y (ctx->height - 12)
+#define _Y (ctx->height - 4)
       GFX_rect(ctx, _X, _Y, _W, 2, COL_SET);
       GFX_draw_horizontal_line(ctx, _X+1, _X+1+_W-1, _Y+1, COL_RESET);
       GFX_draw_horizontal_line(ctx,
@@ -226,7 +246,7 @@ void hud_paint_main(gcontext *ctx, bool init) {
 
 #define _H 24
 #define _X 32
-#define _Y (ctx->height - 12 - _H)
+#define _Y (ctx->height - 4 - _H)
       GFX_rect(ctx, _X, _Y, 2, _H, COL_SET);
       GFX_draw_vertical_line(ctx, _X+1, _Y+1, _Y+1+_H-1, COL_RESET);
       GFX_draw_vertical_line(ctx,

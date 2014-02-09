@@ -289,7 +289,7 @@ void CVIDEO_init(vbl_cb vbl_cb_fn) {
 
 void CVIDEO_init_gcontext(gcontext *gctx) {
   gctx->width = (CVID_HSCANLINE_BYTE_LEN-1)*8;
-  gctx->hscan= CVID_HSCANLINE_BYTE_LEN;
+  gctx->hstride= CVID_HSCANLINE_BYTE_LEN;
   gctx->height = CVID_GRAM_HEIGHT;
   gctx->gram = vid.cur_gram;
   vid.gctx = gctx;
