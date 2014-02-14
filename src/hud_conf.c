@@ -125,9 +125,9 @@ static void hud_conf_paint_setting_bar(gcontext *ctx, bool ver_else_hor, s16_t x
 }
 
 static void hud_conf_paint_checkbox(gcontext *ctx, s16_t x, s16_t y, bool ticked) {
-    GFX_rect(ctx, x-2,y-2,10,10, COL_SET);
+    GFX_rect(ctx, x-1,y-1,8,8, COL_SET);
     if (ticked) {
-      GFX_fill(ctx, x,y,7,7,COL_SET);
+      GFX_fill(ctx, x,y,5,5,COL_SET);
     }
 }
 

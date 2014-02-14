@@ -60,7 +60,7 @@ typedef struct __attribute__ (( packed )) {
 #define CFG_RADIO_PA_SCHEME_STATIC_m2     2
 #define CFG_RADIO_PA_SCHEME_STATIC_m10    3
 #define CFG_RADIO_PA_SCHEME_DYNAMIC_FAST  4
-#define CFG_RADIO_PA_SCHEME_DYNAMIC_SLOW  4
+#define CFG_RADIO_PA_SCHEME_DYNAMIC_SLOW  5
 
 typedef struct __attribute__ (( packed )) {
   u8_t radio_channel;

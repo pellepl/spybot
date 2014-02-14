@@ -324,17 +324,17 @@ void ROVER_paint(gcontext *ctx) {
   if (cam_daz > PI_TRIG_T) cam_daz -= PI_TRIG_T * 2;
 
   if (ABS(cam_dx) < 8) cam.cx += SIGN(cam_dx);
-  else cam.cx += (cam_dx>>2);
+  else cam.cx += (cam_dx>>3);
   if (ABS(cam_dy) < 8) cam.cy += SIGN(cam_dy);
-  else cam.cy += (cam_dy>>2);
+  else cam.cy += (cam_dy>>3);
   if (ABS(cam_dz) < 8) cam.cz += SIGN(cam_dz);
-  else cam.cz += (cam_dz>>2);
+  else cam.cz += (cam_dz>>3);
   if (ABS(cam_dax) < 8) cam.cax += SIGN(cam_dax);
-  else cam.cax += (cam_dax>>2);
+  else cam.cax += (cam_dax>>3);
   if (ABS(cam_day) < 8) cam.cay += SIGN(cam_day);
-  else cam.cay += (cam_day>>2);
+  else cam.cay += (cam_day>>3);
   if (ABS(cam_daz) < 8) cam.caz += SIGN(cam_daz);
-  else cam.caz += (cam_daz>>2);
+  else cam.caz += (cam_daz>>3);
 
   static bool radar_dir = FALSE;
 

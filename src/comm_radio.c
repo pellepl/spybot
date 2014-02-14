@@ -176,7 +176,7 @@ void COMRAD_init(void) {
 
   // start comm stack ticker
   comrad.comm_tick_task = TASK_create(comrad_com_tick_task_f, TASK_STATIC);
-  TASK_start_timer(comrad.comm_tick_task, &comrad.comm_tick_timer, 0, 0, 0, 7, "comm_tick");
+  TASK_start_timer(comrad.comm_tick_task, &comrad.comm_tick_timer, 0, 0, 0, 5, "comm_tick");
 
   //
   // radio setup
