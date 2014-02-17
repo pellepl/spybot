@@ -240,6 +240,7 @@ typedef u16_t system_counter_type;
 /** RADAR **/
 
 #define CONFIG_RADAR_ANGLES     128
+#define CONFIG_SPYBOT_RADAR_SENSITIVITY   16 //(8-31)
 
 
 /** DEBUG **/

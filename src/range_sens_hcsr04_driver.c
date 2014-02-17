@@ -69,6 +69,7 @@ static struct _sta {
   range_sens_cb_fn cb_fn;
   volatile bool busy;
   task_timer timer;
+  task *task;
   bool cc_high;
   u32_t wraps;
 }  hcsr;
@@ -185,6 +186,9 @@ void RANGE_SENS_init(range_sens_cb_fn cb_fn) {
   TIM_ICInitStructure.TIM_Channel = _HCSR04_CHAN_L;
   TIM_ICInitStructure.TIM_ICPolarity = TIM_ICPolarity_Falling;
   TIM_ICInit(_HCSR04_TIMER, &TIM_ICInitStructure);
+
+  hcsr.task = TASK_create(range_sens_trig_tmo, TASK_STATIC);
+  ASSERT(hcsr.task != NULL);
 }
 
 s32_t RANGE_SENS_trigger(void) {
@@ -195,9 +199,7 @@ s32_t RANGE_SENS_trigger(void) {
   hcsr.busy = TRUE;
 
   // start timeout timer
-  task *t = TASK_create(range_sens_trig_tmo, 0);
-  ASSERT(t);
-  TASK_start_timer(t, &hcsr.timer, 0, 0, 60, 0, "hcsr04");
+  TASK_start_timer(hcsr.task, &hcsr.timer, 0, 0, 60, 0, "hcsr04");
 
   // enable flank sense and timer
   range_sens_enable();

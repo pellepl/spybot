@@ -31,6 +31,10 @@
 #include "configuration_ee.h"
 #endif
 
+#ifdef CONFIG_SPYBOT_HCSR
+#include "range_sens_hcsr04_driver.h"
+#endif
+
 #define PAIRING_ROVER_AWAIT_BEACON  PAIRING_STAGE_ONE
 #define PAIRING_ROVER_SEND_ECHO     PAIRING_STAGE_TWO
 
@@ -72,6 +76,11 @@ m24m01_dev eeprom_dev;
 
 static task_timer mech_timer;
 static task *mech_task = NULL;
+
+#ifdef CONFIG_SPYBOT_HCSR
+static task_timer radar_timer;
+static task *radar_task = NULL;
+#endif
 
 static struct {
   // radar values per angle
@@ -162,6 +171,25 @@ static void app_rover_lsm_task(u32_t a, void *b) {
 }
 #endif // CONFIG_SPYBOT_LSM
 #endif // CONFIG_I2C
+
+#ifdef CONFIG_SPYBOT_HCSR
+static u32_t angle_beep;
+static void app_rover_radar_cb(u32_t echo_ticks) {
+  if (echo_ticks == (u32_t)(~0) ||
+      echo_ticks >= (1<<CONFIG_SPYBOT_RADAR_SENSITIVITY)) {
+    APP_report_radar_value(angle_beep, 255);
+  } else {
+    APP_report_radar_value(angle_beep, echo_ticks >> (CONFIG_SPYBOT_RADAR_SENSITIVITY-8));
+  }
+}
+
+static void app_rover_radar_task(u32_t a, void *b) {
+  u16_t rad_a = SERVO_get_radar_position() + 0x8000;
+  angle_beep = (rad_a * CONFIG_RADAR_ANGLES) / 0x10000;
+  RANGE_SENS_trigger();
+}
+#endif // CONFIG_SPYBOT_HCSR
+
 
 static void app_rover_mech_task(u32_t a, void *b) {
 #ifdef CONFIG_SPYBOT_MOTOR
@@ -401,10 +429,6 @@ static void app_rover_tick(void) {
     // dispatch radar report
     app_rover_dispatch_radar_report();
   }
-
-  //todo test
-  static u8_t sa = 0;
-  APP_report_radar_value((sa++)%127, rand_next());
 }
 
 static void app_rover_setup(app_common *com, app_remote *rem, configuration_t *cnf) {
@@ -439,6 +463,11 @@ static void app_rover_setup(app_common *com, app_remote *rem, configuration_t *c
 #endif
   mech_task = TASK_create(app_rover_mech_task, TASK_STATIC);
   TASK_start_timer(mech_task, &mech_timer, 0, 0, 0, 20, "mech");
+#ifdef CONFIG_SPYBOT_HCSR
+  RANGE_SENS_init(app_rover_radar_cb);
+  radar_task = TASK_create(app_rover_radar_task, TASK_STATIC);
+  TASK_start_timer(radar_task, &radar_timer, 0, 0, 100, 65, "radar");
+#endif // CONFIG_SPYBOT_HCSR
 
 #ifdef CONFIG_SPYBOT_LSM
 int i;
