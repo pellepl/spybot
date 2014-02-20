@@ -43,6 +43,8 @@ static u8_t acc_buf_ix = 0;
 
 static u8_t audio_buf[64];
 
+#include "radar_vecs.c"
+
 static void hud_graph_draw(gcontext *ctx, u8_t *data, u8_t start_ix, u8_t len, u8_t height, u8_t x, u8_t y) {
   GFX_draw_vertical_line(ctx, x,y,y+height+2, COL_SET);
   GFX_draw_horizontal_line(ctx, x,x+len+2,y+height+2, COL_SET);
@@ -140,10 +142,12 @@ void hud_paint_main(gcontext *ctx, bool init) {
 
   // audio
   ADC_sample_sound(NULL, audio_buf, sizeof(audio_buf));
-  hud_graph_draw(ctx, audio_buf, 0, sizeof(audio_buf), 32, 150, ctx->height-32-4);
+  hud_graph_draw(ctx, audio_buf, 0, sizeof(audio_buf), 32, 157, ctx->height-32-4);
 
   // heading
-  s16_t x = ctx->width/2;
+#define _X 14
+
+  s16_t x = ctx->width/2 + _X;
   s16_t y = ctx->height - 4 - 17;
 
   u8_t heading_raw = APP_remote_get_heading();
@@ -174,8 +178,8 @@ void hud_paint_main(gcontext *ctx, bool init) {
   GFX_draw_line(ctx, x+dxb, y+dyb, x+dxp/4, y+dyp/4, COL_SET);
   GFX_draw_line(ctx, x-dxb, y-dyb, x+dxp/4, y+dyp/4, COL_SET);
 
-  GFX_draw_image(ctx, img_compass_bmp, ctx->width/2 - 20, ctx->height - 8 - 4, 40, 10, (comp_heading-12)&0xff, 0, 256/8);
-  GFX_rect(ctx, ctx->width/2 - 20 - 1, ctx->height - 8 - 4 -1, 41, 11, COL_SET);
+  GFX_draw_image(ctx, img_compass_bmp, ctx->width/2 - 20 + _X, ctx->height - 8 - 4, 40, 10, (comp_heading-12)&0xff, 0, 256/8);
+  GFX_rect(ctx, ctx->width/2 - 20 - 1 + _X, ctx->height - 8 - 4 -1, 41, 11, COL_SET);
 
 
   // accelerometer
@@ -215,6 +219,7 @@ void hud_paint_main(gcontext *ctx, bool init) {
 
 #define _H 32
 #define _W 40
+#undef _X
 #define _X 17
 #define _Y (ctx->height - 8)
 
@@ -267,6 +272,29 @@ void hud_paint_main(gcontext *ctx, bool init) {
           _Y+(_H/2) +
           ( ( (1+(_H-2)/2)*axn )>>15 ),
           COL_SET);
+
+      // radar
+#undef _X
+#undef _Y
+#define _X 70
+#define _Y (ctx->height - 22)
+      {
+        u32_t i;
+        radar_vec_t v = radar_vecs[0];
+        GFX_draw_line(ctx, v.x1+_X-1, v.y1+_Y-1, v.x2+_X-1, v.y2+_Y+1, COL_SET);
+        v = radar_vecs[CONFIG_RADAR_ANGLES-1];
+        GFX_draw_line(ctx, v.x1+_X+1, v.y1+_Y-1, v.x2+_X+1, v.y2+_Y+1, COL_SET);
+        u8_t *radar_vals = (u8_t *)APP_get_radar_values();
+        for (i = 0; i < CONFIG_RADAR_ANGLES; i++) {
+          v = radar_vecs[i];
+          u8_t radar_val = radar_vals[i];
+          s16_t x2 = v.x1 + (radar_val * v.dx >> 8);
+          s16_t y2 = v.y1 + (radar_val * v.dy >> 8);
+          GFX_put_pixel(ctx, v.x1+_X, v.y1+_Y-1, COL_SET);
+          GFX_put_pixel(ctx, v.x2+_X, v.y2+_Y+1, COL_SET);
+          GFX_draw_line(ctx, v.x1+_X, v.y1+_Y, x2+_X, y2+_Y, COL_SET);
+        }
+      }
 
   }
 }

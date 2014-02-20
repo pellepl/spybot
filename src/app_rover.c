@@ -173,19 +173,52 @@ static void app_rover_lsm_task(u32_t a, void *b) {
 #endif // CONFIG_I2C
 
 #ifdef CONFIG_SPYBOT_HCSR
-static u32_t angle_beep;
+static s16_t blip_angle = 0;
+static s16_t blip_dir = 0;
+static s16_t old_angle = 0;
+static s16_t old_dir = 0;
 static void app_rover_radar_cb(u32_t echo_ticks) {
+  u8_t radar_log_dist;
+#if 0
   if (echo_ticks == (u32_t)(~0) ||
       echo_ticks >= (1<<CONFIG_SPYBOT_RADAR_SENSITIVITY)) {
-    APP_report_radar_value(angle_beep, 255);
+    radar_log_dist = 255;
   } else {
-    APP_report_radar_value(angle_beep, echo_ticks >> (CONFIG_SPYBOT_RADAR_SENSITIVITY-8));
+    radar_log_dist = echo_ticks >> (CONFIG_SPYBOT_RADAR_SENSITIVITY-8);
+  }
+#else
+  // TODO
+  radar_log_dist = (SYS_get_time_ms() >> 7) & 0xff;
+#endif
+
+  if (old_dir == 0) {
+    return;
+  }
+
+  u8_t start_log_ang, end_log_ang;
+  if (old_dir != blip_dir) {
+    if (blip_dir > 0) {
+      start_log_ang = 0;
+      end_log_ang = MAX(blip_angle, old_angle);
+    } else {
+      start_log_ang = MIN(blip_angle, old_angle);
+      end_log_ang = CONFIG_RADAR_ANGLES - 1;
+    }
+  } else {
+    start_log_ang = MIN(blip_angle, old_angle);
+    end_log_ang = MAX(blip_angle, old_angle);
+  }
+  s16_t a;
+  for (a = start_log_ang; a < end_log_ang; a++) {
+    APP_report_radar_value(a, radar_log_dist);
   }
 }
 
 static void app_rover_radar_task(u32_t a, void *b) {
-  u16_t rad_a = SERVO_get_radar_position() + 0x8000;
-  angle_beep = (rad_a * CONFIG_RADAR_ANGLES) / 0x10000;
+  old_angle = blip_angle;
+  old_dir = blip_dir;
+  SERVO_get_radar_position(&blip_angle, &blip_dir);
+  blip_angle = ((blip_angle + 0x8000) * CONFIG_RADAR_ANGLES) / 0x10000;
   RANGE_SENS_trigger();
 }
 #endif // CONFIG_SPYBOT_HCSR

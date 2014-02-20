@@ -152,8 +152,9 @@ void SERVO_update(void) {
   }
 }
 
-s16_t SERVO_get_radar_position(void) {
-  return radar_pos;
+void SERVO_get_radar_position(s16_t *pos, s16 *dir) {
+  if (pos) *pos = radar_pos;
+  if (dir) *dir= radar_dir;
 }
 
 void SERVO_init(void) {
