@@ -292,7 +292,7 @@ void hud_paint_main(gcontext *ctx, bool init) {
           s16_t y2 = v.y1 + (radar_val * v.dy >> 8);
           GFX_put_pixel(ctx, v.x1+_X, v.y1+_Y-1, COL_SET);
           GFX_put_pixel(ctx, v.x2+_X, v.y2+_Y+1, COL_SET);
-          GFX_draw_line(ctx, v.x1+_X, v.y1+_Y, x2+_X, y2+_Y, COL_SET);
+          GFX_draw_line(ctx, v.x1+_X, v.y1+_Y+1, x2+_X, y2+_Y+1, COL_SET);
         }
       }
 
