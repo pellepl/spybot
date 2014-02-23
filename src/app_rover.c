@@ -179,7 +179,7 @@ static s16_t old_angle = 0;
 static s16_t old_dir = 0;
 static void app_rover_radar_cb(u32_t echo_ticks) {
   u8_t radar_log_dist;
-#if 0
+#if 1
   if (echo_ticks == (u32_t)(~0) ||
       echo_ticks >= (1<<CONFIG_SPYBOT_RADAR_SENSITIVITY)) {
     radar_log_dist = 255;
@@ -187,7 +187,7 @@ static void app_rover_radar_cb(u32_t echo_ticks) {
     radar_log_dist = echo_ticks >> (CONFIG_SPYBOT_RADAR_SENSITIVITY-8);
   }
 #else
-  // TODO
+  // todo for test only
   radar_log_dist = (SYS_get_time_ms() >> 7) & 0xff;
 #endif
 
@@ -372,8 +372,8 @@ static void app_rover_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool alread
 
 
   default:
-    DBG(D_APP, D_WARN, "rover: unknown message %02x\n", data[0]);
     COMRAD_reply(REPLY_DENY, 1);
+    DBG(D_APP, D_WARN, "UNPAIR due to unknown message 0x%02x\n", data[0]);
     APP_set_paired_state(FALSE);
     break;
   }
@@ -452,6 +452,7 @@ static void app_rover_tick(void) {
     } else {
       if (SYS_get_time_ms() - last_ctrl > 2000) {
         // no message from controller in a while, consider us unpaired
+        DBG(D_APP, D_WARN, "UNPAIR due to controller silence\n");
         APP_set_paired_state(FALSE);
         return;
       }

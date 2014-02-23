@@ -83,7 +83,7 @@ static void app_tick_task(u32_t a, void *p) {
   } else if (common.pair_state == PAIRING_STAGE_TWO) {
     common.pair_wait_cnt++;
     if (common.pair_wait_cnt > 3) {
-      DBG(D_APP, D_DEBUG, "ctrl echo wait timed out\n");
+      DBG(D_APP, D_DEBUG, "UNPAIR ctrl echo wait timed out\n");
       APP_set_paired_state(FALSE);
     }
   }
@@ -208,7 +208,7 @@ void APP_comrad_ack(comm_arg *rx, u16_t seq_no, u16_t len, u8_t *data) {
 
   // bad ack or denied ack
   if (len == 0 || data[0] != ACK_OK) {
-    DBG(D_APP, D_DEBUG, "app got denial on ack\n");
+    DBG(D_APP, D_DEBUG, "UNPAIR app got denial on ack\n");
     APP_set_paired_state(FALSE);
     TASK_set_timer_recurrence(&common.tick_timer, BEACON_RECURRENCE);
     return;
@@ -243,6 +243,7 @@ void APP_comrad_err(u16_t seq_no, int err) {
     common.err_count++; // count errorenous txed messages
     if (APP_pair_status() == PAIRING_OK && common.err_count > 3) {
       // unpair after three consecutive bad msgs
+      DBG(D_APP, D_WARN, "UNPAIR due to tx err\n");
       APP_set_paired_state(FALSE);
     }
   }
