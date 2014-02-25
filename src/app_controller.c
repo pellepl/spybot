@@ -181,9 +181,7 @@ static void app_control_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool alre
     COMRAD_reply(reply, reply_ix);
     break;
   default:
-    DBG(D_APP, D_WARN, "UNPAIR due to unknown message 0x%02x\n", data[0]);
-    COMRAD_reply(REPLY_DENY, 1);
-    APP_set_paired_state(FALSE);
+    APP_handle_unknown_msg(rx, len, data, already_received);
     break;
   }
 }

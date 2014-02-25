@@ -29,6 +29,7 @@ static configuration_t app_cfg;
 
 u8_t const REPLY_OK[] = {ACK_OK};
 u8_t const REPLY_DENY[] = {ACK_DENY};
+u8_t const REPLY_DBG[] = {ACK_DBG};
 
 // helpers
 
@@ -207,7 +208,10 @@ void APP_comrad_ack(comm_arg *rx, u16_t seq_no, u16_t len, u8_t *data) {
   common.err_count = 0;
 
   // bad ack or denied ack
-  if (len == 0 || data[0] != ACK_OK) {
+  if (len > 0 && data[0] == ACK_DBG) {
+    DBG(D_APP, D_DEBUG, "Got dbg ack on seq %03x\n", seq_no);
+    return;
+  } else  if (len == 0 || data[0] != ACK_OK) {
     DBG(D_APP, D_DEBUG, "UNPAIR app got denial on ack\n");
     APP_set_paired_state(FALSE);
     TASK_set_timer_recurrence(&common.tick_timer, BEACON_RECURRENCE);
@@ -246,6 +250,22 @@ void APP_comrad_err(u16_t seq_no, int err) {
       DBG(D_APP, D_WARN, "UNPAIR due to tx err\n");
       APP_set_paired_state(FALSE);
     }
+  }
+}
+
+void APP_handle_unknown_msg(comm_arg *rx, u16_t len, u8_t *data, bool already_received) {
+  IF_DBG(D_APP, D_INFO) {
+    print("unknown message received\n");
+    print("  seq:%03x len:%i flags:%08b\n", rx->seqno, len, rx->flags);
+    printbuf(IOSTD, data, len);
+  }
+  common.err_count++; // count errorenous txed messages
+  if (APP_pair_status() == PAIRING_OK && common.err_count > 3) {
+    DBG(D_APP, D_WARN, "UNPAIR due to unknown message 0x%02x\n", data[0]);
+    COMRAD_reply(REPLY_DENY, 1);
+    APP_set_paired_state(FALSE);
+  } else {
+    COMRAD_reply(REPLY_DBG, 1);
   }
 }
 

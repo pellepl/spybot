@@ -165,6 +165,8 @@ static int f_app_cfg_store(void);
 #endif
 static int f_app_cfg_dump(void);
 
+static int f_memfind(int hex);
+
 static void cli_print_app_name(void);
 
 /////////////////////////////////////////////////////////////////////////////////////////////
@@ -366,6 +368,10 @@ static cmd c_tbl[] = {
         "dbg (level <dbg|info|warn|fatal>) (enable [x]*) (disable [x]*)\n"
         "x - <task|heap|comm|cnc|cli|nvs|spi|all>\n"
         "ex: dbg level info disable all enable cnc comm\n"
+    },
+    {.name = "memfind", .fn = (func) f_memfind,
+        .help = "Searches for hex in memory\n"
+            "memfind 0xnnnnnnnn\n"
     },
     { .name = "assert", .fn = (func) f_assert,
         .help = "Asserts system\n"
@@ -697,6 +703,32 @@ static int f_dump_trace() {
 #else
   print("trace not enabled\n");
 #endif
+  return 0;
+}
+
+static int f_memfind(int hex) {
+  u8_t *addr = SRAM_BASE;
+  int i;
+  print("finding 0x%08x...\n", hex);
+  for (i = 0; i < 20*1024 - 4; i++) {
+    u32_t m =
+        (addr[i]) |
+        (addr[i+1]<<8) |
+        (addr[i+2]<<16) |
+        (addr[i+3]<<24);
+    u32_t rm =
+        (addr[i+3]) |
+        (addr[i+2]<<8) |
+        (addr[i+1]<<16) |
+        (addr[i]<<24);
+    if (m == hex) {
+      print("match found @ 0x%08x\n", i + addr);
+    }
+    if (rm == hex) {
+      print("reverse match found @ 0x%08x\n", i + addr);
+    }
+  }
+  print("finished\n");
   return 0;
 }
 

@@ -18,6 +18,7 @@
 #define SPYBOT_SR_RADAR     (1<<7)
 
 #define ACK_OK                      0x01
+#define ACK_DBG                     0xee
 #define ACK_DENY                    0x00
 
 typedef enum {

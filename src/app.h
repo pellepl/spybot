@@ -122,6 +122,8 @@ u8_t APP_pair_status(void);
 // sets whether paired or not
 void APP_set_paired_state(bool paired);
 
+void APP_handle_unknown_msg(comm_arg *rx, u16_t len, u8_t *data, bool already_received);
+
 // called from comm_radio stack on msg
 void APP_comrad_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_received);
 // called from comm_radio stack on ack

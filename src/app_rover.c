@@ -372,9 +372,7 @@ static void app_rover_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool alread
 
 
   default:
-    COMRAD_reply(REPLY_DENY, 1);
-    DBG(D_APP, D_WARN, "UNPAIR due to unknown message 0x%02x\n", data[0]);
-    APP_set_paired_state(FALSE);
+    APP_handle_unknown_msg(rx, len, data, already_received);
     break;
   }
 }
