@@ -21,9 +21,15 @@
 #include "comm_radio.h"
 #include "nrf905_impl.h"
 
-#ifdef CONFIG_SPYBOT_LSM
+#ifdef CONFIG_I2C
 #include "i2c_driver.h"
+#endif
+
+#ifdef CONFIG_I2C_DEVICE
 #include "i2c_dev.h"
+#endif
+
+#ifdef CONFIG_SPYBOT_LSM
 #include "lsm303_driver.h"
 #endif
 

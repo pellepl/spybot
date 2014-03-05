@@ -59,7 +59,6 @@ static time last_ctrl = 0;
 static u32_t app_rover_remote_req = 0;
 
 #ifdef CONFIG_I2C
-task_mutex i2c_mutex = TASK_MUTEX_INIT;
 
 #ifdef CONFIG_SPYBOT_LSM
 lsm303_dev lsm_dev;
@@ -502,13 +501,13 @@ static void app_rover_setup(app_common *com, app_remote *rem, configuration_t *c
 #endif // CONFIG_SPYBOT_HCSR
 
 #ifdef CONFIG_SPYBOT_LSM
-int i;
-for (i = 0; i < 3; i++) {
-  acc_extremes[i][0] = S16_MAX;
-  acc_extremes[i][1] = S16_MIN;
-  mag_extremes[i][0] = S16_MAX;
-  mag_extremes[i][1] = S16_MIN;
-}
+  int i;
+  for (i = 0; i < 3; i++) {
+    acc_extremes[i][0] = S16_MAX;
+    acc_extremes[i][1] = S16_MIN;
+    mag_extremes[i][0] = S16_MAX;
+    mag_extremes[i][1] = S16_MIN;
+  }
 #endif
 }
 

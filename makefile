@@ -229,7 +229,6 @@ ifeq ($(CONFIG_SPYBOT_VIDEO),1)
 CFILES		+= cvideo.c
 CFILES		+= gfx_bitmap.c
 CFILES		+= gfx_3d.c
-#CFILES		+= gfx_img_modesty.c
 CFILES		+= compass.c
 CFILES		+= font_spybot.c
 CFILES		+= hud.c

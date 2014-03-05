@@ -31,6 +31,11 @@ u8_t const REPLY_OK[] = {ACK_OK};
 u8_t const REPLY_DENY[] = {ACK_DENY};
 u8_t const REPLY_DBG[] = {ACK_DBG};
 
+#ifdef CONFIG_I2C
+task_mutex i2c_mutex = TASK_MUTEX_INIT;
+#endif
+
+
 // helpers
 
 int APP_tx(u8_t *data, u16_t len) {
