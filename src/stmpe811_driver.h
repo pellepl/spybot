@@ -49,6 +49,18 @@
 #define STMPE_ADC1                        (1<<1)
 #define STMPE_ADC0                        (1<<0)
 
+// ADC
+//  HW    DATA_REG
+//  CH7 = CH3
+//  CH6 = CH1
+//  CH5 = CH2
+//  CH4 = CH0
+//  CH3 = CH7
+//  CH2 = CH6
+//  CH1 = CH5
+//  CH0 = CH4
+//
+
 // software driver
 
 typedef enum {

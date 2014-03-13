@@ -93,6 +93,7 @@ static void range_sens_trig_tmo(u32_t arg, void *argp) {
   range_sens_disable();
   exit_critical();
 
+  ///print("hscr: tmo\n");
   hcsr.busy = FALSE;
   if (hcsr.cb_fn) {
     hcsr.cb_fn((u32_t)~0);
@@ -100,6 +101,7 @@ static void range_sens_trig_tmo(u32_t arg, void *argp) {
 }
 
 static void range_sens_trig_echo(u32_t delta, void *argp) {
+  ///print("hscr: %08x\n", delta);
   hcsr.cb_fn(delta);
 }
 

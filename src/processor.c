@@ -41,6 +41,9 @@ static void RCC_config() {
 #ifdef CONFIG_SPYBOT_MOTOR
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1, ENABLE);
 #endif
+#ifdef CONFIG_SPYBOT_VIDEO
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1, ENABLE);
+#endif
 
   RCC_APB1PeriphClockCmd(STM32_SYSTEM_TIMER_RCC, ENABLE);
 
@@ -150,8 +153,11 @@ static void NVIC_config(void)
   NVIC_SetPriority(EXTI3_IRQn, NVIC_EncodePriority(prioGrp, 1, 0));
   NVIC_SetPriority(EXTI4_IRQn, NVIC_EncodePriority(prioGrp, 1, 0));
 
-  NVIC_SetPriority(EXTI9_5_IRQn, NVIC_EncodePriority(prioGrp, 0, 0));   // rover cvideo vsync
+  NVIC_SetPriority(EXTI9_5_IRQn, NVIC_EncodePriority(prioGrp, 0, 1));   // rover cvideo vsync
   NVIC_SetPriority(EXTI15_10_IRQn, NVIC_EncodePriority(prioGrp, 0, 1)); // rover cvideo hsync
+#ifdef CONFIG_SPYBOT_VIDEO
+  NVIC_SetPriority(TIM1_CC_IRQn, NVIC_EncodePriority(prioGrp, 0, 0)); // rover cvideo hsync
+#endif
 }
 
 static void UART2_config() {
@@ -386,6 +392,13 @@ static void CVIDEO_config() {
   gpio_config(PORTB, PIN14, CLK_50MHZ, IN, AF0, OPENDRAIN, NOPULL);
   gpio_interrupt_mask_disable(PORTB, PIN14);
   gpio_interrupt_mask_disable(PORTB, PIN8);
+
+  // PA9 vid selection
+  gpio_config(PORTA, PIN9, CLK_50MHZ, OUT, AF0, PUSHPULL, NOPULL);
+  gpio_enable(PORTA, PIN9);
+  // PA8 vid gen
+  gpio_config(PORTA, PIN8, CLK_50MHZ, OUT, AF0, PUSHPULL, NOPULL);
+  gpio_disable(PORTA, PIN8);
 #endif // CONFIG_SPYBOT_VIDEO
 }
 

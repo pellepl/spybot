@@ -287,7 +287,7 @@ void hud_paint_main(gcontext *ctx, bool init) {
         u8_t *radar_vals = (u8_t *)APP_get_radar_values();
         for (i = 0; i < CONFIG_RADAR_ANGLES; i++) {
           v = radar_vecs[i];
-          u8_t radar_val = radar_vals[i];
+          u8_t radar_val = 255-radar_vals[i];
           s16_t x2 = v.x1 + (radar_val * v.dx >> 8);
           s16_t y2 = v.y1 + (radar_val * v.dy >> 8);
           GFX_put_pixel(ctx, v.x1+_X, v.y1+_Y-1, COL_SET);

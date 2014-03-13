@@ -201,6 +201,7 @@ CFILES		+= nrf905_driver.c
 CFILES		+= nrf905_impl.c
 CFILES		+= comm_radio.c
 CFILES		+= led.c
+CFILES		+= stmpe811_driver.c
 
 CFILES		+= app.c
 

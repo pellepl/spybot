@@ -617,30 +617,31 @@ int stmpe811_adc_status(stmpe811_dev *dev) {
 int stmpe811_adc_read(stmpe811_dev *dev, stmpe811_adc_e adc_ch) {
   STMPE_FUNC_ENTRY;
   dev->state = STMPE_ST_ADC_READ;
+  // weird mapping found when testing chip on board
   switch (adc_ch) {
   case STMPE_ADC_CHAN0:
-    dev->buf[0] = STMPE_REG_ADC_DATA_CH0;
-    break;
-  case STMPE_ADC_CHAN1:
-    dev->buf[0] = STMPE_REG_ADC_DATA_CH1;
-    break;
-  case STMPE_ADC_CHAN2:
-    dev->buf[0] = STMPE_REG_ADC_DATA_CH2;
-    break;
-  case STMPE_ADC_CHAN3:
-    dev->buf[0] = STMPE_REG_ADC_DATA_CH3;
-    break;
-  case STMPE_ADC_CHAN4:
     dev->buf[0] = STMPE_REG_ADC_DATA_CH4;
     break;
-  case STMPE_ADC_CHAN5:
+  case STMPE_ADC_CHAN1:
     dev->buf[0] = STMPE_REG_ADC_DATA_CH5;
     break;
-  case STMPE_ADC_CHAN6:
+  case STMPE_ADC_CHAN2:
     dev->buf[0] = STMPE_REG_ADC_DATA_CH6;
     break;
-  case STMPE_ADC_CHAN7:
+  case STMPE_ADC_CHAN3:
     dev->buf[0] = STMPE_REG_ADC_DATA_CH7;
+    break;
+  case STMPE_ADC_CHAN4:
+    dev->buf[0] = STMPE_REG_ADC_DATA_CH0;
+    break;
+  case STMPE_ADC_CHAN5:
+    dev->buf[0] = STMPE_REG_ADC_DATA_CH2;
+    break;
+  case STMPE_ADC_CHAN6:
+    dev->buf[0] = STMPE_REG_ADC_DATA_CH1;
+    break;
+  case STMPE_ADC_CHAN7:
+    dev->buf[0] = STMPE_REG_ADC_DATA_CH3;
     break;
 
   }

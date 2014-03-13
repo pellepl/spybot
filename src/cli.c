@@ -13,6 +13,8 @@
 
 #include "app.h"
 
+#include "gpio.h"
+
 #ifdef CONFIG_SPI
 #include "spi_dev.h"
 #include "spi_driver.h"
@@ -27,6 +29,7 @@
 
 #ifdef CONFIG_I2C_DEVICE
 #include "i2c_dev.h"
+#include "stmpe811_driver.h"
 #endif
 
 #ifdef CONFIG_SPYBOT_LSM
@@ -100,6 +103,19 @@ static int f_i2c_read(int addr, int reg);
 static int f_i2c_write(int addr, int reg, int data);
 static int f_i2c_scan(void);
 
+static int f_stmpe_init(void);
+static int f_stmpe_id(void);
+static int f_stmpe_power(void);
+static int f_stmpe_cfg(void);
+static int f_stmpe_gpio_dir(void);
+static int f_stmpe_gpio_read(void);
+static int f_stmpe_gpio_set(int ports);
+static int f_stmpe_gpio_clr(int ports);
+static int f_stmpe_adc_cfg(void);
+static int f_stmpe_adc_trig(int ports);
+static int f_stmpe_adc_read(int ch);
+static int f_stmpe_adc_read_cont(int ch);
+
 #ifdef CONFIG_M24M01
 static int f_ee_open(void);
 static int f_ee_read(int addr, int len);
@@ -159,6 +175,9 @@ static int f_hud_dbg(char *s);
 static int f_hud_state(int state);
 static int f_hud_view(int x, int y, int z, int ax, int ay, int az);
 static int f_hud_in(int i);
+
+static int f_vid_sel(char *s);
+static int f_vid_gen(int t1, int t2, int t3);
 #endif
 
 static int f_comrad_init(void);
@@ -285,6 +304,12 @@ static cmd c_tbl[] = {
     { .name = "hud_in", .fn = (func) f_hud_in,
         .help = "Emulate input (1=UP, 2=DOWN, 4=LEFT, 8=RIGHT, 16=PRESS)\n"
     },
+    { .name = "vid_sel", .fn = (func) f_vid_sel,
+        .help = "Select video input (cam|gen)\n"
+    },
+    { .name = "vid_gen", .fn = (func) f_vid_gen,
+        .help = "Generate video on/off\n"
+    },
 #endif
 
 #ifdef CONFIG_I2C
@@ -367,6 +392,43 @@ static cmd c_tbl[] = {
 #endif
     { .name = "app_cfg_dump", .fn = (func) f_app_cfg_dump,
         .help = "List remote configuration\n"
+    },
+
+    { .name = "stmpe_init", .fn = (func) f_stmpe_init,
+        .help = "Initiate stmpe811\n"
+    },
+    { .name = "stmpe_id", .fn = (func) f_stmpe_id,
+        .help = "Read stmpe811 ID\n"
+    },
+    { .name = "stmpe_pow", .fn = (func) f_stmpe_power,
+        .help = "Setup stmpe811 blocks\n"
+    },
+    { .name = "stmpe_cfg", .fn = (func) f_stmpe_cfg,
+        .help = "Config stmpe811 ports\n"
+    },
+    { .name = "stmpe_dir", .fn = (func) f_stmpe_gpio_dir,
+        .help = "Config stmpe811 port directions\n"
+    },
+    { .name = "stmpe_read", .fn = (func) f_stmpe_gpio_read,
+        .help = "Read stmpe811 gpio status\n"
+    },
+    { .name = "stmpe_set", .fn = (func) f_stmpe_gpio_set,
+        .help = "Set stmpe811 gpio status\n"
+    },
+    { .name = "stmpe_clr", .fn = (func) f_stmpe_gpio_clr,
+        .help = "Clear stmpe811 gpio status\n"
+    },
+    { .name = "stmpe_adc_cfg", .fn = (func) f_stmpe_adc_cfg,
+        .help = "Configure stmpe811 adc\n"
+    },
+    { .name = "stmpe_adc_trig", .fn = (func) f_stmpe_adc_trig,
+        .help = "Trigger stmpe811 adc reading\n"
+    },
+    { .name = "stmpe_adc_read", .fn = (func) f_stmpe_adc_read,
+        .help = "Read stmpe811 adc channel\n"
+    },
+    { .name = "stmpe_adc_read_cont", .fn = (func) f_stmpe_adc_read_cont,
+        .help = "Read stmpe811 adc channel continuously\n"
     },
 
     { .name = "dbg", .fn = (func) f_dbg,
@@ -1029,6 +1091,121 @@ static int f_ee_write(int addr, char *s) {
 }
 #endif // CONFIG_M24M01
 
+static stmpe811_dev stmpe_dev;
+static u16_t stmpe_arg;
+bool stmpe_report = TRUE;
+
+static void stmpe_cb(struct stmpe811_dev_s *dev, int res, stmpe811_state_e state, u16_t arg) {
+  if (res < 0 || stmpe_report) {
+    print("stmpe cb state:%i res:%i arg:%i (0x%04x)\n", state, res, arg, arg);
+  }
+  stmpe_arg = arg;
+}
+
+static int f_stmpe_init(void) {
+  stmpe811_open(&stmpe_dev, _I2C_BUS(0), stmpe_cb);
+  return 0;
+}
+
+static int f_stmpe_id(void) {
+  int res = stmpe811_identify(&stmpe_dev);
+  if (res != I2C_OK) print ("err:%i\n", res);
+  return 0;
+}
+
+static int f_stmpe_power(void) {
+  int res = stmpe811_ctrl_power_block(&stmpe_dev,
+      STMPE_BLOCK_TEMP|STMPE_BLOCK_GPIO|STMPE_BLOCK_ADC,
+      STMPE_BLOCK_TSC);
+  if (res != I2C_OK) print ("err:%i\n", res);
+  return 0;
+}
+
+static int f_stmpe_cfg(void) {
+  int res = stmpe811_ctrl_config_port_af(&stmpe_dev,
+      STMPE_GPIO1);
+  if (res != I2C_OK) print ("err:%i\n", res);
+  return 0;
+}
+
+static int f_stmpe_gpio_dir(void) {
+  int res = stmpe811_gpio_config_dir(&stmpe_dev, 0b00000010);
+  if (res != I2C_OK) print ("err:%i\n", res);
+  return 0;
+}
+
+static int f_stmpe_gpio_read(void) {
+  int res = stmpe811_gpio_status(&stmpe_dev);
+  if (res != I2C_OK) print ("err:%i\n", res);
+  return 0;
+}
+
+static int f_stmpe_gpio_set(int ports) {
+  int res = stmpe811_gpio_set(&stmpe_dev, ports);
+  if (res != I2C_OK) print ("err:%i\n", res);
+  return 0;
+}
+
+static int f_stmpe_gpio_clr(int ports) {
+  int res = stmpe811_gpio_clr(&stmpe_dev, ports);
+  if (res != I2C_OK) print ("err:%i\n", res);
+  return 0;
+}
+
+static int f_stmpe_adc_cfg(void) {
+  int res = stmpe811_adc_config(&stmpe_dev,
+      STMPE_ADC_CLK_3_25MHZ,
+      STMPE_ADC_TIM_124,
+      STMPE_ADC_RES_12B,
+      STMPE_ADC_REF_INT
+      );
+  if (res != I2C_OK) print ("err:%i\n", res);
+  return 0;
+}
+
+static int f_stmpe_adc_trig(int ports) {
+  int res = stmpe811_adc_trigger(&stmpe_dev, ports);
+  if (res != I2C_OK) print ("err:%i\n", res);
+  return 0;
+}
+
+static int f_stmpe_adc_read(int ch) {
+  int res = stmpe811_adc_read(&stmpe_dev, ch);
+  if (res != I2C_OK) print ("err:%i\n", res);
+  return 0;
+}
+
+static int f_stmpe_adc_read_cont(int ch) {
+  stmpe_report = FALSE;
+  int res;
+  int a = 500;
+  volatile int b = 0;
+  while (a--) {
+    ch = 7 - (a&7);
+    print(" ch%i", ch);
+    res = stmpe811_adc_trigger(&stmpe_dev, 1<<ch);
+    if (res != I2C_OK) {
+      print ("err:%i\n", res);
+      stmpe_report = TRUE;
+      return 0;
+    }
+    b = 0;
+    while (b++ < 0x40000);
+    res = stmpe811_adc_read(&stmpe_dev, ch);
+    if (res != I2C_OK) {
+      print ("err:%i\n", res);
+      stmpe_report = TRUE;
+      return 0;
+    }
+    b = 0;
+    while (b++ < 0x40000);
+    print(":%04x", stmpe_arg);
+    if (ch == 7) print("\n");
+  }
+  stmpe_report = TRUE;
+  return 0;
+}
+
 #endif // CONFIG_I2C
 
 #ifdef CONFIG_ADC
@@ -1302,6 +1479,187 @@ static int f_hud_in(int i) {
   HUD_input(i, TRUE);
   return 0;
 }
+
+static int f_vid_sel(char *s) {
+  if (_argc < 1 || !IS_STRING(s)) {
+    return -1;
+  }
+  if (0 == strcmp("cam", s)) {
+    gpio_enable(PORTA, PIN9);
+  } else if (0 == strcmp("gen", s)) {
+    gpio_disable(PORTA, PIN9);
+  } else {
+    return -1;
+  }
+  return 0;
+}
+
+#define CCR2_VAL      336
+int vtim1;
+int vtim2;
+int vtim3;
+static int f_vid_gen(int t1, int t2, int t3) {
+  vtim1 = t1;
+  vtim2 = t2;
+  vtim3 = t3;
+  gpio_config(PORTA, PIN8, CLK_50MHZ, AF, AF0, PUSHPULL, NOPULL);
+  TIM_Cmd(TIM1, DISABLE);
+  NVIC_DisableIRQ(TIM1_CC_IRQn);
+
+  TIM_TimeBaseInitTypeDef  TIM_TimeBaseStructure;
+  TIM_DeInit(TIM1);
+
+  TIM_TimeBaseStructure.TIM_Period = 4608;//SYS_CPU_FREQ / (15625*2);
+  TIM_TimeBaseStructure.TIM_Prescaler = 1-1;
+  TIM_TimeBaseStructure.TIM_ClockDivision = 0;
+  TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+  TIM_TimeBaseInit(TIM1, &TIM_TimeBaseStructure);
+
+  TIM_OCInitTypeDef  TIM_OCInitStructure;
+  TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
+  TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+  TIM_OCInitStructure.TIM_Pulse = 4600;
+  TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_Low;
+  TIM_OC1Init(TIM1, &TIM_OCInitStructure);
+  TIM_OC1PreloadConfig(TIM1, TIM_OCPreload_Enable);
+
+  TIM_ARRPreloadConfig(TIM1, ENABLE);
+
+  TIM_ClearITPendingBit(TIM1,
+      TIM_IT_Update | TIM_IT_CC1 | TIM_IT_CC2 | TIM_IT_CC3 | TIM_IT_CC4 |
+      TIM_IT_COM | TIM_IT_Trigger | TIM_IT_Break);
+  TIM_ITConfig(TIM1, TIM_IT_CC1, ENABLE);
+  NVIC_EnableIRQ(TIM1_CC_IRQn);
+  TIM_Cmd(TIM1, ENABLE);
+  TIM_CtrlPWMOutputs(TIM1, ENABLE);
+
+
+  return 0;
+}
+
+/*
+ *   .word  TIM1_BRK_IRQHandler
+  .word  TIM1_UP_IRQHandler
+  .word  TIM1_TRG_COM_IRQHandler
+  .word  TIM1_CC_IRQHandler
+ *
+ */
+void TIM1_CC_IRQHandler(void)
+{
+  static int linecount = 0;
+  TIM_ClearITPendingBit(TIM1, TIM_IT_CC1);
+  linecount++;
+//  //
+//  //  //vertical sync
+//  //  if (linecount == 242) {
+//  //    TIM_SetCompare1(TIM1, (4575-342));
+//  //  }
+//  //
+//  //  //transition back to normal sync
+//  //  if (linecount == 261) {
+//  //    TIM_SetCompare1(TIM1, 511);
+//  //  }
+//  //
+//  //  // go back to normal
+//  //  if (linecount == 262) {
+//  //    TIM_SetCompare1(TIM1, 342);
+//  //    linecount = 0;
+//  //  }
+//
+
+//  //vertical sync
+//  if (linecount == /*292*/287) {
+//    TIM_SetCompare1(TIM1, 4608-338); //(4608-342));
+//  }
+//
+//  //transition back to normal sync
+//  if (linecount == 309) {
+//    TIM_SetCompare1(TIM1, 338); //511); // 4.7 => 4.7*72 = 338
+//  }
+//
+//  // go back to normal
+//  if (linecount == 312) {
+//    TIM_SetCompare1(TIM1, 169); //342); //2.35us => 2.35*72MHz=169
+//    linecount = 0;
+//  }
+#define US2_35 169
+#define US4_7  338
+#define USFULL 4608
+  if (linecount == 3 || linecount == 310) {
+    TIM_SetCompare1(TIM1, US2_35);
+  }
+
+  if (linecount == 5) {
+    TIM_SetCompare1(TIM1, US4_7);
+  }
+
+  if (linecount == 313) {
+    TIM_SetCompare1(TIM1, USFULL/2-US2_35);
+    linecount = 0;
+  }
+}
+
+/*
+ * ///////////////////////////////////////////////////////////////////////////////////////
+inline void vsync_pulse()
+{
+      LEVEL_SYNC;
+      _delay_us(30);
+      LEVEL_BLACK;
+      _delay_us(2);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////
+inline void equal_pulse()
+{
+      LEVEL_SYNC;
+      _delay_us(2);
+      LEVEL_BLACK;
+      _delay_us(30);
+}
+///////////////////////////////////////////////////////////////////////////////////////
+inline void hsync_pulse()
+{
+      LEVEL_SYNC;
+      _delay_us(5); //4.7us
+      LEVEL_BLACK;
+      _delay_us(7); //7.3us
+}
+
+   switch(line)
+      {
+      case 0:
+      case 1:
+      vsync_pulse();
+      vsync_pulse();
+      break;
+
+      case 2:
+      vsync_pulse();
+      equal_pulse();
+      break;
+
+      case 3:
+      case 4:
+      equal_pulse();
+      equal_pulse();
+      break;
+
+      case 310:
+      case 311:
+      equal_pulse();
+      equal_pulse();
+      break;
+
+      case 312:
+      equal_pulse();
+      vsync_pulse();
+      break;
+      default:
+      // Image scanline (not a sync line)
+
+      hsync_pulse(); // Horizontal Sy
+ */
 
 #endif // CONFIG_SPYBOT_VIDEO
 

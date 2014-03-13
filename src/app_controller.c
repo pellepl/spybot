@@ -294,14 +294,13 @@ static void app_control_tick(void) {
     s8_t radar  = remote->radar;
     u8_t act = 0;
     u8_t sr = SPYBOT_SR_ACC | SPYBOT_SR_HEADING;
-    sr |= (common->tick_count & 7) ? 0 : SPYBOT_SR_RADAR;
+    sr |= (common->tick_count % 6) ? 0 : SPYBOT_SR_RADAR;
     u8_t msg[] = {
         CMD_CONTROL, left_motor, right_motor, pan, tilt, radar, act, sr
     };
     await_radar_report = sr & SPYBOT_SR_RADAR;
     APP_tx(msg, sizeof(msg));
   } else {
-
     // order is of importance
 
     if (app_ctrl_remote_req & APP_CTRL_REMOTE_REQ_SET_CONFIG) {
