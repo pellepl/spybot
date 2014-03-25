@@ -288,11 +288,15 @@ void hud_paint_main(gcontext *ctx, bool init) {
         for (i = 0; i < CONFIG_RADAR_ANGLES; i++) {
           v = radar_vecs[i];
           u8_t radar_val = 255-radar_vals[i];
-          s16_t x2 = v.x1 + (radar_val * v.dx >> 8);
-          s16_t y2 = v.y1 + (radar_val * v.dy >> 8);
           GFX_put_pixel(ctx, v.x1+_X, v.y1+_Y-1, COL_SET);
           GFX_put_pixel(ctx, v.x2+_X, v.y2+_Y+1, COL_SET);
-          GFX_draw_line(ctx, v.x1+_X, v.y1+_Y+1, x2+_X, y2+_Y+1, COL_SET);
+          if (radar_val > 0)
+          {
+            s16_t x2 = v.x1 + (radar_val * v.dx >> 8);
+            s16_t y2 = v.y1 + (radar_val * v.dy >> 8);
+            GFX_draw_line(ctx, v.x1+_X, v.y1+_Y+1, x2+_X, y2+_Y+1, COL_SET);
+            GFX_draw_line(ctx, v.x1+_X+1, v.y1+_Y+1, x2+_X, y2+_Y+1, COL_SET);
+          }
         }
       }
 

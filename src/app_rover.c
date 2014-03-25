@@ -103,7 +103,9 @@ static void app_rover_set_remote_req(u32_t req) {
 void app_rover_set_paired(bool paired) {
   last_ctrl = 0;
   if (!paired) {
+#ifdef CONFIG_SPYBOT_MOTOR
     MOTOR_go(0);
+#endif
   }
 }
 
@@ -216,7 +218,12 @@ static void app_rover_radar_cb(u32_t echo_ticks) {
 static void app_rover_radar_task(u32_t a, void *b) {
   old_angle = blip_angle;
   old_dir = blip_dir;
+#ifdef CONFIG_SPYBOT_SERVO
   SERVO_get_radar_position(&blip_angle, &blip_dir);
+#else
+  blip_angle = 0;
+  blip_dir = 0;
+#endif
   blip_angle = ((blip_angle + 0x8000) * CONFIG_RADAR_ANGLES) / 0x10000;
   RANGE_SENS_trigger();
 }
@@ -467,9 +474,14 @@ static void app_rover_setup(app_common *com, app_remote *rem, configuration_t *c
   remote = rem;
   app_cfg = cnf;
 
+#ifdef CONFIG_SPYBOT_HCSR
+  RANGE_SENS_init(app_rover_radar_cb);
+#endif
+
 #ifdef CONFIG_I2C
   I2C_config(_I2C_BUS(0), 100000);
 
+#ifdef CONFIG_SPYBOT_LSM
   lsm_open(&lsm_dev, _I2C_BUS(0), FALSE, app_rover_lsm_cb_irq);
   // lock mutex for lsm config
   if (!TASK_mutex_lock(&i2c_mutex)) {
@@ -481,6 +493,7 @@ static void app_rover_setup(app_common *com, app_remote *rem, configuration_t *c
 
   lsm_task = TASK_create(app_rover_lsm_task, TASK_STATIC);
   TASK_start_timer(lsm_task, &lsm_timer, 0, 0, 500, 100, "lsm_read");
+#endif
 
   CFG_EE_init(&eeprom_dev, app_rover_cfg_cb);
   CFG_EE_load_config();
@@ -495,7 +508,6 @@ static void app_rover_setup(app_common *com, app_remote *rem, configuration_t *c
   mech_task = TASK_create(app_rover_mech_task, TASK_STATIC);
   TASK_start_timer(mech_task, &mech_timer, 0, 0, 0, 20, "mech");
 #ifdef CONFIG_SPYBOT_HCSR
-  RANGE_SENS_init(app_rover_radar_cb);
   radar_task = TASK_create(app_rover_radar_task, TASK_STATIC);
   TASK_start_timer(radar_task, &radar_timer, 0, 0, 100, 65, "radar");
 #endif // CONFIG_SPYBOT_HCSR

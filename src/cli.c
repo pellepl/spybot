@@ -1269,6 +1269,7 @@ static int f_dbg_tx(char *s) {
 #ifdef CONFIG_SPYBOT_HCSR
 static void cli_range_cb(u32_t t) {
   print("range cb:%i\n", t);
+  // todo remove RANGE_SENS_trigger();
 }
 
 static int f_range_init(void) {

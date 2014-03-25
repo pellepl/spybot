@@ -362,6 +362,8 @@ static void app_control_setup(app_common *com, app_remote *rem, configuration_t 
   APP_remote_set_camera_ctrl(0, 0);
   APP_remote_set_radar_ctrl(RADAR_CTRL_NORMAL);
 
+  memset(remote_radar.vals, 0xff, CONFIG_RADAR_ANGLES);
+
   app_joy_ctrl = APP_JOYSTICK_CONTROL_MOTOR;
 }
 
