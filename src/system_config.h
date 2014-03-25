@@ -227,11 +227,11 @@ typedef u16_t system_counter_type;
 //#define CONFIG_TASK_NONCRITICAL_TIMER
 
 /** APP **/
-//#define CONFIG_SPLASH
 
 #ifndef SECONDARY
 #define CONFIG_ADC
 #endif
+
 
 /** MOTOR **/
 

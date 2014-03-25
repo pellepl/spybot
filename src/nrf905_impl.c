@@ -156,6 +156,17 @@ void NRF905_IMPL_init(nrf905_rx rx_cb, nrf905_tx tx_cb, nrf905_cfg cfg_cb, nrf90
 
 }
 
+void NRF905_IMPL_status(void) {
+  print("NRF905 status\n");
+  print("  gpio PWR: %s\n", gpio_get(NRF905_PWR_PORT, NRF905_PWR_PIN) ? "HI":"LO");
+  print("  gpio TRX: %s\n", gpio_get(NRF905_TRX_CE_PORT, NRF905_TRX_CE_PIN) ? "HI":"LO");
+  print("  gpio TXE: %s\n", gpio_get(NRF905_TX_EN_PORT, NRF905_TX_EN_PIN) ? "HI":"LO");
+  print("  gpio CD : %s\n", gpio_get(NRF905_CARRIER_DETECT_PORT, NRF905_CARRIER_DETECT_PIN) ? "HI":"LO");
+  print("  gpio DR : %s\n", gpio_get(NRF905_DATA_READY_PORT, NRF905_DATA_READY_PIN) ? "HI":"LO");
+  print("  state   : %i\n", NRF905_get_state(&radio.nrf));
+  print("  carrier : %s (last dect:%i ms ago)\n", radio.carrier_on ? "UP  " : "DOWN", SYS_get_time_ms() - radio.last_carrier);
+}
+
 void NRF905_IMPL_read_conf(void) {
   NRF905_standby(&radio.nrf);
   int res = NRF905_read_config(&radio.nrf, &radio.config);

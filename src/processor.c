@@ -156,7 +156,7 @@ static void NVIC_config(void)
   NVIC_SetPriority(EXTI9_5_IRQn, NVIC_EncodePriority(prioGrp, 0, 1));   // rover cvideo vsync
   NVIC_SetPriority(EXTI15_10_IRQn, NVIC_EncodePriority(prioGrp, 0, 1)); // rover cvideo hsync
 #ifdef CONFIG_SPYBOT_VIDEO
-  NVIC_SetPriority(TIM1_CC_IRQn, NVIC_EncodePriority(prioGrp, 0, 0)); // rover cvideo hsync
+  NVIC_SetPriority(TIM1_UP_IRQn, NVIC_EncodePriority(prioGrp, 0, 0));
 #endif
 }
 

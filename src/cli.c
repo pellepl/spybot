@@ -163,6 +163,7 @@ static int f_radio_tx(void);
 static int f_radio_carrier(void);
 static int f_radio_channel(u16_t channel);
 static int f_radio_pa(u8_t pa);
+static int f_radio_dump(void);
 #endif
 
 #ifdef CONFIG_SPYBOT_VIDEO
@@ -177,7 +178,7 @@ static int f_hud_view(int x, int y, int z, int ax, int ay, int az);
 static int f_hud_in(int i);
 
 static int f_vid_sel(char *s);
-static int f_vid_gen(int t1, int t2, int t3);
+static int f_vid_gen(int e);
 #endif
 
 static int f_comrad_init(void);
@@ -276,6 +277,9 @@ static cmd c_tbl[] = {
     },
     { .name = "radio_pa", .fn = (func)f_radio_pa,
         .help = "Set radio PA <0-3>\n"
+    },
+    { .name = "radio_dump", .fn = (func)f_radio_dump,
+        .help = "Dumps radio status\n"
     },
 #endif //RADIO_DBG
 #ifdef CONFIG_SPYBOT_VIDEO
@@ -1393,6 +1397,11 @@ static int f_radio_pa(u8_t pa) {
   return 0;
 }
 
+static int f_radio_dump(void) {
+  NRF905_IMPL_status();
+  return 0;
+}
+
 static int f_radio_read_conf(void) {
   NRF905_IMPL_read_conf();
   return 0;
@@ -1496,44 +1505,50 @@ static int f_vid_sel(char *s) {
 }
 
 #define CCR2_VAL      336
-int vtim1;
-int vtim2;
-int vtim3;
-static int f_vid_gen(int t1, int t2, int t3) {
-  vtim1 = t1;
-  vtim2 = t2;
-  vtim3 = t3;
+static int f_vid_gen(int e) {
+  if (e == 0) {
+    TIM_DeInit(TIM1);
+    TIM_Cmd(TIM1, DISABLE);
+    TIM_OC1PreloadConfig(TIM1, TIM_OCPreload_Disable);
+    NVIC_DisableIRQ(TIM1_UP_IRQn);
+    TIM_CtrlPWMOutputs(TIM1, DISABLE);
+    return 0;
+  }
   gpio_config(PORTA, PIN8, CLK_50MHZ, AF, AF0, PUSHPULL, NOPULL);
   TIM_Cmd(TIM1, DISABLE);
-  NVIC_DisableIRQ(TIM1_CC_IRQn);
+  NVIC_DisableIRQ(TIM1_UP_IRQn);
 
   TIM_TimeBaseInitTypeDef  TIM_TimeBaseStructure;
   TIM_DeInit(TIM1);
 
-  TIM_TimeBaseStructure.TIM_Period = 4608;//SYS_CPU_FREQ / (15625*2);
+  TIM_TimeBaseStructure.TIM_Period = 4608;//SYS_CPU_FREQ / 15625;
   TIM_TimeBaseStructure.TIM_Prescaler = 1-1;
   TIM_TimeBaseStructure.TIM_ClockDivision = 0;
   TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+  TIM_TimeBaseStructure.TIM_RepetitionCounter = 0;
   TIM_TimeBaseInit(TIM1, &TIM_TimeBaseStructure);
 
   TIM_OCInitTypeDef  TIM_OCInitStructure;
   TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
   TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
-  TIM_OCInitStructure.TIM_Pulse = 4600;
+  TIM_OCInitStructure.TIM_Pulse = 4608/2;
   TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_Low;
+  TIM_OCInitStructure.TIM_OCNPolarity = TIM_OCPolarity_High;
+  TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Reset;
+  TIM_OCInitStructure.TIM_OCNIdleState = TIM_OCNIdleState_Reset;
+
   TIM_OC1Init(TIM1, &TIM_OCInitStructure);
   TIM_OC1PreloadConfig(TIM1, TIM_OCPreload_Enable);
 
-  TIM_ARRPreloadConfig(TIM1, ENABLE);
+  TIM_ARRPreloadConfig(TIM1, DISABLE);
 
   TIM_ClearITPendingBit(TIM1,
       TIM_IT_Update | TIM_IT_CC1 | TIM_IT_CC2 | TIM_IT_CC3 | TIM_IT_CC4 |
       TIM_IT_COM | TIM_IT_Trigger | TIM_IT_Break);
-  TIM_ITConfig(TIM1, TIM_IT_CC1, ENABLE);
-  NVIC_EnableIRQ(TIM1_CC_IRQn);
+  TIM_ITConfig(TIM1, TIM_IT_Update, ENABLE);
+  NVIC_EnableIRQ(TIM1_UP_IRQn);
   TIM_Cmd(TIM1, ENABLE);
   TIM_CtrlPWMOutputs(TIM1, ENABLE);
-
 
   return 0;
 }
@@ -1545,47 +1560,16 @@ static int f_vid_gen(int t1, int t2, int t3) {
   .word  TIM1_CC_IRQHandler
  *
  */
-void TIM1_CC_IRQHandler(void)
+void TIM1_UP_IRQHandler(void)
 {
   static int linecount = 0;
-  TIM_ClearITPendingBit(TIM1, TIM_IT_CC1);
+  TIM_ClearITPendingBit(TIM1, TIM_IT_Update);
   linecount++;
-//  //
-//  //  //vertical sync
-//  //  if (linecount == 242) {
-//  //    TIM_SetCompare1(TIM1, (4575-342));
-//  //  }
-//  //
-//  //  //transition back to normal sync
-//  //  if (linecount == 261) {
-//  //    TIM_SetCompare1(TIM1, 511);
-//  //  }
-//  //
-//  //  // go back to normal
-//  //  if (linecount == 262) {
-//  //    TIM_SetCompare1(TIM1, 342);
-//  //    linecount = 0;
-//  //  }
-//
 
-//  //vertical sync
-//  if (linecount == /*292*/287) {
-//    TIM_SetCompare1(TIM1, 4608-338); //(4608-342));
-//  }
-//
-//  //transition back to normal sync
-//  if (linecount == 309) {
-//    TIM_SetCompare1(TIM1, 338); //511); // 4.7 => 4.7*72 = 338
-//  }
-//
-//  // go back to normal
-//  if (linecount == 312) {
-//    TIM_SetCompare1(TIM1, 169); //342); //2.35us => 2.35*72MHz=169
-//    linecount = 0;
-//  }
 #define US2_35 169
 #define US4_7  338
 #define USFULL 4608
+
   if (linecount == 3 || linecount == 310) {
     TIM_SetCompare1(TIM1, US2_35);
   }
