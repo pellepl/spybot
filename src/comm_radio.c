@@ -323,7 +323,6 @@ static void comrad_rad_on_rx(u8_t *data, u8_t len) {
     print("COMRAD got packet, radio len %i\n", len);
     printbuf(IOSTD, data, len);
   }
-  //comrad.stack.phy.up_rx_f(&comrad.stack, len-1, NULL);
 
   if (comrad.bad_link_simul) {
     if ((rand_next() & 0xff) <= comrad.bad_link_simul) {
@@ -343,6 +342,12 @@ static void comrad_rad_on_rx(u8_t *data, u8_t len) {
       comrad_rad_return();
       return;
     }
+  }
+
+  // add safeguard - if radio pkt handling returns in idle state,
+  // automatically switch to listening
+  if (NRF905_IMPL_is_standby()) {
+    comrad_rad_return();
   }
 }
 

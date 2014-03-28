@@ -31,5 +31,6 @@ int NRF905_IMPL_carrier(void);
 bool NRF905_IMPL_lbt_check_rts(u32_t ms);
 bool NRF905_IMPL_listening(void);
 void NRF905_IMPL_status(void);
+bool NRF905_IMPL_is_standby(void);
 
 #endif /* NRF905_IMPL_H_ */

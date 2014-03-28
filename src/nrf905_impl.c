@@ -167,6 +167,10 @@ void NRF905_IMPL_status(void) {
   print("  carrier : %s (last dect:%i ms ago)\n", radio.carrier_on ? "UP  " : "DOWN", SYS_get_time_ms() - radio.last_carrier);
 }
 
+bool NRF905_IMPL_is_standby(void) {
+  return NRF905_get_state(&radio.nrf) == NRF905_STANDBY;
+}
+
 void NRF905_IMPL_read_conf(void) {
   NRF905_standby(&radio.nrf);
   int res = NRF905_read_config(&radio.nrf, &radio.config);

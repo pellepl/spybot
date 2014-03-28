@@ -200,8 +200,15 @@ typedef u16_t system_counter_type;
 
 /** ARCH **/
 #ifdef CONFIG_SPYBOT_VIDEO
-#define CONFIG_ARCH_CRITICAL_DISABLE_IRQ __set_BASEPRI(0x02)
-#define CONFIG_ARCH_CRITICAL_ENABLE_IRQ __set_BASEPRI(0x00)
+#define CONFIG_ARCH_CRITICAL_DISABLE_IRQ \
+  do { \
+    __set_BASEPRI(0x02<<(8-__NVIC_PRIO_BITS)); \
+  } while (0)
+
+#define CONFIG_ARCH_CRITICAL_ENABLE_IRQ \
+  do { \
+    __set_BASEPRI(0x00); \
+} while (0)
 #endif
 
 /** UART **/
@@ -225,6 +232,7 @@ typedef u16_t system_counter_type;
 /** TASK KERNEL **/
 #define CONFIG_TASK_POOL 32
 //#define CONFIG_TASK_NONCRITICAL_TIMER
+#define CONFIG_TASKQ_DBG_CRITICAL
 
 /** APP **/
 
