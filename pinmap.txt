@@ -32,7 +32,7 @@ PB7                               TIM4_CH2          GPIO_IN             SERVO_RA
 PB8                C8             TIM4_CH3          GPIO_IN/INT         SERVO_V                  SCREEN_VSYNC
 PB9                               TIM4_CH4          GPIO_IN             SERVO_H                  BUTTONA
 
-rev B
+rev B/C
 
 PORT    INT_ROV    INT_CTL        CONF_ROVER        CONF_CONTROL        ROVER                    CONTROL
 ----    -------    -------        ----------        ------------        -----                    -------

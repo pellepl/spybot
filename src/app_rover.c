@@ -132,6 +132,7 @@ static void app_rover_lsm_cb_task(u32_t ares, void *adev) {
     DBG(D_APP, D_WARN, "lsm bad read\n");
   } else  if (res != I2C_OK) {
     DBG(D_APP, D_WARN, "lsm err %i\n", res);
+    I2C_reset(_I2C_BUS(0));
     I2C_config(_I2C_BUS(0), 100000);
   }
   TASK_mutex_unlock(&i2c_mutex);
@@ -168,7 +169,13 @@ static void app_rover_lsm_task(u32_t a, void *b) {
   }
 
   reading_lsm = TRUE;
-  lsm_read_both(&lsm_dev);
+  int res = lsm_read_both(&lsm_dev);
+  if (res != I2C_OK) {
+    I2C_reset(_I2C_BUS(0));
+    I2C_config(_I2C_BUS(0), 100000);
+    TASK_mutex_unlock(&i2c_mutex);
+    reading_lsm = FALSE;
+  }
 }
 #endif // CONFIG_SPYBOT_LSM
 #endif // CONFIG_I2C

@@ -180,6 +180,14 @@
 #define NRF905_TX_EN_PIN              PIN5
 #endif
 
+/** BATTERY **/
+#ifndef BAT_LOAD_PORT
+#define BAT_LOAD_PORT               PORTB
+#endif
+#ifndef BAT_LOAD_PIN
+#define BAT_LOAD_PIN                PIN2
+#endif
+
 
 
 /****************************************************/

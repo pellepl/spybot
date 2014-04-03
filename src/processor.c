@@ -441,6 +441,11 @@ static void MOTOR_config() {
 #endif // CONFIG_SPYBOT_MOTOR
 }
 
+static void BAT_init(void) {
+  gpio_config(BAT_LOAD_PORT, BAT_LOAD_PIN, CLK_2MHZ, OUT, AF0, PUSHPULL, NOPULL);
+  gpio_disable(BAT_LOAD_PORT, BAT_LOAD_PIN);
+}
+
 // ifc
 
 void PROC_base_init() {
@@ -452,6 +457,7 @@ void PROC_periph_init() {
   DBGMCU_Config(STM32_SYSTEM_TIMER_DBGMCU, ENABLE);
   gpio_init();
 
+  BAT_init();
   UART2_config();
   LED_config();
   SPI_config();

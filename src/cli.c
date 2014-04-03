@@ -189,6 +189,9 @@ static int f_comrad_dbg_bad_link(u8_t badness);
 static int f_app_cfg_update(int conf, int val, bool urg);
 static int f_app_cfg_store(void);
 #endif
+
+static int f_bat_load(int en);
+
 static int f_app_cfg_dump(void);
 
 static int f_memfind(int hex);
@@ -396,6 +399,10 @@ static cmd c_tbl[] = {
 #endif
     { .name = "app_cfg_dump", .fn = (func) f_app_cfg_dump,
         .help = "List remote configuration\n"
+    },
+
+    { .name = "bat_load", .fn = (func) f_bat_load,
+        .help = "Enable/disable battery load\nex: bat_load 0|1\n"
     },
 
     { .name = "stmpe_init", .fn = (func) f_stmpe_init,
@@ -1211,6 +1218,17 @@ static int f_stmpe_adc_read_cont(int ch) {
 }
 
 #endif // CONFIG_I2C
+
+static int f_bat_load(int en) {
+  if (_argc != 1) return -1;
+  if (en) {
+    gpio_enable(BAT_LOAD_PORT, BAT_LOAD_PIN);
+  } else {
+    gpio_disable(BAT_LOAD_PORT, BAT_LOAD_PIN);
+  }
+  return 0;
+}
+
 
 #ifdef CONFIG_ADC
 static int f_adc(void) {

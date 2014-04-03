@@ -313,13 +313,13 @@ void MOTOR_update(void) {
   if (ts_delta > MOTOR_NO_CTRL_MS_DECEL) {
     for (i = 0; i < 2; i++) {
       if (motor.desired[i] > 0) {
-        if (motor.desired > MOTOR_NO_CTRL_DECEL_DELTA) {
+        if (motor.desired[i] > MOTOR_NO_CTRL_DECEL_DELTA) {
           motor.desired[i] -= MOTOR_NO_CTRL_DECEL_DELTA;
         } else {
           motor.desired[i] = 0;
         }
       } else if (motor.desired[i] < 0) {
-        if (motor.desired < -MOTOR_NO_CTRL_DECEL_DELTA) {
+        if (motor.desired[i] < -MOTOR_NO_CTRL_DECEL_DELTA) {
           motor.desired[i] += MOTOR_NO_CTRL_DECEL_DELTA;
         } else {
           motor.desired[i] = 0;
@@ -331,7 +331,7 @@ void MOTOR_update(void) {
   // get delta between desired motor spin and actual motor spin and update actual towards desired
   motor_d[0] = motor.desired[0] - motor.actual[0];
   motor_d[1] = motor.desired[1] - motor.actual[1];
-  int i;
+
   for (i = 0; i < 2; i++) {
     if (motor_d[i] == 0) {
       continue;

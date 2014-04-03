@@ -266,12 +266,12 @@ void APP_comrad_err(u16_t seq_no, int err) {
 
 void APP_handle_unknown_msg(comm_arg *rx, u16_t len, u8_t *data, bool already_received) {
   IF_DBG(D_APP, D_INFO) {
-    print("unknown message received\n");
+    print("unknown message received 0x%02x\n", data[0]);
     print("  seq:%03x len:%i flags:%08b\n", rx->seqno, len, rx->flags);
     printbuf(IOSTD, data, len);
   }
-  common.err_count++; // count errorenous txed messages
-  if (APP_pair_status() == PAIRING_OK && common.err_count > 3) {
+  if (!already_received) common.err_count++; // count errorenous rxed messages
+  if (APP_pair_status() == PAIRING_OK && common.err_count > COMM_MAX_TX_ERR) {
     DBG(D_APP, D_WARN, "UNPAIR due to unknown message 0x%02x\n", data[0]);
     COMRAD_reply(REPLY_DENY, 1);
     APP_set_paired_state(FALSE);
