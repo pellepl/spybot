@@ -212,17 +212,22 @@ void APP_comrad_ack(comm_arg *rx, u16_t seq_no, u16_t len, u8_t *data) {
 
   common.err_count = 0;
 
-  // bad ack or denied ack
+  // ack check
   if (len > 0 && data[0] == ACK_DBG) {
     DBG(D_APP, D_DEBUG, "Got dbg ack on seq %03x\n", seq_no);
     return;
-  } else  if (len == 0 || data[0] != ACK_OK) {
+  } else  if (len == 0 || data[0] == ACK_DENY) {
     DBG(D_APP, D_DEBUG, "UNPAIR app got denial on ack\n");
     APP_set_paired_state(FALSE);
     TASK_set_timer_recurrence(&common.tick_timer, BEACON_RECURRENCE);
     return;
+  } else if (data[0] != ACK_OK) {
+    DBG(D_APP, D_DEBUG, "Unknown ack on seq %03x\n", seq_no);
+    // bad ack, ignore
+    return;
   }
 
+  // pairing
 #ifdef CONFIG_SPYBOT_APP_CLIENT
   if (common.pair_state == PAIRING_STAGE_TWO) {
     DBG(D_APP, D_DEBUG, "rover got ack on beacon echo, pairing ok\n");
@@ -240,6 +245,7 @@ void APP_comrad_ack(comm_arg *rx, u16_t seq_no, u16_t len, u8_t *data) {
   }
 #endif
 
+  // dispatch
   if (common.pair_state == PAIRING_OK) {
     common.impl->app_impl_handle_ack(common.tx_cmd, rx, len, data);
   }
@@ -249,9 +255,9 @@ void APP_comrad_err(u16_t seq_no, int err) {
   DBG(D_APP, D_WARN, "comrad err: seq:%04x (%04x) %i\n", seq_no, common.tx_seqno, err);
   if (seq_no == common.tx_seqno) {
     common.comrad_busy = FALSE;
-    common.err_count++; // count errorenous txed messages
-    if (APP_pair_status() == PAIRING_OK && common.err_count > 3) {
-      // unpair after three consecutive bad msgs
+    common.err_count++; // count erroneous txed messages
+    if (APP_pair_status() == PAIRING_OK && common.err_count > COMM_MAX_TX_ERR) {
+      // reached max limit of failed tx
       DBG(D_APP, D_WARN, "UNPAIR due to tx err\n");
       APP_set_paired_state(FALSE);
     }

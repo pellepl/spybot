@@ -61,6 +61,9 @@ DOWN  -5/-9  -7/-9  -9/-9    -9/-7   -9/-5
 
 #define MOTOR_PWM_CYCLE_STRETCH           20
 
+#define MOTOR_NO_CTRL_MS_DECEL            1000
+#define MOTOR_NO_CTRL_DECEL_DELTA         3
+
 const static s16_t ctrl_map[3][3][2] = {
     {
         { -64,-128}, {-128,-128}, {-128, -64},
@@ -76,6 +79,7 @@ const static s16_t ctrl_map[3][3][2] = {
 static struct {
   s16_t actual[2];
   s16_t desired[2];
+  time ts_last_control;
 } motor;
 
 static void motor_stop(void) {
@@ -241,6 +245,10 @@ static bool upd_report;
 void MOTOR_control(s16_t ohori, s16_t overi) {
   s16_t motor_ctrl[2];
 
+  // update control timestamp
+  motor.ts_last_control = SYS_get_time_ms();
+
+  // check configuration for axis inversion
   if (APP_cfg_get_val(CFG_COMMON) & CFG_COMMON_JOY_H_INVERT) {
     ohori = -ohori;
   }
@@ -257,6 +265,7 @@ void MOTOR_control(s16_t ohori, s16_t overi) {
 #endif
   motor_translate(hori, veri, motor_ctrl);
 
+  // adjust steering according to configuration
   s16_t adj = APP_cfg_get_val(CFG_STEER_ADJUST);
   s16_t left = motor_ctrl[0];
   s16_t right = motor_ctrl[1];
@@ -296,7 +305,30 @@ void MOTOR_control(s16_t ohori, s16_t overi) {
 }
 
 void MOTOR_update(void) {
+  int i;
   s16_t motor_d[2];
+
+  // check last motor control timestamp, if too old start decelerating
+  time ts_delta = SYS_get_time_ms() - motor.ts_last_control;
+  if (ts_delta > MOTOR_NO_CTRL_MS_DECEL) {
+    for (i = 0; i < 2; i++) {
+      if (motor.desired[i] > 0) {
+        if (motor.desired > MOTOR_NO_CTRL_DECEL_DELTA) {
+          motor.desired[i] -= MOTOR_NO_CTRL_DECEL_DELTA;
+        } else {
+          motor.desired[i] = 0;
+        }
+      } else if (motor.desired[i] < 0) {
+        if (motor.desired < -MOTOR_NO_CTRL_DECEL_DELTA) {
+          motor.desired[i] += MOTOR_NO_CTRL_DECEL_DELTA;
+        } else {
+          motor.desired[i] = 0;
+        }
+      }
+    }
+  }
+
+  // get delta between desired motor spin and actual motor spin and update actual towards desired
   motor_d[0] = motor.desired[0] - motor.actual[0];
   motor_d[1] = motor.desired[1] - motor.actual[1];
   int i;

@@ -39,10 +39,12 @@
 #define BEACON_RECURRENCE           109
 #define COMM_RECURRENCE             113
 #define COMM_OTHER_RECURRENCE       97
+#define COMM_MAX_TX_ERR             5
 #else
 #define BEACON_RECURRENCE           401
 #define COMM_RECURRENCE             97
 #define COMM_OTHER_RECURRENCE       113
+#define COMM_MAX_TX_ERR             15
 #endif
 
 // radar not scanning
