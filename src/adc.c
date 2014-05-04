@@ -9,6 +9,8 @@
 #define ADC_JOYST_SECOND  2
 #define ADC_AUDIO         3
 
+#define AUDIO_SUBSAMPLES  8
+
 static struct {
   volatile u8_t state;
   u8_t *buf;
@@ -90,31 +92,40 @@ s32_t ADC_sample_sound(adc_cb cb, u8_t *buf, u32_t len) {
 }
 
 
+static u32_t _sub_samp = 0;
+static u32_t _sum_samp = 0;
 void ADC_irq(void) {
   // audio
   if (ADC_GetITStatus(ADC1, ADC_IT_EOC) != RESET) {
     ADC_ClearITPendingBit(ADC1, ADC_IT_EOC);
-    u16_t val = ADC_GetConversionValue(ADC1);
-    if (!adc1.trig_upper) {
-      if (val > 2048+256) {
-        adc1.trig_upper = TRUE;
-        if (adc1.ix >= adc1.len / 4) {
-          memcpy(&adc1.buf[0], &adc1.buf[adc1.ix - adc1.len / 4],  (adc1.len / 4)-1);
-          adc1.ix = adc1.len / 4;
+    u16_t raw = ADC_GetConversionValue(ADC1);
+    _sum_samp += raw;
+    if (++_sub_samp >= AUDIO_SUBSAMPLES) {
+      _sub_samp = 0;
+      u16_t val = _sum_samp / AUDIO_SUBSAMPLES;
+      _sum_samp = 0;
+      if (!adc1.trig_upper) {
+        if (val > 2048+256) {
+          adc1.trig_upper = TRUE;
+          if (adc1.ix >= adc1.len / 4) {
+            memcpy(&adc1.buf[0], &adc1.buf[adc1.ix - adc1.len / 4],  (adc1.len / 4)-1);
+            adc1.ix = adc1.len / 4;
+          }
         }
-      }
-    } else {
-      if (!adc1.trig_lower) {
-        if (val < 2048-256) {
-          adc1.trig_lower = TRUE;
-          if (adc1.ix >= adc1.len / 2) {
-            memcpy(&adc1.buf[0], &adc1.buf[adc1.ix - adc1.len / 2],  (adc1.len / 2)-1);
-            adc1.ix = adc1.len / 2;
+      } else {
+        if (!adc1.trig_lower) {
+          if (val < 2048-256) {
+            adc1.trig_lower = TRUE;
+            if (adc1.ix >= adc1.len / 2) {
+              memcpy(&adc1.buf[0], &adc1.buf[adc1.ix - adc1.len / 2],  (adc1.len / 2)-1);
+              adc1.ix = adc1.len / 2;
+            }
           }
         }
       }
+      adc1.buf[adc1.ix++] = (val >> (4+3));
+
     }
-    adc1.buf[adc1.ix++] = (val >> (4+3));
     if (adc1.ix < adc1.len) {
       ADC_SoftwareStartConvCmd(ADC1, ENABLE);
     } else {

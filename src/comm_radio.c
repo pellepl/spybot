@@ -320,7 +320,7 @@ static void comrad_rad_return(void) {
 static void comrad_rad_on_rx(u8_t *data, u8_t len) {
   // pretend to be phy and feed comm link layer comm_link_rx
   IF_DBG(D_RADIO, D_DEBUG) {
-    print("COMRAD got packet, radio len %i\n", len);
+    print("COMRAD RX, radio len %i\n", len);
     printbuf(IOSTD, data, len);
   }
 
@@ -472,6 +472,7 @@ static int comrad_com_tx_flush(comm *comm, comm_arg* tx) {
   }
 
   unsigned char buf[COMM_RADIO_LNK_MAX_DATA];
+  memset(buf, 0xee, COMM_RADIO_LNK_MAX_DATA);
   buf[0] = tx->len;
   memcpy(&buf[1], tx->data, tx->len+1);
 

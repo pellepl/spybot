@@ -49,6 +49,17 @@
 #define STMPE_ADC1                        (1<<1)
 #define STMPE_ADC0                        (1<<0)
 
+  // weird mapping - see data sheet p 29
+
+#define STMPE_GPIO_ADC7                   STMPE_ADC3
+#define STMPE_GPIO_ADC6                   STMPE_ADC1
+#define STMPE_GPIO_ADC5                   STMPE_ADC2
+#define STMPE_GPIO_ADC4                   STMPE_ADC0
+#define STMPE_GPIO_ADC3                   STMPE_ADC7
+#define STMPE_GPIO_ADC2                   STMPE_ADC6
+#define STMPE_GPIO_ADC1                   STMPE_ADC5
+#define STMPE_GPIO_ADC0                   STMPE_ADC4
+
 // ADC
 //  HW    DATA_REG
 //  CH7 = CH3
@@ -112,7 +123,7 @@ typedef struct stmpe811_dev_s {
   stmpe811_state_e state;
   void (*callback)(struct stmpe811_dev_s *dev, int res,
       stmpe811_state_e state, u16_t arg);
-  i2c_dev_sequence seq[2];
+  i2c_dev_sequence seq[4];
   u8_t buf[8];
   u16_t arg;
 } stmpe811_dev;
@@ -163,6 +174,15 @@ typedef enum {
   STMPE_ADC_CHAN6,
   STMPE_ADC_CHAN7,
 } stmpe811_adc_e;
+
+#define STMPE_GPIO_ADC_CHAN0 STMPE_ADC_CHAN4
+#define STMPE_GPIO_ADC_CHAN1 STMPE_ADC_CHAN5
+#define STMPE_GPIO_ADC_CHAN2 STMPE_ADC_CHAN6
+#define STMPE_GPIO_ADC_CHAN3 STMPE_ADC_CHAN7
+#define STMPE_GPIO_ADC_CHAN4 STMPE_ADC_CHAN0
+#define STMPE_GPIO_ADC_CHAN5 STMPE_ADC_CHAN2
+#define STMPE_GPIO_ADC_CHAN6 STMPE_ADC_CHAN1
+#define STMPE_GPIO_ADC_CHAN7 STMPE_ADC_CHAN3
 
 typedef enum {
   STMPE_TEMP_MODE_ONCE = 0,

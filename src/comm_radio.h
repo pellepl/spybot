@@ -19,8 +19,8 @@
 #define COMRAD_RADIO_ADJUST_TICKS   5
 
 #define COMM_RADIO_LQUAL_PERFECT    250
-#define COMM_RADIO_LQUAL_GOOD       210
-#define COMM_RADIO_LQUAL_WEAK       160
+#define COMM_RADIO_LQUAL_GOOD       190
+#define COMM_RADIO_LQUAL_WEAK       130
 
 void COMRAD_init(void);
 int COMRAD_send(const u8_t *data, u16_t len, bool ack);

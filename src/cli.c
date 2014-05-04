@@ -29,7 +29,7 @@
 
 #ifdef CONFIG_I2C_DEVICE
 #include "i2c_dev.h"
-#include "stmpe811_driver.h"
+#include "stmpe811_handler.h"
 #endif
 
 #ifdef CONFIG_SPYBOT_LSM
@@ -103,24 +103,16 @@ static int f_i2c_read(int addr, int reg);
 static int f_i2c_write(int addr, int reg, int data);
 static int f_i2c_scan(void);
 
-static int f_stmpe_init(void);
-static int f_stmpe_id(void);
-static int f_stmpe_power(void);
-static int f_stmpe_cfg(void);
-static int f_stmpe_gpio_dir(void);
-static int f_stmpe_gpio_read(void);
-static int f_stmpe_gpio_set(int ports);
-static int f_stmpe_gpio_clr(int ports);
-static int f_stmpe_adc_cfg(void);
-static int f_stmpe_adc_trig(int ports);
-static int f_stmpe_adc_read(int ch);
-static int f_stmpe_adc_read_cont(int ch);
-
 #ifdef CONFIG_M24M01
 static int f_ee_open(void);
 static int f_ee_read(int addr, int len);
 static int f_ee_write(int addr, char *s);
 #endif
+
+static int f_ioexp_init(void);
+static int f_ioexp_gpio_set(u8_t set, u8_t reset);
+static int f_ioexp_adc_read(u8_t adc_chan);
+static int f_ioexp_temp_read(void);
 #endif
 
 #ifdef CONFIG_SPYBOT_LSM
@@ -339,6 +331,14 @@ static cmd c_tbl[] = {
         { .name = "ee_w", .fn = (func) f_ee_write,
             .help = "write eeprom (address, string)\n" },
 #endif
+    { .name = "ioexp_init", .fn = (func) f_ioexp_init,
+        .help = "Initialize io expander\n" },
+    { .name = "ioexp_gpio", .fn = (func)f_ioexp_gpio_set,
+        .help = "Set outputs (set, reset)\n" },
+    { .name = "ioexp_adc", .fn = (func) f_ioexp_adc_read,
+        .help = "Read adc channel\n" },
+    { .name = "ioexp_temp", .fn = (func) f_ioexp_temp_read,
+        .help = "Read temperature\n" },
 #endif
 
 #ifdef CONFIG_SPYBOT_LSM
@@ -405,42 +405,6 @@ static cmd c_tbl[] = {
         .help = "Enable/disable battery load\nex: bat_load 0|1\n"
     },
 
-    { .name = "stmpe_init", .fn = (func) f_stmpe_init,
-        .help = "Initiate stmpe811\n"
-    },
-    { .name = "stmpe_id", .fn = (func) f_stmpe_id,
-        .help = "Read stmpe811 ID\n"
-    },
-    { .name = "stmpe_pow", .fn = (func) f_stmpe_power,
-        .help = "Setup stmpe811 blocks\n"
-    },
-    { .name = "stmpe_cfg", .fn = (func) f_stmpe_cfg,
-        .help = "Config stmpe811 ports\n"
-    },
-    { .name = "stmpe_dir", .fn = (func) f_stmpe_gpio_dir,
-        .help = "Config stmpe811 port directions\n"
-    },
-    { .name = "stmpe_read", .fn = (func) f_stmpe_gpio_read,
-        .help = "Read stmpe811 gpio status\n"
-    },
-    { .name = "stmpe_set", .fn = (func) f_stmpe_gpio_set,
-        .help = "Set stmpe811 gpio status\n"
-    },
-    { .name = "stmpe_clr", .fn = (func) f_stmpe_gpio_clr,
-        .help = "Clear stmpe811 gpio status\n"
-    },
-    { .name = "stmpe_adc_cfg", .fn = (func) f_stmpe_adc_cfg,
-        .help = "Configure stmpe811 adc\n"
-    },
-    { .name = "stmpe_adc_trig", .fn = (func) f_stmpe_adc_trig,
-        .help = "Trigger stmpe811 adc reading\n"
-    },
-    { .name = "stmpe_adc_read", .fn = (func) f_stmpe_adc_read,
-        .help = "Read stmpe811 adc channel\n"
-    },
-    { .name = "stmpe_adc_read_cont", .fn = (func) f_stmpe_adc_read_cont,
-        .help = "Read stmpe811 adc channel continuously\n"
-    },
 
     { .name = "dbg", .fn = (func) f_dbg,
         .help = "Set debug filter and level\n"
@@ -975,12 +939,16 @@ static u8_t i2c_dev_reg = 0;
 static u8_t i2c_dev_val = 0;
 static i2c_dev i2c_device;
 static u8_t i2c_wr_data[2];
-static i2c_dev_sequence i2c_r_seqs[] = { I2C_SEQ_TX(&i2c_dev_reg, 1),
-    I2C_SEQ_RX_STOP(&i2c_dev_val, 1) };
-static i2c_dev_sequence i2c_w_seqs[] = { I2C_SEQ_TX_STOP(i2c_wr_data, 2) , };
+static i2c_dev_sequence i2c_r_seqs[] = {
+    I2C_SEQ_TX(&i2c_dev_reg, 1),
+    I2C_SEQ_RX_STOP(&i2c_dev_val, 1)
+};
+static i2c_dev_sequence i2c_w_seqs[] = {
+    I2C_SEQ_TX_STOP(i2c_wr_data, 2) ,
+};
 
 static void i2c_test_cb(i2c_dev *dev, int result) {
-  print("i2c_dev_cb: reg %02x val %02x res:%i\n", i2c_dev_reg, i2c_dev_val,
+  print("i2c_dev_cb: reg:0x%02x val:0x%02x 0b%08b res:%i\n", i2c_dev_reg, i2c_dev_val, i2c_dev_val,
       result);
   I2C_DEV_close(&i2c_device);
 }
@@ -990,7 +958,8 @@ static int f_i2c_read(int addr, int reg) {
   I2C_DEV_set_callback(&i2c_device, i2c_test_cb);
   I2C_DEV_open(&i2c_device);
   i2c_dev_reg = reg;
-  I2C_DEV_sequence(&i2c_device, i2c_r_seqs, 2);
+  int res = I2C_DEV_sequence(&i2c_device, i2c_r_seqs, 2);
+  if (res != I2C_OK) print("err: %i\n", res);
   return 0;
 }
 
@@ -1002,7 +971,8 @@ static int f_i2c_write(int addr, int reg, int data) {
   i2c_wr_data[1] = data;
   i2c_dev_reg = reg;
   i2c_dev_val = data;
-  I2C_DEV_sequence(&i2c_device, i2c_w_seqs, 1);
+  int res = I2C_DEV_sequence(&i2c_device, i2c_w_seqs, 1);
+  if (res != I2C_OK) print("err: %i\n", res);
   return 0;
 }
 
@@ -1102,118 +1072,70 @@ static int f_ee_write(int addr, char *s) {
 }
 #endif // CONFIG_M24M01
 
-static stmpe811_dev stmpe_dev;
-static u16_t stmpe_arg;
-bool stmpe_report = TRUE;
+static stmpe811_handler ioexp;
 
-static void stmpe_cb(struct stmpe811_dev_s *dev, int res, stmpe811_state_e state, u16_t arg) {
-  if (res < 0 || stmpe_report) {
-    print("stmpe cb state:%i res:%i arg:%i (0x%04x)\n", state, res, arg, arg);
-  }
-  stmpe_arg = arg;
+static void ioexp_gpio_cb(u8_t mask, u8_t gpio) {
+  print("ioexp gpio irq mask:%08b gpio:%08b\n", mask, gpio);
 }
 
-static int f_stmpe_init(void) {
-  stmpe811_open(&stmpe_dev, _I2C_BUS(0), stmpe_cb);
-  return 0;
+static void ioexp_adc_cb(u8_t adc, u16_t val) {
+  print("ioexp adc irq adc:%08b val:%04x\n", adc, val);
 }
 
-static int f_stmpe_id(void) {
-  int res = stmpe811_identify(&stmpe_dev);
-  if (res != I2C_OK) print ("err:%i\n", res);
-  return 0;
+static void ioexp_temp_cb(u16_t val) {
+  print("ioexp temp irq temp:%04x\n", val);
 }
 
-static int f_stmpe_power(void) {
-  int res = stmpe811_ctrl_power_block(&stmpe_dev,
-      STMPE_BLOCK_TEMP|STMPE_BLOCK_GPIO|STMPE_BLOCK_ADC,
-      STMPE_BLOCK_TSC);
-  if (res != I2C_OK) print ("err:%i\n", res);
-  return 0;
+static void ioexp_err_cb(stmpe811_handler_state state, int err) {
+  print("ioexp res state:%i res:%i\n", state, err);
 }
 
-static int f_stmpe_cfg(void) {
-  int res = stmpe811_ctrl_config_port_af(&stmpe_dev,
-      STMPE_GPIO1);
-  if (res != I2C_OK) print ("err:%i\n", res);
-  return 0;
+static void ioexp_irq(gpio_pin pin) {
+  print("ioexp irq\n");
+  stmpe811_handler_interrupt_cb(&ioexp);
 }
 
-static int f_stmpe_gpio_dir(void) {
-  int res = stmpe811_gpio_config_dir(&stmpe_dev, 0b00000010);
-  if (res != I2C_OK) print ("err:%i\n", res);
-  return 0;
-}
-
-static int f_stmpe_gpio_read(void) {
-  int res = stmpe811_gpio_status(&stmpe_dev);
-  if (res != I2C_OK) print ("err:%i\n", res);
-  return 0;
-}
-
-static int f_stmpe_gpio_set(int ports) {
-  int res = stmpe811_gpio_set(&stmpe_dev, ports);
-  if (res != I2C_OK) print ("err:%i\n", res);
-  return 0;
-}
-
-static int f_stmpe_gpio_clr(int ports) {
-  int res = stmpe811_gpio_clr(&stmpe_dev, ports);
-  if (res != I2C_OK) print ("err:%i\n", res);
-  return 0;
-}
-
-static int f_stmpe_adc_cfg(void) {
-  int res = stmpe811_adc_config(&stmpe_dev,
+static int f_ioexp_init(void) {
+  stmpe811_handler_open(&ioexp, _I2C_BUS(0), ioexp_gpio_cb, ioexp_adc_cb, ioexp_temp_cb, ioexp_err_cb);
+  stmpe811_handler_setup(&ioexp,
+      STMPE_BLOCK_TEMP | STMPE_BLOCK_GPIO | STMPE_BLOCK_ADC,
+      STMPE_GPIO1 | STMPE_GPIO2 | STMPE_GPIO3 | STMPE_GPIO4 |  STMPE_GPIO5 | STMPE_GPIO6 | STMPE_GPIO7, // analog / digital
+      STMPE_GPIO1, // direction
+      STMPE_GPIO1, // default output
+      TRUE, // interrupt
+      STMPE_INT_POLARITY_ACTIVE_LOW_FALLING, STMPE_INT_TYPE_EDGE, // interrupt config
+      STMPE_INT_GPIO | STMPE_INT_ADC | STMPE_INT_TEMP_SENS, // interrupt enable
+      STMPE_GPIO2 | STMPE_GPIO3 | STMPE_GPIO4 |  STMPE_GPIO5 | STMPE_GPIO6 | STMPE_GPIO7, // gpio interrupt mask
+      STMPE_GPIO_ADC0, // adc interrupt mask
+      STMPE_GPIO2 | STMPE_GPIO3 | STMPE_GPIO4 | STMPE_GPIO5 | STMPE_GPIO6 | STMPE_GPIO7, // detect rising
+      STMPE_GPIO2 | STMPE_GPIO3 | STMPE_GPIO4 | STMPE_GPIO5 | STMPE_GPIO6 | STMPE_GPIO7, // detect falling
       STMPE_ADC_CLK_3_25MHZ,
-      STMPE_ADC_TIM_124,
+      STMPE_ADC_TIM_64,
       STMPE_ADC_RES_12B,
-      STMPE_ADC_REF_INT
-      );
-  if (res != I2C_OK) print ("err:%i\n", res);
+      STMPE_ADC_REF_INT,
+      TRUE, // temp enable
+      STMPE_TEMP_MODE_ONCE,
+      FALSE,
+      STMPE_TEMP_THRES_OVER,
+      0);
+  gpio_config(PORTC, PIN13, CLK_50MHZ, IN, AF0, OPENDRAIN, NOPULL);
+  gpio_interrupt_config(PORTC, PIN13, ioexp_irq, FLANK_DOWN);
   return 0;
 }
 
-static int f_stmpe_adc_trig(int ports) {
-  int res = stmpe811_adc_trigger(&stmpe_dev, ports);
-  if (res != I2C_OK) print ("err:%i\n", res);
+static int f_ioexp_gpio_set(u8_t set, u8_t reset) {
+  stmpe811_handler_gpio_define(&ioexp, set, reset);
   return 0;
 }
 
-static int f_stmpe_adc_read(int ch) {
-  int res = stmpe811_adc_read(&stmpe_dev, ch);
-  if (res != I2C_OK) print ("err:%i\n", res);
+static int f_ioexp_adc_read(u8_t adc_chan) {
+  stmpe811_handler_adc_read(&ioexp, 1<<adc_chan);
   return 0;
 }
 
-static int f_stmpe_adc_read_cont(int ch) {
-  stmpe_report = FALSE;
-  int res;
-  int a = 500;
-  volatile int b = 0;
-  while (a--) {
-    ch = 7 - (a&7);
-    print(" ch%i", ch);
-    res = stmpe811_adc_trigger(&stmpe_dev, 1<<ch);
-    if (res != I2C_OK) {
-      print ("err:%i\n", res);
-      stmpe_report = TRUE;
-      return 0;
-    }
-    b = 0;
-    while (b++ < 0x40000);
-    res = stmpe811_adc_read(&stmpe_dev, ch);
-    if (res != I2C_OK) {
-      print ("err:%i\n", res);
-      stmpe_report = TRUE;
-      return 0;
-    }
-    b = 0;
-    while (b++ < 0x40000);
-    print(":%04x", stmpe_arg);
-    if (ch == 7) print("\n");
-  }
-  stmpe_report = TRUE;
+
+static int f_ioexp_temp_read(void) {
+  stmpe811_handler_temp_read(&ioexp, TRUE);
   return 0;
 }
 

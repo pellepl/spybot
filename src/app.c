@@ -267,7 +267,7 @@ void APP_comrad_err(u16_t seq_no, int err) {
 void APP_handle_unknown_msg(comm_arg *rx, u16_t len, u8_t *data, bool already_received) {
   IF_DBG(D_APP, D_INFO) {
     print("unknown message received 0x%02x\n", data[0]);
-    print("  seq:%03x len:%i flags:%08b\n", rx->seqno, len, rx->flags);
+    print("  s:%i d:%i seq:%03x len:%i flags:%08b\n", rx->src, rx->dst, rx->seqno, len, rx->flags);
     printbuf(IOSTD, data, len);
   }
   if (!already_received) common.err_count++; // count errorenous rxed messages
