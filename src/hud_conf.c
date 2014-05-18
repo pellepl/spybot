@@ -125,10 +125,10 @@ static void hud_conf_paint_setting_bar(gcontext *ctx, bool ver_else_hor, s16_t x
 }
 
 static void hud_conf_paint_checkbox(gcontext *ctx, s16_t x, s16_t y, bool ticked) {
-    GFX_rect(ctx, x-1,y-1,8,8, COL_SET);
-    if (ticked) {
-      GFX_fill(ctx, x+1,y+1,5,5,COL_SET);
-    }
+  GFX_rect(ctx, x-1,y-1,8,8, COL_SET);
+  if (ticked) {
+    GFX_fill(ctx, x+1,y+1,5,5,COL_SET);
+  }
 }
 
 
@@ -151,16 +151,16 @@ static void hud_conf_paint_menu(gcontext *ctx) {
   hud_conf_paint_title(ctx, menu_items[0]);
 
   u8_t menu_ix = 0;
-  u8_t y = 4;
+  u8_t y = 4*8;
   bool do_fill = (((SYS_get_time_ms() - conf.last_selection) >> 9) & 1) == 0;
   while (menu_items[menu_ix+1]) {
     bool select = do_fill && menu_ix == conf.menu_sel_ix;
     if (select) {
       int item_len = strlen(menu_items[menu_ix+1]);
-      GFX_fill(ctx, 8, y*8, item_len*8, 8, COL_SET);
+      GFX_fill(ctx, 8, y, item_len*8, 8, COL_SET);
     }
-    GFX_printn(ctx, menu_items[menu_ix+1], 0, 1, y, select ? COL_RESET : COL_SET);
-    y += 2;
+    GFX_printy(ctx, menu_items[menu_ix+1], 0, 1, y, select ? COL_RESET : COL_SET);
+    y += 12;
     menu_ix++;
   }
 }
@@ -432,12 +432,12 @@ static void hud_conf_input_exit(input_type in, bool change) {
 static void hud_conf_paint_common(gcontext *ctx) {
   ROVER_view(230,200,230, 0, 0, -4*PI_TRIG_T/5, FALSE);
   hud_conf_paint_menu(ctx);
-  hud_conf_paint_checkbox(ctx, 200, 8*4, conf.remote.common & CFG_COMMON_JOY_H_INVERT);
-  hud_conf_paint_checkbox(ctx, 200, 8*6, conf.remote.common & CFG_COMMON_JOY_V_INVERT);
-  hud_conf_paint_checkbox(ctx, 200, 8*8, conf.remote.common & CFG_COMMON_LEFT_INVERT);
-  hud_conf_paint_checkbox(ctx, 200, 8*10, conf.remote.common & CFG_COMMON_RIGHT_INVERT);
-  hud_conf_paint_checkbox(ctx, 200, 8*12, conf.remote.common & CFG_COMMON_PAN_INVERT);
-  hud_conf_paint_checkbox(ctx, 200, 8*14, conf.remote.common & CFG_COMMON_TILT_INVERT);
+  hud_conf_paint_checkbox(ctx, 200, 8*4+12*0, conf.remote.common & CFG_COMMON_JOY_H_INVERT);
+  hud_conf_paint_checkbox(ctx, 200, 8*4+12*1, conf.remote.common & CFG_COMMON_JOY_V_INVERT);
+  hud_conf_paint_checkbox(ctx, 200, 8*4+12*2, conf.remote.common & CFG_COMMON_LEFT_INVERT);
+  hud_conf_paint_checkbox(ctx, 200, 8*4+12*3, conf.remote.common & CFG_COMMON_RIGHT_INVERT);
+  hud_conf_paint_checkbox(ctx, 200, 8*4+12*4, conf.remote.common & CFG_COMMON_PAN_INVERT);
+  hud_conf_paint_checkbox(ctx, 200, 8*4+12*5, conf.remote.common & CFG_COMMON_TILT_INVERT);
 }
 
 static void hud_conf_input_common(input_type in, bool change) {

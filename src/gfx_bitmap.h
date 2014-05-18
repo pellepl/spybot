@@ -28,6 +28,7 @@ void GFX_put_pixel(gcontext *ctx, s16_t x, s16_t y, gcolor col);
 void GFX_fill(gcontext *ctx, s16_t x, s16_t y, u16_t width, u16_t height, gcolor col);
 void GFX_printn(gcontext *ctx, const char *s, int len, u8_t cx, u8_t cy, gcolor col);
 void GFX_printn_big(gcontext *ctx, const char *str, int len, u8_t cx, u8_t cy, gcolor c);
+void GFX_printy(gcontext *ctx, const char *str, int len, u8_t cx, s16_t yy, gcolor c);
 //void GFX_draw_string(gcontext *ctx, s8_t *s, s16_t x, s16_t y, gcolor col);
 void GFX_draw_line(gcontext *ctx, s16_t x1, s16_t y1, s16_t x2, s16_t y2, gcolor col);
 void GFX_rect(gcontext *ctx, s16_t x, s16_t y, s16_t w, s16_t h, gcolor col);

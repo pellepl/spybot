@@ -147,6 +147,8 @@ void APP_remote_set_radar_ctrl(s8_t radar);
 void APP_remote_set_motor_ctrl(s8_t horizontal, s8_t vertical);
 // sets remotely shared camera control  vector
 void APP_remote_set_camera_ctrl(s8_t horizontal, s8_t vertical);
+// returns remotely shared state
+const app_remote *APP_remote_get(void);
 #ifdef CONFIG_SPYBOT_MASTER
 void APP_remote_load_config(void);
 void APP_remote_store_config(void);

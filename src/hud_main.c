@@ -301,5 +301,17 @@ void hud_paint_main(gcontext *ctx, bool init) {
       }
 
   }
+
+  // crosshair
+#define _L  16
+  {
+    GFX_draw_horizontal_line(ctx, ctx->width/2-_L, ctx->width/2+_L, ctx->height/2, COL_MIX);
+    GFX_draw_vertical_line(ctx, ctx->width/2, ctx->height/2-_L, ctx->height/2+_L, COL_MIX);
+
+    s16_t d = (-APP_remote_get()->tilt * _L) >> 7;
+    GFX_draw_horizontal_line(ctx, ctx->width/2-4, ctx->width/2+5, ctx->height/2+d, COL_MIX);
+    d = (APP_remote_get()->pan * _L) >> 7;
+    GFX_draw_vertical_line(ctx, ctx->width/2+d, ctx->height/2-4, ctx->height/2+5, COL_MIX);
+  }
 }
 

@@ -368,19 +368,20 @@ void GFX_rect(gcontext *ctx, s16_t x, s16_t y, s16_t w, s16_t h, gcolor col) {
   GFX_draw_vertical_line(ctx, x+w, y, y+h+1, col);
 }
 
-void GFX_printn(gcontext *ctx, const char *str, int len, u8_t cx, u8_t cy, gcolor c) {
-  u8_t ch;
+void GFX_printy(gcontext *ctx, const char *str, int len, u8_t cx, s16_t yy, gcolor c) {
   u8_t cw = ctx->width/8;
-  if (cy*8+8 > ctx->height) {
+  if (yy+8 > ctx->height) {
     return;
   }
 
   if (len) len++;
 
+  u8_t ch;
+
   while (cx < cw && (ch = *str++) != 0 && (len == 0 || --len > 0)) {
     if (cx >= 0) {
       u8_t y;
-      u8_t *ga = ctx->gram + cx + (cy*8*ctx->hstride);
+      u8_t *ga = ctx->gram + cx + (yy*ctx->hstride);
       switch (c) {
       case COL_SET:
         for (y = 0; y < 8; y++) {
@@ -416,6 +417,10 @@ void GFX_printn(gcontext *ctx, const char *str, int len, u8_t cx, u8_t cy, gcolo
     }
     cx++;
   }
+}
+
+void GFX_printn(gcontext *ctx, const char *str, int len, u8_t cx, u8_t cy, gcolor c) {
+  GFX_printy(ctx, str, len, cx, cy*8, c);
 }
 
 void GFX_printn_big(gcontext *ctx, const char *str, int len, u8_t cx, u8_t cy, gcolor c) {

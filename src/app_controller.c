@@ -348,7 +348,7 @@ static void app_control_setup(app_common *com, app_remote *rem, configuration_t 
 #endif
 
   // setup ui & input
-#ifdef CONFIG_SPYBOT_CONTROL
+#ifdef CONFIG_SPYBOT_CONTROLLER
   INPUT_init();
 #endif
 

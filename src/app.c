@@ -334,6 +334,11 @@ void APP_remote_set_radar_ctrl(s8_t radar) {
   remote.radar = radar;
 }
 
+const app_remote *APP_remote_get(void) {
+  return &remote;
+}
+
+
 const configuration_t *APP_cfg_get(void) {
   return &app_cfg;
 }
