@@ -75,6 +75,7 @@ static void app_control_set_remote_req(u32_t req) {
 void app_control_set_paired(bool paired) {
   if (paired) {
     app_control_set_remote_req(APP_CTRL_REMOTE_REQ_GET_CONFIG);
+    CVIDEO_set_input(INPUT_CAMERA);
   }
 }
 
@@ -353,6 +354,7 @@ static void app_control_setup(app_common *com, app_remote *rem, configuration_t 
 #endif
 
 #ifdef CONFIG_SPYBOT_VIDEO
+  CVIDEO_set_input(INPUT_GENERATED);
   HUD_init(&gctx);
   HUD_state(HUD_MAIN);
   ui_task = TASK_create(app_control_ui_task, TASK_STATIC);

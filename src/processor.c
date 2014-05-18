@@ -388,11 +388,16 @@ static void CVIDEO_config() {
   gpio_interrupt_mask_disable(PORTB, PIN8);
 
   // PA9 vid selection
-  gpio_config(PORTA, PIN9, CLK_50MHZ, OUT, AF0, PUSHPULL, NOPULL);
-  gpio_enable(PORTA, PIN9);
+  gpio_config(VID_SEL_PORT, VID_SEL_PIN, CLK_50MHZ, OUT, AF0, PUSHPULL, NOPULL);
+  if (VID_SEL_PINVAL_GEN)  {
+    gpio_disable(VID_SEL_PORT, VID_SEL_PIN);
+  } else {
+    gpio_enable(VID_SEL_PORT, VID_SEL_PIN);
+  }
   // PA8 vid gen
-  gpio_config(PORTA, PIN8, CLK_50MHZ, OUT, AF0, PUSHPULL, NOPULL);
-  gpio_disable(PORTA, PIN8);
+  gpio_config(VID_GEN_PORT, VID_GEN_PIN, CLK_50MHZ, AF, AF0, PUSHPULL, NOPULL);
+  gpio_disable(VID_GEN_PORT, VID_GEN_PIN);
+
 #endif // CONFIG_SPYBOT_VIDEO
 }
 

@@ -170,7 +170,6 @@ static int f_hud_view(int x, int y, int z, int ax, int ay, int az);
 static int f_hud_in(int i);
 
 static int f_vid_sel(char *s);
-static int f_vid_gen(int e);
 #endif
 
 static int f_comrad_init(void);
@@ -305,9 +304,6 @@ static cmd c_tbl[] = {
     },
     { .name = "vid_sel", .fn = (func) f_vid_sel,
         .help = "Select video input (cam|gen)\n"
-    },
-    { .name = "vid_gen", .fn = (func) f_vid_gen,
-        .help = "Generate video on/off\n"
     },
 #endif
 
@@ -1435,158 +1431,15 @@ static int f_vid_sel(char *s) {
     return -1;
   }
   if (0 == strcmp("cam", s)) {
-    gpio_enable(PORTA, PIN9);
+    CVIDEO_set_input(INPUT_CAMERA);
   } else if (0 == strcmp("gen", s)) {
-    gpio_disable(PORTA, PIN9);
+    CVIDEO_set_input(INPUT_GENERATED);
   } else {
     return -1;
   }
   return 0;
 }
-
-#define CCR2_VAL      336
-static int f_vid_gen(int e) {
-  if (e == 0) {
-    TIM_DeInit(TIM1);
-    TIM_Cmd(TIM1, DISABLE);
-    TIM_OC1PreloadConfig(TIM1, TIM_OCPreload_Disable);
-    NVIC_DisableIRQ(TIM1_UP_IRQn);
-    TIM_CtrlPWMOutputs(TIM1, DISABLE);
-    return 0;
-  }
-  gpio_config(PORTA, PIN8, CLK_50MHZ, AF, AF0, PUSHPULL, NOPULL);
-  TIM_Cmd(TIM1, DISABLE);
-  NVIC_DisableIRQ(TIM1_UP_IRQn);
-
-  TIM_TimeBaseInitTypeDef  TIM_TimeBaseStructure;
-  TIM_DeInit(TIM1);
-
-  TIM_TimeBaseStructure.TIM_Period = 4608;//SYS_CPU_FREQ / 15625;
-  TIM_TimeBaseStructure.TIM_Prescaler = 1-1;
-  TIM_TimeBaseStructure.TIM_ClockDivision = 0;
-  TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
-  TIM_TimeBaseStructure.TIM_RepetitionCounter = 0;
-  TIM_TimeBaseInit(TIM1, &TIM_TimeBaseStructure);
-
-  TIM_OCInitTypeDef  TIM_OCInitStructure;
-  TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
-  TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
-  TIM_OCInitStructure.TIM_Pulse = 4608/2;
-  TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_Low;
-  TIM_OCInitStructure.TIM_OCNPolarity = TIM_OCPolarity_High;
-  TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Reset;
-  TIM_OCInitStructure.TIM_OCNIdleState = TIM_OCNIdleState_Reset;
-
-  TIM_OC1Init(TIM1, &TIM_OCInitStructure);
-  TIM_OC1PreloadConfig(TIM1, TIM_OCPreload_Enable);
-
-  TIM_ARRPreloadConfig(TIM1, DISABLE);
-
-  TIM_ClearITPendingBit(TIM1,
-      TIM_IT_Update | TIM_IT_CC1 | TIM_IT_CC2 | TIM_IT_CC3 | TIM_IT_CC4 |
-      TIM_IT_COM | TIM_IT_Trigger | TIM_IT_Break);
-  TIM_ITConfig(TIM1, TIM_IT_Update, ENABLE);
-  NVIC_EnableIRQ(TIM1_UP_IRQn);
-  TIM_Cmd(TIM1, ENABLE);
-  TIM_CtrlPWMOutputs(TIM1, ENABLE);
-
-  return 0;
-}
-
-/*
- *   .word  TIM1_BRK_IRQHandler
-  .word  TIM1_UP_IRQHandler
-  .word  TIM1_TRG_COM_IRQHandler
-  .word  TIM1_CC_IRQHandler
- *
- */
-void TIM1_UP_IRQHandler(void)
-{
-  static int linecount = 0;
-  TIM_ClearITPendingBit(TIM1, TIM_IT_Update);
-  linecount++;
-
-#define US2_35 169
-#define US4_7  338
-#define USFULL 4608
-
-  if (linecount == 3 || linecount == 310) {
-    TIM_SetCompare1(TIM1, US2_35);
-  }
-
-  if (linecount == 5) {
-    TIM_SetCompare1(TIM1, US4_7);
-  }
-
-  if (linecount == 313) {
-    TIM_SetCompare1(TIM1, USFULL/2-US2_35);
-    linecount = 0;
-  }
-}
-
-/*
- * ///////////////////////////////////////////////////////////////////////////////////////
-inline void vsync_pulse()
-{
-      LEVEL_SYNC;
-      _delay_us(30);
-      LEVEL_BLACK;
-      _delay_us(2);
-}
-
-///////////////////////////////////////////////////////////////////////////////////////
-inline void equal_pulse()
-{
-      LEVEL_SYNC;
-      _delay_us(2);
-      LEVEL_BLACK;
-      _delay_us(30);
-}
-///////////////////////////////////////////////////////////////////////////////////////
-inline void hsync_pulse()
-{
-      LEVEL_SYNC;
-      _delay_us(5); //4.7us
-      LEVEL_BLACK;
-      _delay_us(7); //7.3us
-}
-
-   switch(line)
-      {
-      case 0:
-      case 1:
-      vsync_pulse();
-      vsync_pulse();
-      break;
-
-      case 2:
-      vsync_pulse();
-      equal_pulse();
-      break;
-
-      case 3:
-      case 4:
-      equal_pulse();
-      equal_pulse();
-      break;
-
-      case 310:
-      case 311:
-      equal_pulse();
-      equal_pulse();
-      break;
-
-      case 312:
-      equal_pulse();
-      vsync_pulse();
-      break;
-      default:
-      // Image scanline (not a sync line)
-
-      hsync_pulse(); // Horizontal Sy
- */
-
-#endif // CONFIG_SPYBOT_VIDEO
+#endif
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 

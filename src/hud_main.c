@@ -13,6 +13,7 @@
 #include "comm_radio.h"
 #include "app.h"
 #include "adc.h"
+#include "cvideo.h"
 
 extern unsigned const char const img_compass_bmp[2560];
 
@@ -42,6 +43,9 @@ static u8_t acc_buf_ix = 0;
 #endif
 
 static u8_t audio_buf[64];
+
+static video_input_t last_input = INPUT_GENERATED;
+static time video_loss_msg_t = 0;
 
 #include "radar_vecs.c"
 
@@ -313,5 +317,17 @@ void hud_paint_main(gcontext *ctx, bool init) {
     d = (APP_remote_get()->pan * _L) >> 7;
     GFX_draw_vertical_line(ctx, ctx->width/2+d, ctx->height/2-4, ctx->height/2+5, COL_MIX);
   }
+
+  // video input info
+  if (CVIDEO_get_input() == INPUT_GENERATED) {
+    if (last_input != INPUT_GENERATED) {
+      video_loss_msg_t = now;
+    }
+    if (now - video_loss_msg_t < 4000) {
+      GFX_printn_big(ctx, "VIDEO LOST", 10, 4, 3, COL_OVER);
+    }
+  }
+
+  last_input = CVIDEO_get_input();
 }
 

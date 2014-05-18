@@ -188,6 +188,13 @@
 #define BAT_LOAD_PIN                PIN2
 #endif
 
+/** GEN VIDEO **/
+#define VID_SEL_PORT                PORTA
+#define VID_SEL_PIN                 PIN9
+#define VID_SEL_PINVAL_GEN          0
+
+#define VID_GEN_PORT                PORTA
+#define VID_GEN_PIN                 PIN8
 
 
 /****************************************************/

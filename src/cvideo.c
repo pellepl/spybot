@@ -63,6 +63,7 @@ static struct {
   u8_t *cur_gram;
   volatile bool gram_switch;
   volatile bool gram_dblbuf;
+  video_input_t input;
 } vid;
 
 static void cvideo_disable_output(void) {
@@ -301,4 +302,92 @@ void CVIDEO_gram_double_buffer(bool enable) {
 
 void CVIDEO_gram_switch(void) {
   vid.gram_switch = TRUE;
+}
+
+video_input_t CVIDEO_get_input(void) {
+  return vid.input;
+}
+
+void CVIDEO_set_input(video_input_t input) {
+  vid.input = input;
+  if (input == INPUT_CAMERA) {
+    if (VID_SEL_PINVAL_GEN) {
+      gpio_disable(VID_SEL_PORT, VID_SEL_PIN);
+    } else {
+      gpio_enable(VID_SEL_PORT, VID_SEL_PIN);
+    }
+
+    TIM_DeInit(TIM1);
+    TIM_Cmd(TIM1, DISABLE);
+    TIM_OC1PreloadConfig(TIM1, TIM_OCPreload_Disable);
+    NVIC_DisableIRQ(TIM1_UP_IRQn);
+    TIM_CtrlPWMOutputs(TIM1, DISABLE);
+
+  } else {
+    // INPUT_GENERATED
+    if (VID_SEL_PINVAL_GEN) {
+      gpio_enable(VID_SEL_PORT, VID_SEL_PIN);
+    } else {
+      gpio_disable(VID_SEL_PORT, VID_SEL_PIN);
+    }
+
+    TIM_Cmd(TIM1, DISABLE);
+    NVIC_DisableIRQ(TIM1_UP_IRQn);
+
+    TIM_TimeBaseInitTypeDef  TIM_TimeBaseStructure;
+    TIM_DeInit(TIM1);
+
+    TIM_TimeBaseStructure.TIM_Period = 4608;//SYS_CPU_FREQ / 15625;
+    TIM_TimeBaseStructure.TIM_Prescaler = 1-1;
+    TIM_TimeBaseStructure.TIM_ClockDivision = 0;
+    TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+    TIM_TimeBaseStructure.TIM_RepetitionCounter = 0;
+    TIM_TimeBaseInit(TIM1, &TIM_TimeBaseStructure);
+
+    TIM_OCInitTypeDef  TIM_OCInitStructure;
+    TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
+    TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+    TIM_OCInitStructure.TIM_Pulse = 4608/2;
+    TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_Low;
+    TIM_OCInitStructure.TIM_OCNPolarity = TIM_OCPolarity_High;
+    TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Reset;
+    TIM_OCInitStructure.TIM_OCNIdleState = TIM_OCNIdleState_Reset;
+
+    TIM_OC1Init(TIM1, &TIM_OCInitStructure);
+    TIM_OC1PreloadConfig(TIM1, TIM_OCPreload_Enable);
+
+    TIM_ARRPreloadConfig(TIM1, DISABLE);
+
+    TIM_ClearITPendingBit(TIM1,
+        TIM_IT_Update | TIM_IT_CC1 | TIM_IT_CC2 | TIM_IT_CC3 | TIM_IT_CC4 |
+        TIM_IT_COM | TIM_IT_Trigger | TIM_IT_Break);
+    TIM_ITConfig(TIM1, TIM_IT_Update, ENABLE);
+    NVIC_EnableIRQ(TIM1_UP_IRQn);
+
+    TIM_Cmd(TIM1, ENABLE);
+    TIM_CtrlPWMOutputs(TIM1, ENABLE);
+  }
+}
+
+void TIM1_UP_IRQHandler(void) {
+  static int linecount = 0;
+  TIM_ClearITPendingBit(TIM1, TIM_IT_Update);
+  linecount++;
+
+#define US2_35 169
+#define US4_7  338
+#define USFULL 4608
+
+  if (linecount == 3 || linecount == 310) {
+    TIM_SetCompare1(TIM1, US2_35);
+  }
+
+  if (linecount == 5) {
+    TIM_SetCompare1(TIM1, US4_7);
+  }
+
+  if (linecount == 313) {
+    TIM_SetCompare1(TIM1, USFULL/2-US2_35);
+    linecount = 0;
+  }
 }

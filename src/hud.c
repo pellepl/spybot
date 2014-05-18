@@ -18,6 +18,8 @@ static struct {
   gcontext *ctx;
   hud_state state;
   hud_state cstate;
+  time last_vbl_check;
+  u32_t vbl_count;
 } hud;
 
 void HUD_state(hud_state state) {
@@ -43,7 +45,26 @@ void HUD_init(gcontext *ctx) {
 }
 
 void HUD_paint(void) {
+  time t = SYS_get_time_ms();
   bool init = hud.state != hud.cstate;
+
+  // check we get vbl from cvideo
+  if (hud.last_vbl_check == 0) {
+    hud.last_vbl_check = t;
+  } else {
+    if (t - hud.last_vbl_check >= 1000) {
+      // check each ~sec
+      hud.last_vbl_check = t;
+      if (hud.vbl_count < 25) {
+        // must at least get 25 vbls per second
+        // else switch to generated input
+        CVIDEO_set_input(INPUT_GENERATED);
+        DBG(D_APP, D_WARN, "lost camera input, switch to generated\n");
+      }
+      hud.vbl_count = 0;
+    }
+  }
+
   if (hud.state == HUD_MAIN) {
     GFX_fill(hud.ctx, 0, 0, hud.ctx->width, hud.ctx->height, COL_RESET);
     hud_paint_main(hud.ctx, init);
@@ -65,4 +86,5 @@ hud_state HUD_get_state(void) {
 }
 
 void HUD_vbl(void) {
+  hud.vbl_count++;
 }
