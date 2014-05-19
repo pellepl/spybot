@@ -1106,7 +1106,7 @@ static int f_ioexp_init(void) {
       STMPE_GPIO2 | STMPE_GPIO3 | STMPE_GPIO4 | STMPE_GPIO5 | STMPE_GPIO6 | STMPE_GPIO7, // detect rising
       STMPE_GPIO2 | STMPE_GPIO3 | STMPE_GPIO4 | STMPE_GPIO5 | STMPE_GPIO6 | STMPE_GPIO7, // detect falling
       STMPE_ADC_CLK_3_25MHZ,
-      STMPE_ADC_TIM_64,
+      STMPE_ADC_TIM_80,
       STMPE_ADC_RES_12B,
       STMPE_ADC_REF_INT,
       TRUE, // temp enable

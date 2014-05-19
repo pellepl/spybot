@@ -626,7 +626,7 @@ int stmpe811_adc_status(stmpe811_dev *dev) {
 int stmpe811_adc_read(stmpe811_dev *dev, stmpe811_adc_e adc_ch) {
   STMPE_FUNC_ENTRY;
   dev->state = STMPE_ST_ADC_READ;
-#if 1
+
   switch (adc_ch) {
   case STMPE_ADC_CHAN0:
     dev->buf[0] = STMPE_REG_ADC_DATA_CH0;
@@ -653,34 +653,7 @@ int stmpe811_adc_read(stmpe811_dev *dev, stmpe811_adc_e adc_ch) {
     dev->buf[0] = STMPE_REG_ADC_DATA_CH7;
     break;
   }
-#else
-  switch (adc_ch) {
-  case STMPE_ADC_CHAN0:
-    dev->buf[0] = STMPE_REG_ADC_DATA_CH0;
-    break;
-  case STMPE_ADC_CHAN1:
-    dev->buf[0] = STMPE_REG_ADC_DATA_CH1;
-    break;
-  case STMPE_ADC_CHAN2:
-    dev->buf[0] = STMPE_REG_ADC_DATA_CH2;
-    break;
-  case STMPE_ADC_CHAN3:
-    dev->buf[0] = STMPE_REG_ADC_DATA_CH3;
-    break;
-  case STMPE_ADC_CHAN4:
-    dev->buf[0] = STMPE_REG_ADC_DATA_CH4;
-    break;
-  case STMPE_ADC_CHAN5:
-    dev->buf[0] = STMPE_REG_ADC_DATA_CH5;
-    break;
-  case STMPE_ADC_CHAN6:
-    dev->buf[0] = STMPE_REG_ADC_DATA_CH6;
-    break;
-  case STMPE_ADC_CHAN7:
-    dev->buf[0] = STMPE_REG_ADC_DATA_CH7;
-    break;
-  }
-#endif
+
   I2C_SEQ_TX_C(dev->seq[0], &dev->buf[0], 1);
   I2C_SEQ_RX_STOP_C(dev->seq[1], &dev->buf[0], 2);
   res = I2C_DEV_sequence(&dev->i2c_stmpe, &dev->seq[0], 2);
@@ -704,7 +677,7 @@ int stmpe811_temp_config(stmpe811_dev *dev, bool enable, stmpe811_temp_cfg_mode_
   dev->arg = cfg;
   dev->buf[0] = STMPE_REG_TEMP_CTRL;
   I2C_SEQ_TX_C(dev->seq[0], &dev->buf[0], 1);
-  I2C_SEQ_RX_STOP_C(dev->seq[1], &dev->buf[0], 1);
+  I2C_SEQ_RX_STOP_C(dev->seq[1], &dev->buf[1], 1);
   res = I2C_DEV_sequence(&dev->i2c_stmpe, &dev->seq[0], 2);
   STMPE_FUNC_EXIT;
 }
@@ -728,7 +701,7 @@ int stmpe811_temp_config_threshold(stmpe811_dev *dev, bool enable, stmpe811_temp
   dev->buf[2] = cfg;
   dev->buf[0] = STMPE_REG_TEMP_CTRL;
   I2C_SEQ_TX_C(dev->seq[0], &dev->buf[0], 1);
-  I2C_SEQ_RX_STOP_C(dev->seq[1], &dev->buf[0], 1);
+  I2C_SEQ_RX_STOP_C(dev->seq[1], &dev->buf[1], 1);
   res = I2C_DEV_sequence(&dev->i2c_stmpe, &dev->seq[0], 2);
   STMPE_FUNC_EXIT;
 }
@@ -742,7 +715,7 @@ int stmpe811_temp_acquire(stmpe811_dev *dev, bool acquire) {
   dev->arg = cfg;
   dev->buf[0] = STMPE_REG_TEMP_CTRL;
   I2C_SEQ_TX_C(dev->seq[0], &dev->buf[0], 1);
-  I2C_SEQ_RX_STOP_C(dev->seq[1], &dev->buf[0], 1);
+  I2C_SEQ_RX_STOP_C(dev->seq[1], &dev->buf[1], 1);
   res = I2C_DEV_sequence(&dev->i2c_stmpe, &dev->seq[0], 2);
   STMPE_FUNC_EXIT;
 }
@@ -751,7 +724,7 @@ int stmpe811_temp_acquire(stmpe811_dev *dev, bool acquire) {
 int stmpe811_temp_read(stmpe811_dev *dev) {
   STMPE_FUNC_ENTRY;
   dev->state = STMPE_ST_TEMP_READ;
-  dev->buf[0] = STMPE_REG_TEMP_DATA;
+  dev->buf[0] = STMPE_REG_TEMP_DATA_H;
   I2C_SEQ_TX_C(dev->seq[0], &dev->buf[0], 1);
   I2C_SEQ_RX_STOP_C(dev->seq[1], &dev->buf[0], 2);
   res = I2C_DEV_sequence(&dev->i2c_stmpe, &dev->seq[0], 2);

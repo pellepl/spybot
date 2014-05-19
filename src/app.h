@@ -12,6 +12,9 @@
 #include "comm.h"
 #include "configuration.h"
 #include "spybot_protocol.h"
+#ifdef CONFIG_I2C
+#include "stmpe811_handler.h"
+#endif
 
 #define SPYBOT_VERSION        0x00010000
 
@@ -101,6 +104,7 @@ typedef struct app_impl_s {
 
 #ifdef CONFIG_I2C
 extern task_mutex i2c_mutex;
+extern stmpe811_handler stmpe_handler;
 #endif
 
 #define APP_JOYSTICK_CONTROL_MOTOR    TRUE

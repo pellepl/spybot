@@ -58,7 +58,8 @@ enum {
   STMPE_REG_TSC_I_DRIVE   = 0x58,  // 8
   STMPE_REG_TSC_SHIELD    = 0x59,  // 8
   STMPE_REG_TEMP_CTRL     = 0x60,  // 8
-  STMPE_REG_TEMP_DATA     = 0x61,  // 16 // todo checkup might be 61/8bit
+  STMPE_REG_TEMP_DATA_H   = 0x61,  // 16 // todo checkup might be 61/8bit
+  STMPE_REG_TEMP_DATA_L   = 0x62,  // 16 // todo checkup might be 61/8bit
   STMPE_REG_TEMP_TH       = 0x63,  // 16 // todo checkup might be 62/8bit
 } stmpe811_reg;
 
