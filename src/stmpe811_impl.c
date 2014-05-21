@@ -18,7 +18,7 @@ static struct {
   stmpe811_handler handler;
   volatile u32_t req_mask;
   volatile bool irq_task_en;
-  task *irq_task;
+  task *task_irq;
   u8_t gpio_set;
   u8_t gpio_reset;
   u8_t adc_chan;
@@ -26,6 +26,8 @@ static struct {
   u16_t val_temp;
 } stmpe;
 
+static volatile bool init = FALSE;
+static bool pre_state;
 
 static void stmpe_task_config(u32_t a, void *b) {
   if (!TASK_mutex_lock(&i2c_mutex)) {
@@ -40,7 +42,7 @@ static void stmpe_task_config(u32_t a, void *b) {
       STMPE_GPIO_VBAT_EN, // direction
       0, // default output
       TRUE, // interrupt
-      STMPE_INT_POLARITY_ACTIVE_LOW_FALLING, STMPE_INT_TYPE_EDGE, // interrupt config
+      STMPE_INT_POLARITY_ACTIVE_LOW_FALLING, STMPE_INT_TYPE_LEVEL, // interrupt config
       STMPE_INT_GPIO | STMPE_INT_ADC | STMPE_INT_TEMP_SENS, // interrupt enable
       STMPE_GPIO2 | STMPE_GPIO3 | STMPE_GPIO4 |  STMPE_GPIO5 | STMPE_GPIO6 | STMPE_GPIO7, // gpio interrupt mask
       STMPE_GPIO_ADC_VBAT, // adc interrupt mask
@@ -128,19 +130,19 @@ static void stmpe_exe_req(void) {
 }
 
 static void stmpe_task_irq(u32_t a, void *b) {
-  stmpe.irq_task_en = FALSE;
   if (!TASK_mutex_lock(&i2c_mutex)) {
     print("stmpe irq mutex locked\n");
     return;
   }
   print("stmpe irq mutex acquired\n");
   stmpe811_handler_interrupt_cb(&stmpe.handler);
+  stmpe.irq_task_en = FALSE;
 }
 
 static void stmpe_irq(gpio_pin pin) {
   if (!stmpe.irq_task_en) {
     stmpe.irq_task_en = TRUE;
-    TASK_run(stmpe.irq_task, 0, NULL);
+    TASK_run(stmpe.task_irq, 0, NULL);
   }
 }
 
@@ -187,12 +189,29 @@ static void stmpe_err_cb(stmpe811_handler_state state, int err) {
   exit_critical();
 }
 
+void STMPE_timer(void) {
+  if (!init) return;
+  bool state = gpio_get(PORTC, PIN13) != 0;
+  //if (state != pre_state) print("\npc13:%i\n", state);
+  if (pre_state && !state) {
+    stmpe_irq(PIN13);
+  }
+  pre_state = state;
+}
+
 void STMPE_init(void) {
   memset(&stmpe, 0x00, sizeof(stmpe));
   stmpe811_handler_open(&stmpe.handler, _I2C_BUS(0), stmpe_gpio_cb, stmpe_adc_cb, stmpe_temp_cb, stmpe_err_cb);
   gpio_config(PORTC, PIN13, CLK_50MHZ, IN, AF0, OPENDRAIN, NOPULL);
-  gpio_interrupt_config(PORTC, PIN13, stmpe_irq, FLANK_DOWN);
-  stmpe.irq_task = TASK_create(stmpe_task_irq, TASK_STATIC);
+  // cannot do this, will interfere with high prio hsync signal on controller
+  //gpio_interrupt_config(PORTC, PIN13, stmpe_irq, FLANK_DOWN);
+  //gpio_interrupt_mask_enable(PORTC, PIN13, TRUE);
+  // instead, poll in timer
+  pre_state = gpio_get(PORTC, PIN13) != 0;
+  stmpe.task_irq = TASK_create(stmpe_task_irq, TASK_STATIC);
+  ASSERT(stmpe.task_irq);
+
+  init = TRUE;
   task *t = TASK_create(stmpe_task_config, 0);
   ASSERT(t);
   TASK_run(t, 0, NULL);

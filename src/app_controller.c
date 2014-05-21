@@ -199,12 +199,12 @@ static void app_control_init_hud(void) {
 // diagnostics ui
 
 static void app_control_diag_task(u32_t phase, void *b) {
-  static bool diag_press_notice = FALSE;
   static u32_t joy_read = 0;
   static u32_t last_joy_read = 0;
   static u16_t old_h=0, old_v=0;
   static u16_t loop;
   static u8_t audio_buf;
+  static u8_t audio_hi, audio_lo;
 
   switch (phase) {
 
@@ -241,7 +241,7 @@ static void app_control_diag_task(u32_t phase, void *b) {
         (0xfff
         * 1410) // 1.41 * 1000
         / vref;
-    dprint(" CPU VOLTAGE %i.%03iV\n", (voltage_m_1000 / 1000), (voltage_m_1000 % 1000));
+    dprint("   CPU VOLTAGE %i.%03iV\n", (voltage_m_1000 / 1000), (voltage_m_1000 % 1000));
     if (voltage_m_1000 < 3300) {
       dprint("!WARNING: VOLTAGE LOW\n");
     }
@@ -256,7 +256,7 @@ static void app_control_diag_task(u32_t phase, void *b) {
         (0xfff
         * 1410) // 1.41 * 1000
         / vref;
-    dprint(" CPU VOLTAGE %i.%03iV\n", (voltage_m_1000 / 1000), (voltage_m_1000 % 1000));
+    dprint("   CPU VOLTAGE %i.%03iV\n", (voltage_m_1000 / 1000), (voltage_m_1000 % 1000));
     if (voltage_m_1000 < 3300) {
       dprint("!WARNING: VOLTAGE LOW\n");
     }
@@ -286,7 +286,14 @@ static void app_control_diag_task(u32_t phase, void *b) {
     break;
   }
   case 4: {
-    dprint("   RAW ADC VAL %04x\n", STMPE_adc_value());
+    u32_t val = STMPE_adc_value();
+    u32_t v_1000 = val * 7300 / 0xab0;
+    dprint("   BATT VOLTAGE %i.%03i V\n", v_1000 / 1000, v_1000 % 1000);
+    if (v_1000 == 0) {
+      dprint("!WARNING: STMPE811 BROKEN\n");
+    } else if (v_1000 < 5250) {
+      dprint("!WARNING: BATTERY LOW\n");
+    }
     dprint(" DISABLE LOAD\n");
     gpio_disable(BAT_LOAD_PORT, BAT_LOAD_PIN);
     STMPE_req_gpio_set(0, STMPE_GPIO_VBAT_EN);
@@ -369,6 +376,8 @@ static void app_control_diag_task(u32_t phase, void *b) {
   case 9: {
     if (loop == 0) {
       dprint(" READ RAW AUDIO..\n");
+      audio_hi = 0;
+      audio_lo = 0xff;
     }
     loop++;
     ADC_sample_sound(NULL, &audio_buf, 1);
@@ -376,6 +385,10 @@ static void app_control_diag_task(u32_t phase, void *b) {
     memset(level, '=', sizeof(level));
     level[audio_buf>>1] = 0;
     dprint_sl("  %3i %s", audio_buf, level);
+    if (loop > 1) {
+      audio_hi = MAX(audio_hi, audio_buf);
+      audio_lo = MIN(audio_lo, audio_buf);
+    }
 
     task *t = TASK_create(app_control_diag_task, 0);
     ASSERT(t);
@@ -383,6 +396,7 @@ static void app_control_diag_task(u32_t phase, void *b) {
       TASK_start_timer(t, &diag_timer, phase, 0, 20, 0, "diag");
     } else {
       TASK_start_timer(t, &diag_timer, phase+1, 0, 100, 0, "diag");
+      dprint("   lo:%2i  hi:%2i\n", audio_lo, audio_hi);
     }
     break;
   }
@@ -415,11 +429,17 @@ static void app_control_diag_task(u32_t phase, void *b) {
     } else {
       task *t = TASK_create(app_control_diag_task, 0);
       ASSERT(t);
-      TASK_start_timer(t, &diag_timer, -1, 0, 500, 0, "diag");
-      if (!diag_press_notice) {
-        dprint(" LEAVE DIAG BY PRESS\n");
-        diag_press_notice = TRUE;
-      }
+      loop++;
+      TASK_start_timer(t, &diag_timer, -1, 0, 333, 0, "diag");
+      u32_t ti = loop % 3;
+      if (ti == 0)
+        dprint_sl(" LEAVE DIAG BY PRESS..");
+      else if (ti == 2)
+        dprint_sl(" LEAVE DIAG BY PRESS.");
+      else
+        dprint_sl(" LEAVE DIAG BY PRESS");
+
+
     }
     break;
   }

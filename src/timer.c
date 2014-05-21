@@ -11,6 +11,7 @@
 #include "miniutils.h"
 #include "uart_driver.h"
 #include "cli.h"
+#include "stmpe811_impl.h"
 
 void TIMER_irq() {
   if (TIM_GetITStatus(STM32_SYSTEM_TIMER, TIM_IT_Update) != RESET) {
@@ -22,5 +23,6 @@ void TIMER_irq() {
     }
     TASK_timer();
     CLI_timer();
+    STMPE_timer();
   }
 }

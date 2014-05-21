@@ -17,5 +17,6 @@ void STMPE_req_read_adc(u8_t adc);
 void STMPE_req_read_temp(void);
 u16_t STMPE_adc_value(void);
 u16_t STMPE_temp_value(void);
+void STMPE_timer(void);
 
 #endif /* STMPE811_IMPL_H_ */
