@@ -187,17 +187,12 @@ static s16_t old_angle = 0;
 static s16_t old_dir = 0;
 static void app_rover_radar_cb(u32_t echo_ticks) {
   u8_t radar_log_dist;
-#if 1
   if (echo_ticks == (u32_t)(~0) ||
       echo_ticks >= (1<<CONFIG_SPYBOT_RADAR_SENSITIVITY)) {
     radar_log_dist = 255;
   } else {
     radar_log_dist = echo_ticks >> (CONFIG_SPYBOT_RADAR_SENSITIVITY-8);
   }
-#else
-  // todo for test only
-  radar_log_dist = (SYS_get_time_ms() >> 7) & 0xff;
-#endif
 
   if (old_dir == 0) {
     return;
@@ -480,6 +475,15 @@ static void app_rover_setup(app_common *com, app_remote *rem, configuration_t *c
   common = com;
   remote = rem;
   app_cfg = cnf;
+
+  u16_t vref;
+  (void)ADC_sample_vref_sync(&vref);
+  // vref corresponds to 1.32-1.41-1.50V
+  u32_t voltage_m_1000 =
+      (0xfff
+      * 1410) // 1.41 * 1000
+      / vref;
+  print("chip voltage: %i.%03iV\n", (voltage_m_1000 / 1000), (voltage_m_1000 % 1000));
 
 #ifdef CONFIG_SPYBOT_HCSR
   RANGE_SENS_init(app_rover_radar_cb);

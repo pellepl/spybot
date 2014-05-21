@@ -62,6 +62,23 @@ void ADC_init() {
   while(ADC_GetCalibrationStatus(ADC2));
 }
 
+s32_t ADC_sample_vref_sync(u16_t *vref) {
+  if (adc1.state != ADC_IDLE) {
+    return ADC_ERR_BUSY;
+  }
+  ADC_ITConfig(ADC1, ADC_IT_EOC, DISABLE);
+  ADC_TempSensorVrefintCmd(ENABLE);
+  ADC_RegularChannelConfig(ADC1, ADC_Channel_17, 1, ADC_SampleTime_41Cycles5);
+  ADC_SoftwareStartConvCmd(ADC1, ENABLE);
+  while (!ADC_GetFlagStatus(ADC1, ADC_FLAG_EOC));
+  *vref = ADC_GetConversionValue(ADC1);
+  ADC_ClearFlag(ADC1, ADC_FLAG_EOC);
+  ADC_ClearITPendingBit(ADC1, ADC_IT_EOC);
+  ADC_TempSensorVrefintCmd(DISABLE);
+  ADC_ITConfig(ADC1, ADC_IT_EOC, ENABLE);
+  return ADC_OK;
+}
+
 s32_t ADC_sample_joystick(adc_cb cb) {
   if (adc2.state != ADC_IDLE) {
     return ADC_ERR_BUSY;
@@ -98,40 +115,44 @@ void ADC_irq(void) {
   // audio
   if (ADC_GetITStatus(ADC1, ADC_IT_EOC) != RESET) {
     ADC_ClearITPendingBit(ADC1, ADC_IT_EOC);
-    u16_t raw = ADC_GetConversionValue(ADC1);
-    _sum_samp += raw;
-    if (++_sub_samp >= AUDIO_SUBSAMPLES) {
-      _sub_samp = 0;
-      u16_t val = _sum_samp / AUDIO_SUBSAMPLES;
-      _sum_samp = 0;
-      if (!adc1.trig_upper) {
-        if (val > 2048+256) {
-          adc1.trig_upper = TRUE;
-          if (adc1.ix >= adc1.len / 4) {
-            memcpy(&adc1.buf[0], &adc1.buf[adc1.ix - adc1.len / 4],  (adc1.len / 4)-1);
-            adc1.ix = adc1.len / 4;
-          }
-        }
-      } else {
-        if (!adc1.trig_lower) {
-          if (val < 2048-256) {
-            adc1.trig_lower = TRUE;
-            if (adc1.ix >= adc1.len / 2) {
-              memcpy(&adc1.buf[0], &adc1.buf[adc1.ix - adc1.len / 2],  (adc1.len / 2)-1);
-              adc1.ix = adc1.len / 2;
+    if (adc1.state == ADC_AUDIO) {
+      u16_t raw = ADC_GetConversionValue(ADC1);
+      _sum_samp += raw;
+      if (++_sub_samp >= AUDIO_SUBSAMPLES) {
+        _sub_samp = 0;
+        u16_t val = _sum_samp / AUDIO_SUBSAMPLES;
+        _sum_samp = 0;
+        if (adc1.len > 2) {
+          if (!adc1.trig_upper) {
+            if (val > 2048+256) {
+              adc1.trig_upper = TRUE;
+              if (adc1.ix >= adc1.len / 4) {
+                memcpy(&adc1.buf[0], &adc1.buf[adc1.ix - adc1.len / 4],  (adc1.len / 4)-1);
+                adc1.ix = adc1.len / 4;
+              }
+            }
+          } else {
+            if (!adc1.trig_lower) {
+              if (val < 2048-256) {
+                adc1.trig_lower = TRUE;
+                if (adc1.ix >= adc1.len / 2) {
+                  memcpy(&adc1.buf[0], &adc1.buf[adc1.ix - adc1.len / 2],  (adc1.len / 2)-1);
+                  adc1.ix = adc1.len / 2;
+                }
+              }
             }
           }
         }
-      }
-      adc1.buf[adc1.ix++] = (val >> (4+3));
+        adc1.buf[adc1.ix++] = (val >> (4+3));
 
-    }
-    if (adc1.ix < adc1.len) {
-      ADC_SoftwareStartConvCmd(ADC1, ENABLE);
-    } else {
-      adc1.state = ADC_IDLE;
-      if (adc1.adc_finished_cb) {
-        adc1.adc_finished_cb(0,0);
+      }
+      if (adc1.ix < adc1.len) {
+        ADC_SoftwareStartConvCmd(ADC1, ENABLE);
+      } else {
+        adc1.state = ADC_IDLE;
+        if (adc1.adc_finished_cb) {
+          adc1.adc_finished_cb(0,0);
+        }
       }
     }
   }

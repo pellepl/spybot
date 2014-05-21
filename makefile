@@ -144,6 +144,7 @@ INC			+= -I./${sourcedir}
 include ${CONFIG_MAKE}
 
 # extra cflags
+CONFIG_SPYBOT_ADC = 1
 
 ifeq ($(CONFIG_SPYBOT_APP_MASTER),1)
 FLAGS += -DCONFIG_SPYBOT_APP_MASTER
@@ -167,7 +168,6 @@ ifeq ($(CONFIG_SPYBOT_VIDEO),1)
 FLAGS += -DCONFIG_SPYBOT_VIDEO
 endif
 ifeq ($(CONFIG_SPYBOT_JOYSTICK),1)
-CONFIG_SPYBOT_ADC = 1
 CONFIG_SPYBOT_INPUT = 1
 FLAGS += -DCONFIG_SPYBOT_JOYSTICK
 endif
@@ -203,6 +203,7 @@ CFILES		+= comm_radio.c
 CFILES		+= led.c
 CFILES		+= stmpe811_driver.c
 CFILES		+= stmpe811_handler.c
+CFILES		+= stmpe811_impl.c
 
 CFILES		+= app.c
 

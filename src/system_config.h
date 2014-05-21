@@ -196,6 +196,15 @@
 #define VID_GEN_PORT                PORTA
 #define VID_GEN_PIN                 PIN8
 
+/** JOYSTICK **/
+#define JOY_BUTT_PORT               PORTB
+#define JOY_BUTT_PIN                PIN7
+
+/** STMPE811 **/
+#define STMPE_ADC_VBAT              STMPE_ADC0
+#define STMPE_GPIO_ADC_VBAT         STMPE_GPIO_ADC0
+#define STMPE_GPIO_VBAT_EN          STMPE_GPIO1
+
 
 /****************************************************/
 /******** Application build time configuration ******/
@@ -247,13 +256,13 @@ typedef u16_t system_counter_type;
 /** TASK KERNEL **/
 #define CONFIG_TASK_POOL 32
 //#define CONFIG_TASK_NONCRITICAL_TIMER
-#define CONFIG_TASKQ_DBG_CRITICAL
+//#define CONFIG_TASKQ_DBG_CRITICAL
 
 /** APP **/
 
-#ifndef SECONDARY
+//#ifndef SECONDARY
 #define CONFIG_ADC
-#endif
+//#endif
 
 
 /** MOTOR **/

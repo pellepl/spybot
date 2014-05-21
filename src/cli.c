@@ -1079,7 +1079,8 @@ static void ioexp_adc_cb(u8_t adc, u16_t val) {
 }
 
 static void ioexp_temp_cb(u16_t val) {
-  print("ioexp temp irq temp:%04x\n", val);
+  // assume 3.3V (Vio * val) / 7.51
+  print("ioexp temp irq temp:%04x (%i celsius)\n", val, ((s32_t)val * 330) / 751);
 }
 
 static void ioexp_err_cb(stmpe811_handler_state state, int err) {

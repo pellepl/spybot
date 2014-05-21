@@ -23,6 +23,7 @@ typedef enum {
 void HUD_init(gcontext *ctx);
 void HUD_paint(void);
 void HUD_dbg_print(gcontext *ctx, char *str);
+void HUD_dbg_print_same_line(gcontext *ctx, char *str);
 void HUD_state(hud_state state);
 void HUD_vbl(void);
 void HUD_input(input_type i, bool change);

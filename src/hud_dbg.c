@@ -60,3 +60,9 @@ void HUD_dbg_print(gcontext *ctx, char *str) {
     }
   }
 }
+
+void HUD_dbg_print_same_line(gcontext *ctx, char *str) {
+  int len = strlen(str);
+  GFX_fill(ctx, 0, dhud.dbg_cy * 8, ctx->width, 8, COL_RESET);
+  GFX_printn(ctx, str, MIN(ctx->width / 8, len), 0, dhud.dbg_cy, COL_OVER);
+}

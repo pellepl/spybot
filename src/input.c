@@ -40,7 +40,7 @@ static void input_main(input_type in, bool change) {
 
 void INPUT_init(void) {
   // joystick button
-  gpio_config_in(PORTB, PIN7, CLK_2MHZ);
+  gpio_config_in(JOY_BUTT_PORT, JOY_BUTT_PIN, CLK_2MHZ);
   // TODO
   // button a
 //  gpio_config_in(PORTB, PIN9, CLK_2MHZ);
@@ -53,7 +53,7 @@ void INPUT_init(void) {
 
 void INPUT_read(u16_t joystick_v, u16_t joystick_h) {
   input_type new_input = IN_IDLE;
-  if (!gpio_get(PORTB, PIN7)) {
+  if (!gpio_get(JOY_BUTT_PORT, JOY_BUTT_PIN)) {
     new_input |= IN_PRESS;
   }
   if (joystick_v > ADC_LEVEL_HIGH) {

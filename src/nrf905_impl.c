@@ -177,6 +177,10 @@ void NRF905_IMPL_read_conf(void) {
   if (res != NRF905_OK) DBG(D_RADIO, D_WARN, "nrf read conf %i\n", res);
 }
 
+const nrf905_config *NRF905_IMPL_get_config(void) {
+  return &radio.config;
+}
+
 int NRF905_IMPL_conf(nrf905_config *c, bool force) {
   nrf905_config spybot_conf;
   if (c == NULL) {

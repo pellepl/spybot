@@ -33,7 +33,6 @@ u8_t const REPLY_DBG[] = {ACK_DBG};
 
 #ifdef CONFIG_I2C
 task_mutex i2c_mutex = TASK_MUTEX_INIT;
-stmpe811_handler stmpe_handler;
 #endif
 
 

@@ -104,7 +104,6 @@ typedef struct app_impl_s {
 
 #ifdef CONFIG_I2C
 extern task_mutex i2c_mutex;
-extern stmpe811_handler stmpe_handler;
 #endif
 
 #define APP_JOYSTICK_CONTROL_MOTOR    TRUE

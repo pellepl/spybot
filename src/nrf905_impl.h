@@ -21,6 +21,7 @@ typedef void (*nrf905_err)(nrf905_state state, int res);
 
 void NRF905_IMPL_init(nrf905_rx rx_cb, nrf905_tx tx_cb, nrf905_cfg cfg_cb, nrf905_err err_cb);
 void NRF905_IMPL_read_conf(void);
+const nrf905_config *NRF905_IMPL_get_config(void);
 int NRF905_IMPL_conf(nrf905_config *c, bool force);
 int NRF905_IMPL_conf_tx_addr(u8_t *addr, bool force);
 int NRF905_IMPL_conf_channel(u16_t channel_freq, bool force);
