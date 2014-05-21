@@ -12,6 +12,10 @@
 #include "spybot_protocol.h"
 #include "miniutils.h"
 
+#ifdef CONFIG_ADC
+#include "adc.h"
+#endif
+
 #ifdef CONFIG_I2C
 #include "lsm303_driver.h"
 #include "m24m01_driver.h"

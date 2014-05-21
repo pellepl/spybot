@@ -152,7 +152,7 @@ void APP_remote_set_motor_ctrl(s8_t horizontal, s8_t vertical);
 void APP_remote_set_camera_ctrl(s8_t horizontal, s8_t vertical);
 // returns remotely shared state
 const app_remote *APP_remote_get(void);
-#ifdef CONFIG_SPYBOT_MASTER
+#ifdef CONFIG_SPYBOT_APP_MASTER
 void APP_remote_load_config(void);
 void APP_remote_store_config(void);
 void APP_remote_update_config(spybot_cfg cfg, s16_t val, bool urgent);

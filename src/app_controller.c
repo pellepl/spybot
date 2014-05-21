@@ -166,7 +166,7 @@ void APP_get_joystick_reading(s8_t *hori, s8_t *vert) {
 
 #ifdef CONFIG_SPYBOT_VIDEO
 static void app_control_ui_task(u32_t a, void *b) {
-  APP_remote_set_motor_ctrl(0, 0);
+  APP_remote_set_motor_ctrl(0, 0); // reset until someone says otherwise
 #ifdef CONFIG_SPYBOT_JOYSTICK
   ADC_sample_joystick(app_control_adc_cb);
 #endif // CONFIG_SPYBOT_JOYSTICK
@@ -186,14 +186,6 @@ static void app_control_ui_task(u32_t a, void *b) {
   }
 #endif // CONFIG_SPYBOT_JOYSTICK
 }
-
-
-static void app_control_init_hud(void) {
-  HUD_state(HUD_MAIN);
-  ui_task = TASK_create(app_control_ui_task, TASK_STATIC);
-  TASK_start_timer(ui_task, &ui_timer, 0, 0, 0, 35, "ui_upd");
-}
-
 #endif // CONFIG_SPYBOT_VIDEO
 
 // diagnostics ui
@@ -346,7 +338,6 @@ static void app_control_diag_task(u32_t phase, void *b) {
 
   case 7: {
     dprint(" READ RAW JOYSTICK..\n");
-    ADC_sample_joystick(app_control_adc_cb);
 
     task *t = TASK_create(app_control_diag_task, 0);
     ASSERT(t);
@@ -368,7 +359,6 @@ static void app_control_diag_task(u32_t phase, void *b) {
           ((joy_read-last_joy_read < 20) && joy_read < 500) ? phase : (phase+1), 0, 100, 0, "diag");
       loop = 0;
     }
-    ADC_sample_joystick(app_control_adc_cb);
     joy_read++;
     break;
   }
@@ -415,6 +405,7 @@ static void app_control_diag_task(u32_t phase, void *b) {
     task *t = TASK_create(app_control_diag_task, 0);
     ASSERT(t);
     TASK_start_timer(t, &diag_timer, phase+1, 0, 1000, 0, "diag");
+    loop = 0;
     break;
   }
 
@@ -425,8 +416,10 @@ static void app_control_diag_task(u32_t phase, void *b) {
       if (APP_pair_status() == PAIRING_OK) {
         CVIDEO_set_input(INPUT_CAMERA);
       }
-      app_control_init_hud();
+      HUD_state(HUD_MAIN);
     } else {
+      if (loop == 0) dprint(" DIAGNOSIS FINISHED\n");
+
       task *t = TASK_create(app_control_diag_task, 0);
       ASSERT(t);
       loop++;
@@ -446,7 +439,7 @@ static void app_control_diag_task(u32_t phase, void *b) {
   }
 }
 
-static void app_control_init_diagnostics(void) {
+static void app_control_start_diagnostics(void) {
   diagnostics = TRUE;
   task *t = TASK_create(app_control_diag_task, 0);
   ASSERT(t);
@@ -662,10 +655,13 @@ static void app_control_setup(app_common *com, app_remote *rem, configuration_t 
 #ifdef CONFIG_SPYBOT_VIDEO
   CVIDEO_set_input(INPUT_GENERATED);
   HUD_init(&gctx);
+  ui_task = TASK_create(app_control_ui_task, TASK_STATIC);
+  TASK_start_timer(ui_task, &ui_timer, 0, 0, 0, 35, "ui_upd");
+
   if (!gpio_get(JOY_BUTT_PORT, JOY_BUTT_PIN)) {
-    app_control_init_diagnostics();
+    app_control_start_diagnostics();
   } else {
-    app_control_init_hud();
+    HUD_state(HUD_MAIN);
   }
 #endif
 

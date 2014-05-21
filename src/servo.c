@@ -80,6 +80,8 @@ static s16_t servo_get_adjust(servo_out servo) {
     case SERVO_RADAR:
       adj = APP_cfg_get_val(CFG_RADAR_ADJUST);
       break;
+    default:
+      break;
   }
   return adj;
 }

@@ -746,7 +746,7 @@ static int f_dump_trace() {
 }
 
 static int f_memfind(int hex) {
-  u8_t *addr = SRAM_BASE;
+  u8_t *addr = (u8_t*)SRAM_BASE;
   int i;
   print("finding 0x%08x...\n", hex);
   for (i = 0; i < 20*1024 - 4; i++) {

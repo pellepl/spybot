@@ -25,5 +25,7 @@
 #define CONFIG_SPI_DEVICE
 #define CONFIG_I2C
 #define CONFIG_I2C_DEVICE
+#define CONFIG_M24M01
+#define CONFIG_STMPE811
 #endif
 #endif
