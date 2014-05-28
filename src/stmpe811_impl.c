@@ -14,6 +14,10 @@
 #define STMPE_REQ_ADC     (1<<1)
 #define STMPE_REQ_TEMP    (1<<2)
 
+#define STMPE_DBG(...)
+
+//#define STMPE_DBG(...) print(__VA_ARGS__)
+
 static struct {
   stmpe811_handler handler;
   volatile u32_t req_mask;
@@ -28,8 +32,6 @@ static struct {
 
 static volatile bool init = FALSE;
 static bool pre_state;
-
-#define STMPE_DBG(...)
 
 static void stmpe_task_config(u32_t a, void *b) {
   if (!TASK_mutex_lock(&i2c_mutex)) {
@@ -259,4 +261,5 @@ u16_t STMPE_adc_value(void) {
 u16_t STMPE_temp_value(void) {
   return stmpe.val_temp;
 }
+
 

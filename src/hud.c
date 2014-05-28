@@ -52,14 +52,16 @@ void HUD_paint(void) {
   if (hud.last_vbl_check == 0) {
     hud.last_vbl_check = t;
   } else {
-    if (t - hud.last_vbl_check >= 1000) {
-      // check each ~sec
+    if (t - hud.last_vbl_check >= 2000) {
+      // check each ~second sec
       hud.last_vbl_check = t;
-      if (hud.vbl_count < 25) {
+      if (hud.vbl_count < 50) {
         // must at least get 25 vbls per second
         // else switch to generated input
-        CVIDEO_set_input(INPUT_GENERATED);
         DBG(D_APP, D_WARN, "lost camera input, switch to generated\n");
+        CVIDEO_set_input(INPUT_NONE);
+        SYS_hardsleep_ms(100);
+        CVIDEO_set_input(INPUT_GENERATED);
       }
       hud.vbl_count = 0;
     }

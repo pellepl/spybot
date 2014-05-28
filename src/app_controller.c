@@ -71,6 +71,14 @@ static bool app_joy_ctrl;
 
 static task_timer diag_timer;
 static char _diag_msg[32];
+
+static struct {
+  s8_t vals[CONFIG_RADAR_ANGLES];
+} remote_radar;
+
+
+static void app_control_start(void);
+
 static void dprint(const char *f, ...) {
   va_list arg_p;
   memset(_diag_msg, 0, sizeof(_diag_msg));
@@ -91,10 +99,6 @@ static void dprint_sl(const char *f, ...) {
   va_end(arg_p);
   HUD_dbg_print_same_line(&gctx, _diag_msg);
 }
-
-static struct {
-  s8_t vals[CONFIG_RADAR_ANGLES];
-} remote_radar;
 
 static void app_control_clr_remote_req(u32_t req) {
   app_ctrl_remote_req &= ~req;
@@ -190,6 +194,26 @@ static void app_control_ui_task(u32_t a, void *b) {
 
 // diagnostics ui
 
+typedef enum {
+  DIAG_SYS = 0,
+  DIAG_CPU_VOLTAGE,
+  DIAG_BATT_VOLTAGE1,
+  DIAG_BATT_VOLTAGE2,
+  DIAG_BATT_VOLTAGE3,
+  DIAG_RADIO_ENABLE,
+  DIAG_TX_CARRIER,
+  DIAG_RX,
+  DIAG_RADIO_CLOSE,
+  DIAG_LEDS,
+  DIAG_COMRAD_START,
+  DIAG_COMRAD_SETTINGS,
+  DIAG_JOYSTICK1,
+  DIAG_JOYSTICK2,
+  DIAG_AUDIO,
+  DIAG_COMRAD_TX,
+  DIAG_REMOTE_SETTINGS,
+} diag_phase;
+
 static void app_control_diag_task(u32_t phase, void *b) {
   static u32_t joy_read = 0;
   static u32_t last_joy_read = 0;
@@ -200,7 +224,7 @@ static void app_control_diag_task(u32_t phase, void *b) {
 
   switch (phase) {
 
-  case 0: {
+  case DIAG_SYS: {
     HUD_state(HUD_DBG);
     dprint(" DIAGNOSTICS\n");
     dprint(" -----------\n");
@@ -224,7 +248,7 @@ static void app_control_diag_task(u32_t phase, void *b) {
     break;
   }
 
-  case 1: {
+  case DIAG_CPU_VOLTAGE: {
     dprint(" CHECK CPU VOLTAGE..\n");
     u16_t vref;
     (void)ADC_sample_vref_sync(&vref);
@@ -260,7 +284,7 @@ static void app_control_diag_task(u32_t phase, void *b) {
     break;
   }
 
-  case 2: {
+  case DIAG_BATT_VOLTAGE1: {
     dprint(" CHECK BATT VOLTAGE..\n");
     dprint(" ENABLE LOAD\n");
     gpio_enable(BAT_LOAD_PORT, BAT_LOAD_PIN);
@@ -270,14 +294,14 @@ static void app_control_diag_task(u32_t phase, void *b) {
     TASK_start_timer(t, &diag_timer, phase+1, 0, 200, 0, "diag");
     break;
   }
-  case 3: {
+  case DIAG_BATT_VOLTAGE2: {
     STMPE_req_read_adc(STMPE_ADC_VBAT);
     task *t = TASK_create(app_control_diag_task, 0);
     ASSERT(t);
     TASK_start_timer(t, &diag_timer, phase+1, 0, 300, 0, "diag");
     break;
   }
-  case 4: {
+  case DIAG_BATT_VOLTAGE3: {
     u32_t val = STMPE_adc_value();
     u32_t v_1000 = val * 7300 / 0xab0;
     dprint("   BATT VOLTAGE %i.%03i V\n", v_1000 / 1000, v_1000 % 1000);
@@ -290,14 +314,120 @@ static void app_control_diag_task(u32_t phase, void *b) {
     gpio_disable(BAT_LOAD_PORT, BAT_LOAD_PIN);
     STMPE_req_gpio_set(0, STMPE_GPIO_VBAT_EN);
 
-    loop = 0;
     task *t = TASK_create(app_control_diag_task, 0);
     ASSERT(t);
-    TASK_start_timer(t, &diag_timer, phase+1, 0, 1000, 0, "diag");
+    TASK_start_timer(t, &diag_timer, phase+1, 0, 500, 0, "diag");
     break;
   }
 
-  case 5: {
+  case DIAG_RADIO_ENABLE: {
+    dprint(" RADIO ENABLE\n");
+    NRF905_IMPL_init(NULL, NULL, NULL, NULL);
+    nrf905_config conf;
+    conf.auto_retransmit = NRF905_CFG_AUTO_RETRAN_OFF;
+    conf.channel_freq = 0;
+    conf.crc_en = NRF905_CFG_CRC_ON;
+    conf.crc_mode = NRF905_CFG_CRC_MODE_16BIT;
+    conf.crystal_frequency = NRF905_CFG_XTAL_FREQ_16MHZ;
+    conf.hfreq_pll = NRF905_CFG_HFREQ_433;
+    conf.out_clk_enable = NRF905_CFG_OUT_CLK_OFF;
+    conf.out_clk_freq = NRF905_CFG_OUT_CLK_FREQ_1MHZ;
+    conf.pa_pwr= NRF905_CFG_PA_PWR_10;
+  #ifdef SECONDARY
+    conf.rx_address = 0x9ce3aed2;
+  #else
+    conf.rx_address = 0x631c512d;
+  #endif
+    conf.rx_address_field_width = NRF905_CFG_ADDRESS_FIELD_WIDTH_4;
+    conf.rx_payload_width = COMM_LNK_MAX_DATA;
+    conf.rx_reduced_power = NRF905_CFG_RX_REDUCED_POWER_OFF;
+    conf.tx_address_field_width = NRF905_CFG_ADDRESS_FIELD_WIDTH_4;
+    conf.tx_payload_width = COMM_LNK_MAX_DATA;
+
+    int res = NRF905_IMPL_conf(&conf, TRUE);
+    if (res != NRF905_OK) {
+      dprint("!ERR: RADIO CFG %i\n", res);
+    } else {
+      dprint(" RADIO CONFIG OK\n", res);
+    }
+
+    task *t = TASK_create(app_control_diag_task, 0);
+    ASSERT(t);
+    TASK_start_timer(t, &diag_timer, phase+1, 0, 250, 0, "diag");
+    loop = 0;
+    break;
+  }
+
+  case DIAG_TX_CARRIER: {
+    if (loop == 0) dprint(" RADIO TX CARRIER\n");
+    u32_t time_to_next = 3000;
+    u16_t channel_freq = (loop/2)*128;
+
+    if ((loop & 1) == 0) {
+      int res = NRF905_IMPL_conf_channel(channel_freq, TRUE);
+      if (res != NRF905_OK) {
+        dprint("!ERR: RADIO SET CH %i\n", res);
+      } else {
+        u32_t ch100 = (42240 + channel_freq*10)*(1 + NRF905_CFG_HFREQ_433);
+        dprint(" FREQ %i.%i MHz", ch100/100, ch100%100);
+      }
+      time_to_next = 100;
+    } else {
+      int res = NRF905_IMPL_carrier();
+      if (res != NRF905_OK) {
+        dprint(" \n");
+        dprint("!ERR: RADIO SET CARRIER %i\n", res);
+      } else {
+        dprint(" CARRIER\n");
+      }
+    }
+
+    loop++;
+    task *t = TASK_create(app_control_diag_task, 0);
+    ASSERT(t);
+    if (loop < 8) {
+      TASK_start_timer(t, &diag_timer, phase, 0, time_to_next, 0, "diag");
+    } else {
+      loop = 0;
+      TASK_start_timer(t, &diag_timer, phase+1, 0, time_to_next, 0, "diag");
+    }
+    break;
+  }
+
+  case DIAG_RX: {
+    if (loop == 0) {
+      dprint(" RADIO RX\n");
+      int res = NRF905_IMPL_rx();
+      if (res != NRF905_OK) {
+        dprint("!ERR: RADIO SET RX %i\n", res);
+      }
+    } else {
+      dprint_sl("   CARRIER DETECTS:%i", NRF905_IMPL_carrier_count());
+    }
+    loop++;
+
+    task *t = TASK_create(app_control_diag_task, 0);
+    ASSERT(t);
+    if (loop < 60) {
+      TASK_start_timer(t, &diag_timer, phase, 0, 100, 0, "diag");
+    } else {
+      dprint("   CARRIER DETECTS:%i\n", NRF905_IMPL_carrier_count());
+      loop = 0;
+      TASK_start_timer(t, &diag_timer, phase+1, 0, 100, 0, "diag");
+    }
+    break;
+  }
+
+  case DIAG_RADIO_CLOSE: {
+    dprint(" RADIO CLOSE..\n");
+    NRF905_IMPL_close();
+    task *t = TASK_create(app_control_diag_task, 0);
+    ASSERT(t);
+    TASK_start_timer(t, &diag_timer, phase+1, 0, 300, 0, "diag");
+    break;
+  }
+
+  case DIAG_LEDS: {
     if (loop == 0) {
       dprint(" BLINK MAIN LED..\n");
     }
@@ -305,7 +435,7 @@ static void app_control_diag_task(u32_t phase, void *b) {
     LED_set(LED_MAIN, (SYS_get_time_ms() % 200 < 100));
     task *t = TASK_create(app_control_diag_task, 0);
     ASSERT(t);
-    if (loop < 100) {
+    if (loop < 50) {
       TASK_start_timer(t, &diag_timer, phase, 0, 50, 0, "diag");
     } else {
       TASK_start_timer(t, &diag_timer, phase+1, 0, 50, 0, "diag");
@@ -313,9 +443,18 @@ static void app_control_diag_task(u32_t phase, void *b) {
     break;
   }
 
-  case 6: {
+  case DIAG_COMRAD_START: {
+    dprint(" COMM STACK STARTUP..\n");
+    COMRAD_init();
+    task *t = TASK_create(app_control_diag_task, 0);
+    ASSERT(t);
+    TASK_start_timer(t, &diag_timer, phase+1, 0, 1000, 0, "diag");
+    break;
+  }
+
+  case DIAG_COMRAD_SETTINGS: {
     NRF905_IMPL_read_conf();
-    dprint(" RADIO CONFIG\n");
+    dprint(" COMM RADIO CONFIG\n");
     dprint("   CRYSTAL %i MHz\n",
         (int[5]){4,8,12,16,20}[NRF905_IMPL_get_config()->crystal_frequency]);
     dprint("   PLL     %s MHz\n",
@@ -336,7 +475,7 @@ static void app_control_diag_task(u32_t phase, void *b) {
     break;
   }
 
-  case 7: {
+  case DIAG_JOYSTICK1: {
     dprint(" READ RAW JOYSTICK..\n");
 
     task *t = TASK_create(app_control_diag_task, 0);
@@ -344,7 +483,7 @@ static void app_control_diag_task(u32_t phase, void *b) {
     TASK_start_timer(t, &diag_timer, phase+1, 0, 200, 0, "diag");
     break;
   }
-  case 8: {
+  case DIAG_JOYSTICK2: {
     task *t = TASK_create(app_control_diag_task, 0);
     ASSERT(t);
     if (joy_read < 500 &&
@@ -363,7 +502,7 @@ static void app_control_diag_task(u32_t phase, void *b) {
     break;
   }
 
-  case 9: {
+  case DIAG_AUDIO: {
     if (loop == 0) {
       dprint(" READ RAW AUDIO..\n");
       audio_hi = 0;
@@ -387,11 +526,31 @@ static void app_control_diag_task(u32_t phase, void *b) {
     } else {
       TASK_start_timer(t, &diag_timer, phase+1, 0, 100, 0, "diag");
       dprint("   lo:%2i  hi:%2i\n", audio_lo, audio_hi);
+      loop = 0;
     }
     break;
   }
 
-  case 10: {
+  case DIAG_COMRAD_TX: {
+    if (loop == 0) dprint(" COMRAD TX DBG\n");
+    loop++;
+    task *t = TASK_create(app_control_diag_task, 0);
+    ASSERT(t);
+    if (loop <= 5) {
+      char msg[20];
+      memset(msg, 0, sizeof(msg));
+      sprint(msg, "DIAGNOSIS TX #%i", loop);
+      APP_tx_dbg(msg);
+      dprint_sl("   SENDING MSG #%i", loop);
+      TASK_start_timer(t, &diag_timer, phase, 0, 300, 0, "diag");
+    } else {
+      TASK_start_timer(t, &diag_timer, phase+1, 0, 100, 0, "diag");
+    }
+    break;
+
+  }
+
+  case DIAG_REMOTE_SETTINGS: {
     if (APP_pair_status() == PAIRING_OK) {
       dprint(" REMOTE CONFIG\n");
       dprint("   PAN    %i\n", APP_cfg_get()->main.cam_pan_adjust);
@@ -412,11 +571,11 @@ static void app_control_diag_task(u32_t phase, void *b) {
   default: {
     if (!gpio_get(JOY_BUTT_PORT, JOY_BUTT_PIN))
     {
-      diagnostics = FALSE;
       if (APP_pair_status() == PAIRING_OK) {
         CVIDEO_set_input(INPUT_CAMERA);
       }
-      HUD_state(HUD_MAIN);
+      app_control_start();
+      diagnostics = FALSE;
     } else {
       if (loop == 0) dprint(" DIAGNOSIS FINISHED\n");
 
@@ -441,12 +600,20 @@ static void app_control_diag_task(u32_t phase, void *b) {
 
 static void app_control_start_diagnostics(void) {
   diagnostics = TRUE;
+  CVIDEO_set_input(INPUT_NONE);
+  SYS_hardsleep_ms(500);
+  CVIDEO_set_input(INPUT_GENERATED);
   task *t = TASK_create(app_control_diag_task, 0);
   ASSERT(t);
   TASK_run(t, 0, NULL);
 }
 
 // control common
+
+static void app_control_start(void) {
+  if (!diagnostics) COMRAD_init();
+  HUD_state(HUD_MAIN);
+}
 
 static void app_control_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_received) {
   u8_t reply[REPLY_MAX_LEN];
@@ -661,7 +828,7 @@ static void app_control_setup(app_common *com, app_remote *rem, configuration_t 
   if (!gpio_get(JOY_BUTT_PORT, JOY_BUTT_PIN)) {
     app_control_start_diagnostics();
   } else {
-    HUD_state(HUD_MAIN);
+    app_control_start();
   }
 #endif
 

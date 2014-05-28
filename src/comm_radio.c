@@ -21,6 +21,7 @@ typedef struct {
 } pool_pkt;
 
 static struct radio_s {
+  bool initialized;
   comm stack;
 
   // last received sequence number
@@ -224,10 +225,16 @@ void COMRAD_init(void) {
   SYS_hardsleep_ms(250); // ugly wait for conf to finish - todo
   comrad_rad_return();
 
+  comrad.initialized = TRUE;
+
   // start radio supervision ticker
   comrad.rad_tick_task = TASK_create(comrad_rad_super_task_f, TASK_STATIC);
   TASK_start_timer(comrad.rad_tick_task, &comrad.rad_tick_timer, 0, 0,
       COMRAD_RADIO_ADJUST_TICK_D, COMRAD_RADIO_ADJUST_TICK_D, "rad_tick");
+}
+
+bool COMRAD_is_initialized(void) {
+  return comrad.initialized;
 }
 
 

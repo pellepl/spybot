@@ -39,6 +39,7 @@ task_mutex i2c_mutex = TASK_MUTEX_INIT;
 // helpers
 
 int APP_tx(u8_t *data, u16_t len) {
+  if (!COMRAD_is_initialized()) return R_COMM_PHY_TRY_LATER;
   if (common.comrad_busy) return R_COMM_PHY_TRY_LATER;
   int res = COMRAD_send(data, len, TRUE);
   if (res >= R_COMM_OK) {
@@ -290,7 +291,6 @@ void APP_init(void) {
   // common
   memset(&common, 0, sizeof(common));
   memset(&remote, 0, sizeof(remote));
-  COMRAD_init();
   LED_init();
 
 #ifdef CONFIG_SPYBOT_CONTROLLER

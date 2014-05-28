@@ -21,6 +21,7 @@ static struct {
   nrf905_config config;
   bool carrier_on;
   time last_carrier;
+  u32_t carrier_count;
 } radio;
 
 static void nrf_impl_cb(nrf905 *nrf, nrf905_state state, int res) {
@@ -110,6 +111,8 @@ static void nrf_impl_carrier_detect_irq(gpio_pin pin) {
     radio.carrier_on = cd;
     if (!cd) {
       radio.last_carrier = SYS_get_time_ms();
+    } else {
+      radio.carrier_count++;
     }
   }
 }
@@ -153,7 +156,13 @@ void NRF905_IMPL_init(nrf905_rx rx_cb, nrf905_tx tx_cb, nrf905_cfg cfg_cb, nrf90
   gpio_interrupt_mask_enable(NRF905_DATA_READY_PORT, NRF905_DATA_READY_PIN, TRUE);
 
   NRF905_standby(&radio.nrf);
+}
 
+void NRF905_IMPL_close(void) {
+  NRF905_standby(&radio.nrf);
+  SPI_DEV_close(&radio.spi_dev);
+  gpio_interrupt_mask_disable(NRF905_CARRIER_DETECT_PORT, NRF905_CARRIER_DETECT_PIN);
+  gpio_interrupt_mask_disable(NRF905_DATA_READY_PORT, NRF905_DATA_READY_PIN);
 }
 
 void NRF905_IMPL_status(void) {
@@ -297,6 +306,10 @@ int NRF905_IMPL_carrier(void) {
   res = NRF905_tx_carrier(&radio.nrf);
   if (res != NRF905_OK) DBG(D_RADIO, D_WARN, "nrf carrier %i\n", res);
   return res;
+}
+
+u32_t NRF905_IMPL_carrier_count(void) {
+  return radio.carrier_count;
 }
 
 bool NRF905_IMPL_lbt_check_rts(u32_t ms) {

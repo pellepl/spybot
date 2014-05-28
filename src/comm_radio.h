@@ -28,5 +28,6 @@ int COMRAD_reply(const u8_t *data, u16_t len);
 void COMRAD_report_paired(bool paired);
 u8_t COMRAD_get_link_qual(void);
 void COMRAD_dbg_pkt_drop_rate(u8_t percentage);
+bool COMRAD_is_initialized(void);
 
 #endif /* COMM_RADIO_H_ */

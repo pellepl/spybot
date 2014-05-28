@@ -108,36 +108,47 @@ s32_t ADC_sample_sound(adc_cb cb, u8_t *buf, u32_t len) {
   return ADC_OK;
 }
 
-
+#define AVERAGE
 static u32_t _sub_samp = 0;
-static u32_t _sum_samp = 0;
+static s32_t _sum_samp = 0;
 void ADC_irq(void) {
   // audio
   if (ADC_GetITStatus(ADC1, ADC_IT_EOC) != RESET) {
     ADC_ClearITPendingBit(ADC1, ADC_IT_EOC);
     if (adc1.state == ADC_AUDIO) {
       u16_t raw = ADC_GetConversionValue(ADC1);
+#ifdef AVERAGE
       _sum_samp += raw;
+#else
+      _sum_samp += (raw - (1<<11));
+#endif
       if (++_sub_samp >= AUDIO_SUBSAMPLES) {
         _sub_samp = 0;
+#ifdef AVERAGE
         u16_t val = _sum_samp / AUDIO_SUBSAMPLES;
+#else
+        //_sum_samp /= 2;
+        _sum_samp = MIN((1<<11)-1, _sum_samp);
+        _sum_samp = MAX(-(1<<11), _sum_samp);
+        u16_t val = (1<<11) + _sum_samp;
+#endif
         _sum_samp = 0;
         if (adc1.len > 2) {
           if (!adc1.trig_upper) {
-            if (val > 2048+256) {
-              adc1.trig_upper = TRUE;
+            if (val > 2048+768) {
               if (adc1.ix >= adc1.len / 4) {
+                adc1.trig_upper = TRUE;
                 memcpy(&adc1.buf[0], &adc1.buf[adc1.ix - adc1.len / 4],  (adc1.len / 4)-1);
-                adc1.ix = adc1.len / 4;
+                adc1.ix = adc1.len / 4 - 1;
               }
             }
           } else {
             if (!adc1.trig_lower) {
-              if (val < 2048-256) {
-                adc1.trig_lower = TRUE;
+              if (val < 2048-768) {
                 if (adc1.ix >= adc1.len / 2) {
+                  adc1.trig_lower = TRUE;
                   memcpy(&adc1.buf[0], &adc1.buf[adc1.ix - adc1.len / 2],  (adc1.len / 2)-1);
-                  adc1.ix = adc1.len / 2;
+                  adc1.ix = adc1.len / 2 - 1;
                 }
               }
             }

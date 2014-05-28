@@ -310,32 +310,41 @@ video_input_t CVIDEO_get_input(void) {
 
 void CVIDEO_set_input(video_input_t input) {
   vid.input = input;
-  if (input == INPUT_CAMERA) {
-    if (VID_SEL_PINVAL_GEN) {
-      gpio_disable(VID_SEL_PORT, VID_SEL_PIN);
-    } else {
-      gpio_enable(VID_SEL_PORT, VID_SEL_PIN);
-    }
-
+  if (input == INPUT_CAMERA || input == INPUT_NONE) {
     TIM_DeInit(TIM1);
     TIM_Cmd(TIM1, DISABLE);
     TIM_OC1PreloadConfig(TIM1, TIM_OCPreload_Disable);
     NVIC_DisableIRQ(TIM1_UP_IRQn);
     TIM_CtrlPWMOutputs(TIM1, DISABLE);
 
+    if (input == INPUT_CAMERA) {
+      if (VID_SEL_PINVAL_GEN) {
+        gpio_disable(VID_SEL_PORT, VID_SEL_PIN);
+      } else {
+        gpio_enable(VID_SEL_PORT, VID_SEL_PIN);
+      }
+    } else {
+      if (VID_SEL_PINVAL_GEN) {
+        gpio_enable(VID_SEL_PORT, VID_SEL_PIN);
+      } else {
+        gpio_disable(VID_SEL_PORT, VID_SEL_PIN);
+      }
+    }
+
   } else {
     // INPUT_GENERATED
+
+    TIM_TimeBaseInitTypeDef  TIM_TimeBaseStructure;
+
+    TIM_Cmd(TIM1, DISABLE);
+    NVIC_DisableIRQ(TIM1_UP_IRQn);
+    //TIM_DeInit(TIM1);
+
     if (VID_SEL_PINVAL_GEN) {
       gpio_enable(VID_SEL_PORT, VID_SEL_PIN);
     } else {
       gpio_disable(VID_SEL_PORT, VID_SEL_PIN);
     }
-
-    TIM_Cmd(TIM1, DISABLE);
-    NVIC_DisableIRQ(TIM1_UP_IRQn);
-
-    TIM_TimeBaseInitTypeDef  TIM_TimeBaseStructure;
-    TIM_DeInit(TIM1);
 
     TIM_TimeBaseStructure.TIM_Period = 4608;//SYS_CPU_FREQ / 15625;
     TIM_TimeBaseStructure.TIM_Prescaler = 1-1;
@@ -364,6 +373,7 @@ void CVIDEO_set_input(video_input_t input) {
     TIM_ITConfig(TIM1, TIM_IT_Update, ENABLE);
     NVIC_EnableIRQ(TIM1_UP_IRQn);
 
+    TIM_SetCounter(TIM1, 0);
     TIM_Cmd(TIM1, ENABLE);
     TIM_CtrlPWMOutputs(TIM1, ENABLE);
   }

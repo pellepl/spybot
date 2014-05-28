@@ -15,7 +15,8 @@ typedef void (*vbl_cb)(void);
 
 typedef enum {
   INPUT_CAMERA = 0,
-  INPUT_GENERATED
+  INPUT_GENERATED,
+  INPUT_NONE
 } video_input_t;
 
 void CVIDEO_init(vbl_cb fn);
