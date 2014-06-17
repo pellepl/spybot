@@ -88,7 +88,7 @@ void hud_paint_main(gcontext *ctx, bool init) {
   memset(txt,0,28);
   time now = SYS_get_time_ms();
   bool blink = (now/500) & 1;
-  bool show_init = now < 2000;
+  bool show_init = now < 4000;
 
   // info status line
   if (show_init) {
@@ -100,14 +100,8 @@ void hud_paint_main(gcontext *ctx, bool init) {
     u8_t h, m, s;
     u16_t ms;
     SYS_get_time(NULL, &h, &m, &s, &ms);
-    sprint(txt, "%02i:%02i:%02i.%i ", h,m,s,ms/100);
-    GFX_printn(ctx, txt, 0,  17, 0, COL_OVER);
-  }
-
-  if (blink) {
-    GFX_printn(ctx, " ", 0, 27, 0, COL_OVER);
-  } else {
-    GFX_printn(ctx, "\001",0, 27, 0, COL_OVER);
+    sprint(txt, "%02i:%02i:%02i.%i", h,m,s,ms/100);
+    GFX_printn(ctx, txt, 0, 18, 0, COL_OVER);
   }
 
   // upper status bar
@@ -124,8 +118,25 @@ void hud_paint_main(gcontext *ctx, bool init) {
       GFX_printn(ctx, "\002\003", 0, 0, 0, COL_OVER);
     }
 
+    u32_t last_batt_1000 = APP_get_last_batt();
+    if (last_batt_1000 > 7000)
+      GFX_printn(ctx, "\013", 0, 3, 0, COL_OVER);
+    else if (last_batt_1000 > 6500)
+      GFX_printn(ctx, "\014", 0, 3, 0, COL_OVER);
+    else if (last_batt_1000 > 6000)
+      GFX_printn(ctx, "\015", 0, 3, 0, COL_OVER);
+    else if (last_batt_1000 > 5500)
+      GFX_printn(ctx, "\016", 0, 3, 0, COL_OVER);
+    else if (last_batt_1000 == 0)
+      GFX_printn(ctx, "\012", 0, 3, 0, COL_OVER);
+    else {
+      if (((now>>8)&1))
+        GFX_printn(ctx, "\016", 0, 3, 0, COL_OVER);
+    }
+
+
     if ((APP_pair_status() == PAIRING_STAGE_TWO && ((now>>8)&1)) || APP_pair_status() == PAIRING_OK) {
-      GFX_printn(ctx, "\022", 0, 3, 0, COL_OVER);
+      GFX_printn(ctx, "\022", 0, 5, 0, COL_OVER);
     }
   }
 
@@ -137,11 +148,11 @@ void hud_paint_main(gcontext *ctx, bool init) {
 
   // joystick control
   if (!show_init) {
-    if (APP_get_joystick_control() == APP_JOYSTICK_CONTROL_MOTOR) {
-      GFX_printn(ctx, "\020", 0, 5, 0, COL_OVER);
-    } else {
-      GFX_printn(ctx, "\021", 0, 5, 0, COL_OVER);
-    }
+    GFX_printn(ctx, APP_get_joystick_control() == APP_JOYSTICK_CONTROL_MOTOR ? "\020" : "\021",
+        0, 7, 0, COL_OVER);
+    GFX_printn(ctx, APP_remote_get()->light_ir ? "\033" : "\032", 0, 9, 0, COL_OVER);
+    GFX_printn(ctx, APP_remote_get()->light_white ? "\035" : "\034", 0, 11, 0, COL_OVER);
+    GFX_printn(ctx, "\013", 0, 13, 0, COL_OVER);
   }
 
   // audio

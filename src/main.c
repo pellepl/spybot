@@ -21,8 +21,10 @@
 #include "motor.h"
 #endif
 #include "app.h"
+#include "gpio.h"
 
 static void spybot_assert_cb(void) {
+  gpio_disable(BAT_LOAD_PORT, BAT_LOAD_PIN);
 #ifdef CONFIG_SPYBOT_MOTOR
   MOTOR_go(0);
 #endif
@@ -127,6 +129,7 @@ void hard_fault_handler_c (unsigned int * hardfault_args)
 #ifdef CONFIG_SPYBOT_MOTOR
   MOTOR_go(0);
 #endif
+  gpio_disable(BAT_LOAD_PORT, BAT_LOAD_PIN);
 
   u8_t io = IODBG;
 
@@ -218,6 +221,6 @@ void hard_fault_handler_c (unsigned int * hardfault_args)
 
   SYS_dump_trace(IODBG);
 
-  while(1);
+  SYS_reboot(REBOOT_CRASH);
 }
 #endif

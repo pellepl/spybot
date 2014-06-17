@@ -21,11 +21,24 @@
 #ifdef CONFIG_SPYBOT_ROVER
 #include "app_rover.h"
 #endif
-
+#ifdef CONFIG_ADC
+#include "adc.h"
+#endif
+#ifdef CONFIG_I2C
+#include "stmpe811_impl.h"
+#endif
+#include "gpio.h"
 
 static app_common common;
 static app_remote remote;
 static configuration_t app_cfg;
+
+static u8_t batt_meas_state;
+static u16_t batt_meas_sum;
+static time batt_meas_start;
+static time last_batt_meas = 0;
+static bool batt_measured = FALSE;
+static u32_t last_batt_time;
 
 u8_t const REPLY_OK[] = {ACK_OK};
 u8_t const REPLY_DENY[] = {ACK_DENY};
@@ -286,11 +299,83 @@ u8_t APP_pair_status(void) {
 }
 
 
+// battery measuring
+
+static void stmpe_batt_meas_adc_cb(u16_t adc_val) {
+  if (batt_meas_state >= 3) {
+    batt_meas_state++;
+    batt_meas_sum += adc_val;
+    if (batt_meas_state > 6) {
+      batt_meas_sum /= 4;
+      u32_t v_1000 = batt_meas_sum * 7400 / 0xab0;
+      last_batt_time = v_1000;
+      DBG(D_APP, D_INFO, "BATT: %i.%03i V\n", v_1000 / 1000, v_1000 % 1000);
+      batt_meas_state = 0;
+      gpio_disable(BAT_LOAD_PORT, BAT_LOAD_PIN);
+      STMPE_req_gpio_set(0, STMPE_GPIO_VBAT_EN);
+    } else {
+      STMPE_req_read_adc(STMPE_ADC_VBAT, stmpe_batt_meas_adc_cb);
+    }
+  }
+}
+
+void APP_measure_batt_poll(void) {
+  if (batt_meas_state == 0) {
+    time now = SYS_get_time_ms();
+    if ((!batt_measured && now > 750) || (now - last_batt_meas) >= 45000) {
+      batt_measured = TRUE;
+      last_batt_meas = now;
+      batt_meas_state = 1;
+      batt_meas_sum = 0;
+    } else {
+      return;
+    }
+  }
+
+  if (batt_meas_state == 1) batt_meas_start = SYS_get_time_ms();
+  if (SYS_get_time_ms() - batt_meas_start > 100) {
+    // this is taking too long, abort
+    batt_meas_state = 0;
+    gpio_disable(BAT_LOAD_PORT, BAT_LOAD_PIN);
+    STMPE_req_gpio_set(0, STMPE_GPIO_VBAT_EN);
+    DBG(D_APP, D_WARN, "battery measuring aborted due to timeout\n");
+    return;
+  }
+
+  switch (batt_meas_state) {
+  case 1:
+    gpio_enable(BAT_LOAD_PORT, BAT_LOAD_PIN);
+    STMPE_req_gpio_set(STMPE_GPIO_VBAT_EN, 0);
+    batt_meas_state = 2;
+    break;
+
+  case 2:
+    if (SYS_get_time_ms() - batt_meas_start < 5) {
+      // allow 5 ms to load capacitors
+      return;
+    }
+    batt_meas_state = 3;
+    STMPE_req_read_adc(STMPE_ADC_VBAT, stmpe_batt_meas_adc_cb);
+    break;
+    break;
+  default:
+    // handled in stmpe adc callback
+    break;
+  }
+}
+
+// common
+
 void APP_init(void) {
+  SYS_dbg_level(D_DEBUG);
   SYS_dbg_mask_enable(D_APP); // todo remove
   // common
   memset(&common, 0, sizeof(common));
   memset(&remote, 0, sizeof(remote));
+  batt_meas_state = 0;
+  batt_meas_sum = 0;
+  batt_meas_start = 0;
+  last_batt_time = 0;
   LED_init();
 
 #ifdef CONFIG_SPYBOT_CONTROLLER
@@ -307,6 +392,17 @@ void APP_init(void) {
   TASK_start_timer(common.tick_task, &common.tick_timer, 0, 0, 50, 1000, "apptick");
   //print("priogroup to stop at critical context:%i\n",
   //  NVIC_EncodePriority(8 - __NVIC_PRIO_BITS, 1, 0));
+
+#ifdef CONFIG_ADC
+  u16_t vref;
+  (void)ADC_sample_vref_sync(&vref);
+  // vref corresponds to 1.32-1.41-1.50V
+  u32_t voltage_m_1000 =
+      (0xfff
+      * 1410) // 1.41 * 1000
+      / vref;
+  print("\nchip voltage: %i.%03iV\n", (voltage_m_1000 / 1000), (voltage_m_1000 % 1000));
+#endif
 }
 
 void APP_impl_set(app_impl *impl) {
@@ -473,3 +569,12 @@ void APP_cfg_set(spybot_cfg c, s16_t val) {
     break;
   }
 }
+
+u32_t APP_get_last_batt(void) {
+  return last_batt_time;
+}
+
+void APP_force_batt_reading(void) {
+  batt_measured = FALSE;
+}
+

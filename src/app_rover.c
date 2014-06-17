@@ -130,11 +130,14 @@ static void app_rover_cfg_cb(cfg_state state, cfg_ee_state ee_state, int res) {
 // rover lsm
 #ifdef CONFIG_SPYBOT_LSM
 static void app_rover_lsm_cb_task(u32_t ares, void *adev) {
-  lsm303_dev *dev = (lsm303_dev *)dev;
+  lsm303_dev *dev = (lsm303_dev *)adev;
+  TRACE_USR_MSG(0x30);
   int res = (int)ares;
   if (res == I2C_ERR_LSM303_BAD_READ) {
+    TRACE_USR_MSG(0x31);
     DBG(D_APP, D_WARN, "lsm bad read\n");
   } else  if (res != I2C_OK) {
+    TRACE_USR_MSG(0x32);
     DBG(D_APP, D_WARN, "lsm err %i\n", res);
     I2C_reset(_I2C_BUS(0));
     I2C_config(_I2C_BUS(0), 100000);
@@ -159,22 +162,28 @@ static void app_rover_lsm_cb_task(u32_t ares, void *adev) {
 }
 
 static void app_rover_lsm_cb_irq(lsm303_dev *dev, int res) {
+  TRACE_USR_MSG(0x20);
   task *t = TASK_create(app_rover_lsm_cb_task, 0);
   ASSERT(t);
   TASK_run(t, res, dev);
 }
 
 static void app_rover_lsm_task(u32_t a, void *b) {
+  TRACE_USR_MSG(0x00);
   if (reading_lsm) {
+    TRACE_USR_MSG(0x01);
     return;
   }
   if (!TASK_mutex_lock(&i2c_mutex)) {
+    TRACE_USR_MSG(0x02);
     return;
   }
+  TRACE_USR_MSG(0x10);
 
   reading_lsm = TRUE;
   int res = lsm_read_both(&lsm_dev);
   if (res != I2C_OK) {
+    TRACE_USR_MSG(0x11);
     I2C_reset(_I2C_BUS(0));
     I2C_config(_I2C_BUS(0), 100000);
     TASK_mutex_unlock(&i2c_mutex);
@@ -243,6 +252,7 @@ static void app_rover_mech_task(u32_t a, void *b) {
 #ifdef CONFIG_SPYBOT_SERVO
   SERVO_update();
 #endif // CONFIG_SPYBOT_SERVO
+  APP_measure_batt_poll();
 }
 
 static void app_rover_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool already_received) {
@@ -258,19 +268,19 @@ static void app_rover_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool alread
     u8_t sr = (u8_t)data[7];
 
     reply[reply_ix++] = sr;
-    remote->motor_ctrl[0] = (s8_t)data[1];
-    remote->motor_ctrl[1] = (s8_t)data[2];
+    if (!already_received) {
+      remote->motor_ctrl[0] = (s8_t)data[1];
+      remote->motor_ctrl[1] = (s8_t)data[2];
 
-    if (already_received) {
+      remote->pan = (s8_t)data[3];
+      remote->tilt = (s8_t)data[4];
+      remote->radar = (s8_t)data[5];
 
+      // action_mask
+      remote->light_ir = (act & SPYBOT_ACTION_LIGHT_IR) != 0;
+      remote->light_white = (act & SPYBOT_ACTION_LIGHT_WHITE) != 0;
+      remote->beep = (act & SPYBOT_ACTION_BEEP) != 0;
     }
-    remote->pan = (s8_t)data[3];
-    remote->tilt = (s8_t)data[4];
-    remote->radar = (s8_t)data[5];
-
-    // action_mask
-    // todo
-    (void)act;
 
     // status_mask
     if (sr & SPYBOT_SR_ACC) {
@@ -282,12 +292,12 @@ static void app_rover_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool alread
       reply[reply_ix++] = remote->lsm_heading;
     }
     if (sr & SPYBOT_SR_TEMP) {
-      // todo
+      reply[reply_ix++] = remote->temp;
     }
     if (sr & SPYBOT_SR_BATT) {
-      // todo
+      reply[reply_ix++] = remote->batt;
     }
-    if (sr & SPYBOT_SR_RADAR) {
+    if ((sr & SPYBOT_SR_RADAR) && !already_received) {
       app_rover_set_remote_req(APP_ROVER_REMOTE_REQ_RADAR_REPORT | APP_REMOTE_REQ_URGENT);
     }
     COMRAD_reply(reply, reply_ix);
@@ -475,19 +485,26 @@ static void app_rover_tick(void) {
   }
 }
 
+#ifdef CONFIG_SPYBOT_LSM
+static void app_rover_setup_lsm(u32_t a, void *b) {
+  lsm_open(&lsm_dev, _I2C_BUS(0), FALSE, app_rover_lsm_cb_irq);
+  // lock mutex for lsm config
+  if (!TASK_mutex_lock(&i2c_mutex)) {
+    return;
+  }
+  int res = lsm_config_default(&lsm_dev);
+  ASSERT(res == I2C_OK);
+  lsm_set_lowpass(&lsm_dev, 50, 50);
+
+  lsm_task = TASK_create(app_rover_lsm_task, TASK_STATIC);
+  TASK_start_timer(lsm_task, &lsm_timer, 0, 0, 500, 100, "lsm_read");
+}
+#endif
+
 static void app_rover_setup(app_common *com, app_remote *rem, configuration_t *cnf) {
   common = com;
   remote = rem;
   app_cfg = cnf;
-
-  u16_t vref;
-  (void)ADC_sample_vref_sync(&vref);
-  // vref corresponds to 1.32-1.41-1.50V
-  u32_t voltage_m_1000 =
-      (0xfff
-      * 1410) // 1.41 * 1000
-      / vref;
-  print("chip voltage: %i.%03iV\n", (voltage_m_1000 / 1000), (voltage_m_1000 % 1000));
 
 #ifdef CONFIG_SPYBOT_HCSR
   RANGE_SENS_init(app_rover_radar_cb);
@@ -496,18 +513,12 @@ static void app_rover_setup(app_common *com, app_remote *rem, configuration_t *c
 #ifdef CONFIG_I2C
   I2C_config(_I2C_BUS(0), 100000);
 
-#ifdef CONFIG_SPYBOT_LSM
-  lsm_open(&lsm_dev, _I2C_BUS(0), FALSE, app_rover_lsm_cb_irq);
-  // lock mutex for lsm config
-  if (!TASK_mutex_lock(&i2c_mutex)) {
-    ASSERT(FALSE); // should never happen, during init
-  }
-  int res = lsm_config_default(&lsm_dev);
-  ASSERT(res == I2C_OK);
-  lsm_set_lowpass(&lsm_dev, 50, 50);
+  STMPE_init();
 
-  lsm_task = TASK_create(app_rover_lsm_task, TASK_STATIC);
-  TASK_start_timer(lsm_task, &lsm_timer, 0, 0, 500, 100, "lsm_read");
+#ifdef CONFIG_SPYBOT_LSM
+  task *config_lsm_t = TASK_create(app_rover_setup_lsm, 0);
+  ASSERT(config_lsm_t);
+  TASK_run(config_lsm_t, 0, NULL);
 #endif
 
   CFG_EE_init(&eeprom_dev, app_rover_cfg_cb);
@@ -536,6 +547,7 @@ static void app_rover_setup(app_common *com, app_remote *rem, configuration_t *c
     mag_extremes[i][1] = S16_MIN;
   }
 #endif
+  COMRAD_init();
 }
 
 static app_impl rover_impl;

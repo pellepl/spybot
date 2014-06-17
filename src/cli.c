@@ -113,7 +113,8 @@ static int f_ioexp_init(void);
 static int f_ioexp_gpio_set(u8_t set, u8_t reset);
 static int f_ioexp_adc_read(u8_t adc_chan);
 static int f_ioexp_temp_read(void);
-#endif
+static int f_batt_force(void);
+#endif // CONFIG_I2C
 
 #ifdef CONFIG_SPYBOT_LSM
 static int f_lsm_extremes(bool reset);
@@ -335,6 +336,8 @@ static cmd c_tbl[] = {
         .help = "Read adc channel\n" },
     { .name = "ioexp_temp", .fn = (func) f_ioexp_temp_read,
         .help = "Read temperature\n" },
+    { .name = "batt_read", .fn = (func) f_batt_force,
+        .help = "Force battery reading\n" },
 #endif
 
 #ifdef CONFIG_SPYBOT_LSM
@@ -732,6 +735,18 @@ static int f_dump() {
   print("FULL DUMP\n=========\n");
   TASK_dump(IOSTD);
   print("\n");
+  print("APP specifics\n-------------\n");
+  print("I2C mutex\n");
+  print("  taken: %s\n", i2c_mutex.taken ? "YES":"NO");
+  if (i2c_mutex.taken) {
+    print("  entries: %i\n", i2c_mutex.entries);
+    print("  owner:   0x%08x  [func:0x%08x]\n", i2c_mutex.owner, i2c_mutex.owner->f);
+    print("  reentr.: %s\n", i2c_mutex.reentrant ? "YES":"NO");
+  }
+  print("\n");
+  print("STMPE811 irq pin: %s\n", gpio_get(PORTC, PIN13) ? "HI":"LO");
+  STMPE_req_read_int_sta();
+  print("\n");
   print("=========\n");
   return 0;
 }
@@ -985,7 +1000,7 @@ void i2c_scan_report_task(u32_t addr, void *res) {
 
   print("%s", (char *) res);
 
-  if (i2c_scan_addr < 254) {
+  if (i2c_scan_addr < 0xee) {
     i2c_scan_addr += 2;
     I2C_query(_I2C_BUS(0), i2c_scan_addr);
   } else {
@@ -1134,6 +1149,10 @@ static int f_ioexp_adc_read(u8_t adc_chan) {
 static int f_ioexp_temp_read(void) {
   stmpe811_handler_temp_read(&ioexp, TRUE);
   return 0;
+}
+
+static int f_batt_force(void) {
+  APP_force_batt_reading();
 }
 
 #endif // CONFIG_I2C

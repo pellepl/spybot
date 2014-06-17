@@ -1,3 +1,4 @@
+#include "system.h"
 #include "stm32f10x_it.h"
 #include "uart_driver.h"
 #ifdef CONFIG_SPI

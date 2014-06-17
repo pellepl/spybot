@@ -25,8 +25,8 @@ static struct {
 } radio;
 
 static void nrf_impl_cb(nrf905 *nrf, nrf905_state state, int res) {
-  DBG(D_RADIO, D_WARN, "nrf cb state:%i res:%i\n", state, res);
   if (res != NRF905_OK) {
+    DBG(D_RADIO, D_WARN, "nrf cb state:%i res:%i\n", state, res);
     if ((state == NRF905_TX_PRIME || state == NRF905_TX) && radio.tx_cb) {
       radio.tx_cb(res);
     }

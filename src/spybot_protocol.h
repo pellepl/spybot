@@ -17,6 +17,10 @@
 #define SPYBOT_SR_BATT      (1<<3)
 #define SPYBOT_SR_RADAR     (1<<7)
 
+#define SPYBOT_ACTION_LIGHT_IR      (1<<0)
+#define SPYBOT_ACTION_LIGHT_WHITE   (1<<1)
+#define SPYBOT_ACTION_BEEP          (1<<2)
+
 #define ACK_OK                      0x01
 #define ACK_DBG                     0xee
 #define ACK_DENY                    0x00
@@ -39,8 +43,9 @@ typedef enum {
 
   // [rover <-- ctrl]
   // arg: s8 left, s8 right, s8 pan, s8 tilt, s8 radar, u8 action_mask, u8 status_mask
-  //      u8 action_mask: bit 0 - lights
-  //                      bit 1 - beep
+  //      u8 action_mask: bit 0 - lights dark
+  //                      bit 1 - lights bright
+  //                      bit 2 - beep
   //      u8 status_mask: bit 0 - acc
   //                      bit 1 - heading
   //                      bit 2 - temp

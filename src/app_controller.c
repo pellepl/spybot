@@ -27,10 +27,6 @@
 #include "input.h"
 #endif
 
-#ifdef CONFIG_I2C
-#include "stmpe811_impl.h"
-#endif
-
 // for diagnosis
 #include "gpio.h"
 #include "led.h"
@@ -156,7 +152,6 @@ static void app_ctrl_update_camera_ctrl(s8_t h, s8_t v) {
   }
 }
 
-
 // control ui
 
 #ifdef CONFIG_SPYBOT_JOYSTICK
@@ -189,6 +184,9 @@ static void app_control_ui_task(u32_t a, void *b) {
 
   }
 #endif // CONFIG_SPYBOT_JOYSTICK
+  if (!diagnostics) {
+    APP_measure_batt_poll();
+  }
 }
 #endif // CONFIG_SPYBOT_VIDEO
 
@@ -295,7 +293,7 @@ static void app_control_diag_task(u32_t phase, void *b) {
     break;
   }
   case DIAG_BATT_VOLTAGE2: {
-    STMPE_req_read_adc(STMPE_ADC_VBAT);
+    STMPE_req_read_adc(STMPE_ADC_VBAT, NULL);
     task *t = TASK_create(app_control_diag_task, 0);
     ASSERT(t);
     TASK_start_timer(t, &diag_timer, phase+1, 0, 300, 0, "diag");
@@ -303,7 +301,7 @@ static void app_control_diag_task(u32_t phase, void *b) {
   }
   case DIAG_BATT_VOLTAGE3: {
     u32_t val = STMPE_adc_value();
-    u32_t v_1000 = val * 7300 / 0xab0;
+    u32_t v_1000 = val * 7400 / 0xab0;
     dprint("   BATT VOLTAGE %i.%03i V\n", v_1000 / 1000, v_1000 % 1000);
     if (v_1000 == 0) {
       dprint("!WARNING: STMPE811 BROKEN\n");
@@ -511,7 +509,7 @@ static void app_control_diag_task(u32_t phase, void *b) {
     loop++;
     ADC_sample_sound(NULL, &audio_buf, 1);
     char level[17];
-    memset(level, '=', sizeof(level));
+    memset(level, 1, sizeof(level));
     level[audio_buf>>1] = 0;
     dprint_sl("  %3i %s", audio_buf, level);
     if (loop > 1) {
@@ -662,6 +660,12 @@ static void app_control_handle_ack(u8_t cmd, comm_arg *rx, u16_t len, u8_t *data
     if (sr & SPYBOT_SR_HEADING) {
       remote->lsm_heading = data[ix++];
     }
+    if (sr & SPYBOT_SR_TEMP) {
+      remote->temp = data[ix++];
+    }
+    if (sr & SPYBOT_SR_BATT) {
+      remote->batt = data[ix++];
+    }
 
     break;
   }
@@ -755,7 +759,10 @@ static void app_control_tick(void) {
     s8_t pan = remote->pan;
     s8_t tilt  = remote->tilt;
     s8_t radar  = remote->radar;
-    u8_t act = 0;
+    u8_t act = 0 |
+        (remote->light_ir ? SPYBOT_ACTION_LIGHT_IR : 0) |
+        (remote->light_white ? SPYBOT_ACTION_LIGHT_WHITE : 0) |
+        (remote->beep ? SPYBOT_ACTION_BEEP : 0);
     u8_t sr = SPYBOT_SR_ACC | SPYBOT_SR_HEADING;
     sr |= (common->tick_count % 6) ? 0 : SPYBOT_SR_RADAR;
     u8_t msg[] = {
@@ -815,10 +822,6 @@ static void app_control_setup(app_common *com, app_remote *rem, configuration_t 
   INPUT_init();
 #endif
 
-#ifdef CONFIG_I2C
-  STMPE_init();
-#endif
-
 #ifdef CONFIG_SPYBOT_VIDEO
   CVIDEO_set_input(INPUT_GENERATED);
   HUD_init(&gctx);
@@ -830,6 +833,10 @@ static void app_control_setup(app_common *com, app_remote *rem, configuration_t 
   } else {
     app_control_start();
   }
+#endif
+
+#ifdef CONFIG_I2C
+  STMPE_init();
 #endif
 
   APP_remote_set_camera_ctrl(0, 0);

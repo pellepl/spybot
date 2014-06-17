@@ -257,6 +257,7 @@ typedef u16_t system_counter_type;
 #define CONFIG_TASK_POOL 32
 //#define CONFIG_TASK_NONCRITICAL_TIMER
 //#define CONFIG_TASKQ_DBG_CRITICAL
+#define CONFIG_TASKQ_MUTEX
 
 /** APP **/
 

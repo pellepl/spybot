@@ -80,6 +80,11 @@ typedef struct {
   s8_t pan;
   s8_t tilt;
   s8_t radar;
+  s8_t temp;
+  u8_t batt;
+  bool light_ir;
+  bool light_white;
+  bool beep;
 
 } app_remote;
 
@@ -164,6 +169,12 @@ const configuration_t *APP_cfg_get(void);
 void APP_cfg_set(spybot_cfg c, s16_t val);
 // returns a value from current volatile static local configuration
 s16_t APP_cfg_get_val(spybot_cfg c);
+
+void APP_measure_batt_poll(void);
+
+u32_t APP_get_last_batt(void);
+
+void APP_force_batt_reading(void);
 
 
 #ifdef CONFIG_SPYBOT_LSM

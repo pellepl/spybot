@@ -9,7 +9,7 @@
 #define ADC_JOYST_SECOND  2
 #define ADC_AUDIO         3
 
-#define AUDIO_SUBSAMPLES  8
+#define AUDIO_SUBSAMPLES  6
 
 static struct {
   volatile u8_t state;
@@ -108,7 +108,7 @@ s32_t ADC_sample_sound(adc_cb cb, u8_t *buf, u32_t len) {
   return ADC_OK;
 }
 
-#define AVERAGE
+//#define AVERAGE
 static u32_t _sub_samp = 0;
 static s32_t _sum_samp = 0;
 void ADC_irq(void) {
@@ -127,7 +127,7 @@ void ADC_irq(void) {
 #ifdef AVERAGE
         u16_t val = _sum_samp / AUDIO_SUBSAMPLES;
 #else
-        //_sum_samp /= 2;
+        _sum_samp /= 3;
         _sum_samp = MIN((1<<11)-1, _sum_samp);
         _sum_samp = MAX(-(1<<11), _sum_samp);
         u16_t val = (1<<11) + _sum_samp;
