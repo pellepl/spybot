@@ -367,8 +367,8 @@ void APP_measure_batt_poll(void) {
 // common
 
 void APP_init(void) {
-  SYS_dbg_level(D_DEBUG);
-  SYS_dbg_mask_enable(D_APP); // todo remove
+  //SYS_dbg_level(D_WARN);
+  //SYS_dbg_mask_enable(D_ANY); // todo remove
   // common
   memset(&common, 0, sizeof(common));
   memset(&remote, 0, sizeof(remote));
@@ -386,12 +386,16 @@ void APP_init(void) {
   APP_rover_init();
 #endif
 
-  common.impl->app_impl_setup(&common, &remote, &app_cfg);
+  if (!APP_get_safe_mode()) {
+    common.impl->app_impl_setup(&common, &remote, &app_cfg);
 
-  common.tick_task = TASK_create(app_tick_task, TASK_STATIC);
-  TASK_start_timer(common.tick_task, &common.tick_timer, 0, 0, 50, 1000, "apptick");
-  //print("priogroup to stop at critical context:%i\n",
-  //  NVIC_EncodePriority(8 - __NVIC_PRIO_BITS, 1, 0));
+    common.tick_task = TASK_create(app_tick_task, TASK_STATIC);
+    TASK_start_timer(common.tick_task, &common.tick_timer, 0, 0, 50, 1000, "apptick");
+    //print("priogroup to stop at critical context:%i\n",
+    //  NVIC_EncodePriority(8 - __NVIC_PRIO_BITS, 1, 0));
+  } else {
+    print("\n*** SAFE MODE ***\n");
+  }
 
 #ifdef CONFIG_ADC
   u16_t vref;
@@ -578,3 +582,12 @@ void APP_force_batt_reading(void) {
   batt_measured = FALSE;
 }
 
+DBG_ATTRIBUTE static bool __safe_mode;
+
+void APP_set_safe_mode(bool enable) {
+  __safe_mode = enable;
+}
+
+bool APP_get_safe_mode(void) {
+  return __safe_mode;
+}

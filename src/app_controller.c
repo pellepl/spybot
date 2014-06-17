@@ -609,7 +609,7 @@ static void app_control_start_diagnostics(void) {
 // control common
 
 static void app_control_start(void) {
-  if (!diagnostics) COMRAD_init();
+  if (!diagnostics && !APP_get_safe_mode()) COMRAD_init();
   HUD_state(HUD_MAIN);
 }
 

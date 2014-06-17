@@ -186,6 +186,8 @@ static int f_bat_load(int en);
 
 static int f_app_cfg_dump(void);
 
+static int f_safe_mode(char *onoff);
+
 static int f_memfind(int hex);
 
 static void cli_print_app_name(void);
@@ -433,6 +435,9 @@ static cmd c_tbl[] = {
     },
     { .name = "build", .fn = (func) f_build,
         .help = "Outputs build info\n"
+    },
+    { .name = "safe_mode", .fn = (func) f_safe_mode,
+        .help = "Enable or disable safe mode\nsafe_mode [on|off]\n"
     },
     { .name = "help", .fn = (func) f_help,
         .help = "Prints help\n"
@@ -1461,6 +1466,20 @@ static int f_vid_sel(char *s) {
 }
 #endif
 
+static int f_safe_mode(char *onoff) {
+  if (_argc < 1 || !IS_STRING(onoff)) {
+    return -1;
+  }
+  if (0 == strcmp("on", onoff)) {
+    APP_set_safe_mode(TRUE);
+  } else if (0 == strcmp("off", onoff)) {
+    APP_set_safe_mode(FALSE);
+  } else {
+    return -1;
+  }
+  return 0;
+}
+
 /////////////////////////////////////////////////////////////////////////////////////////////
 
 void CLI_TASK_on_input(u32_t len, void *p) {
@@ -1543,10 +1562,17 @@ void CLI_uart_check_char(void *a, u8_t c) {
   }
 }
 
+DBG_ATTRIBUTE static u32_t __dbg_magic;
+
 void CLI_init() {
+  if (__dbg_magic != 0x43215678) {
+    __dbg_magic = 0x43215678;
+    SYS_dbg_level(D_WARN);
+    SYS_dbg_mask_set(0);
+    APP_set_safe_mode(FALSE);
+  }
   memset(&cli_state, 0, sizeof(cli_state));
   DBG(D_CLI, D_DEBUG, "CLI init\n");
-  SYS_dbg_mask_set(0);
   UART_set_callback(_UART(UARTSTDIN), CLI_uart_check_char, NULL);
   print ("\n");
   cli_print_app_name();

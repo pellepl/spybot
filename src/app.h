@@ -176,6 +176,9 @@ u32_t APP_get_last_batt(void);
 
 void APP_force_batt_reading(void);
 
+void APP_set_safe_mode(bool enable);
+
+bool APP_get_safe_mode(void);
 
 #ifdef CONFIG_SPYBOT_LSM
 void APP_get_acc_extremes(s16 x[3][2], bool reset);

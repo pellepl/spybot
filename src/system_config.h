@@ -278,6 +278,8 @@ typedef u16_t system_counter_type;
 
 /** DEBUG **/
 
+#define DBG_ATTRIBUTE __attribute__(( section(".shmem") ))
+
 //#define DBG_RADIO
 
 // disable all asserts

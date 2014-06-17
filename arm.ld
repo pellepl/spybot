@@ -176,7 +176,8 @@ SECTIONS
   /* Shared memory area, not wiped at reset */	
   .shmem (RAM_START + RAM_SIZE - _Shared_Memory_Size): {
     __shared_memory_address__ = .;         /* define a global symbol at shared memory start */
-    . = . + _Shared_Memory_Size;
+    *(.shmem)
+    *(.shmem.*)
     . = ALIGN(4);
   } >RAM
 	
