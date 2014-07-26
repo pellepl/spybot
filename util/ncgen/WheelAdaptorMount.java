@@ -1,7 +1,7 @@
 import java.io.PrintStream;
 import java.util.ArrayList;
 
-public class MotorHolder {
+public class WheelAdaptorMount {
 
   static double workPieceDepth = 11.5;
   static double routerDia = 2.8;
@@ -20,27 +20,6 @@ public class MotorHolder {
   
   static PrintStream out = System.out;
 
-  // motor
-  // 12x(9+15)x10
-  //
-  // holder (12+3*2+10x2)x(9+15+3*2)x(10+3)
-  //
-  //                      __                 __      
-  //                     / /                / /|                                
-  //                    / / |              / / |                                
-  //                   / /  |             / /  |                              
-  //           _______/ /   |  __________/ /___|__                             
-  //          /        /    | /_________/        /|                            
-  //         /        /     /|_________/        / |                             
-  //        /   O    /     /          /    O   /  |                             
-  //       /________/     /          /________/   |                             
-  //       |        |    /           |        |   |                            
-  //       |        |   /            |        |   |                               
-  //       |        |  /_____________|        |   /                               
-  //       |        | //____________/|        |  /                                
-  //       |        |_|            |_|        | /                                 
-  //       |__________________________________|/                                 
-  
   /**
    * @param args
    */
