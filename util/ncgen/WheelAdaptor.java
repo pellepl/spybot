@@ -5,7 +5,7 @@ public class WheelAdaptor {
 
   static double workPieceDepth = 11.5;
   static double routerDia = 2.8;
-  static double feed = 180;
+  static double feed = 100;
   static double zStep = 1.5;
   static double routeOverlap = 0.5;
   static double hoverDistance = 1.0;
@@ -41,15 +41,15 @@ public class WheelAdaptor {
     out.println();
     
     start();
-    routeDrill(0, 0, 0, workPieceDepth+extraToBottom);
+    routeDrillPeck(0, 0, 0, workPieceDepth+extraToBottom*2);
     routeGroove(
         -diameter/2-routerDia/2, -centerFit/2-routerDia/2,
         diameter/2+routerDia/2, -centerFit/2-routerDia/2,
-        0, workPieceDepth/2);
+        0, workPieceDepth*2/3);
     routeGroove(
         -diameter/2-routerDia/2, centerFit/2+routerDia/2,
         diameter/2+routerDia/2, centerFit/2+routerDia/2, 
-        0, workPieceDepth/2);
+        0, workPieceDepth*2/3);
     routeRing(0, 0, diameter/2 + routerDia/2, 0, workPieceDepth+extraToBottom);
     
     end();
@@ -277,7 +277,48 @@ public class WheelAdaptor {
   }
 
   // route out a hole from start z to given z
-  // TODO
+  static void routeHole(double cx, double cy, double r, double startZ, double z) {
+    if (startZ >= z) return;
+    if (r <= 0) {
+      throw new RuntimeException("Invalid radius (" + r + ")");
+    }
+    out.println(
+        "(hole: center " + cx + "," + cy + 
+        " radius:" + r + 
+        " from -" + startZ + " to -" + z + ")");
+    double curZ = startZ + zStep;
+    boolean stop = false;
+    
+    goUp();
+    goXYRapid(cx, cy-r);
+    do {
+      goZ(curZ);
+      double curR = r;
+      while (curR > 0) {
+        goXY(cx, cy-curR);
+        out.println("G02 X" + cx + " Y" + (cy+curR) + " R" + curR);
+        out.println("G02 X" + cx + " Y" + (cy-curR) + " R" + curR);
+        curR -= (routerDia - routeOverlap); 
+      }
+      goXY(cx, cy-r);
+
+      if (curZ == z) {
+        break;
+      } else if (curZ + zStep > z) {
+        curZ = z;
+        if (stop) {
+          break;
+        } else {
+          stop = true;
+        }
+      } else {
+        curZ += zStep;
+      }
+    } while (true);
+
+    // up
+    goUp();
+  }
   
   // drill a hole from start z to given z
   static void routeDrill(double cx, double cy, double startZ, double z) {
@@ -290,6 +331,28 @@ public class WheelAdaptor {
     goXYRapid(cx, cy);
     goZ(startZ);
     goZ(z);
+
+    // up
+    goUp();
+  }
+  
+  // peck drill a hole from start z to given z
+  static void routeDrillPeck(double cx, double cy, double startZ, double z) {
+    if (startZ >= z) return;
+    out.println(
+        "(drill peck: center " + cx + "," + cy + 
+        " from -" + startZ + " to -" + z + ")");
+    
+    goUp();
+    goXYRapid(cx, cy);
+    double curZ = startZ;
+    while (curZ < z) {
+      curZ += zStep;
+      if (curZ > z) curZ = z;
+      goZ(curZ);
+      goUp();
+      if (curZ < z) goRapidDown(curZ - zStep);
+    }
 
     // up
     goUp();
@@ -374,6 +437,10 @@ public class WheelAdaptor {
   
   static void goUp() {
     out.println("G00 Z" + hoverDistance);
+  }
+
+  static void goRapidDown(double z) {
+    out.println("G00 Z" + (-z));
   }
 
   static void goXYRapid(double x, double y) {

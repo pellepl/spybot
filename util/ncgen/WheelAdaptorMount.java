@@ -5,18 +5,29 @@ public class WheelAdaptorMount {
 
   static double workPieceDepth = 11.5;
   static double routerDia = 2.8;
-  static double motorWidth = 12+1.0;
-  static double motorLength= 9+15+1.0;
-  static double motorDepth = 10;
-  static double flangeWidth = 7;
-  static double wall = 1.5;
-  static double flangePos = 4;
-  
-  static double feed = 180;
+  static double feed = 100;
   static double zStep = 1.5;
   static double routeOverlap = 0.5;
   static double hoverDistance = 1.0;
   static double extraToBottom = 0.8;
+  
+  
+  //    ________________               
+  //   /               /|  drill: > 3mm           
+  //  /_______________/ |  bottom to drill dist: 11mm             
+  //  |      ___      | |  width: 25mm             
+  //  |     /   \     | |  hole dia: 9.9mm              
+  //  |     | O |     | |  hole depth: 4mm             
+  //  |     \___/     | /  height: 22mm             
+  //  |_______w________/                
+  //                                      
+  
+  static double drillDia = 3.3;
+  static double holeDia = 9.8;
+  static double holeDepth = 4;
+  static double holeCenterFromBottom = 11;
+  static double width = 25;
+  static double height = holeCenterFromBottom*2;
   
   static PrintStream out = System.out;
 
@@ -25,86 +36,37 @@ public class WheelAdaptorMount {
    */
   public static void main(String[] args) {
 
-    if (args.length < 2) {
-      out.println("(no depth or router diameter set)");
-      out.println("(usage: java MotorHolder <work piece depth in mm> <router diameter in mm>)");
-      workPieceDepth = 11.5;
-      routerDia = 2.8;
-      out.println("(assuming depth and diameter)");
-    } else {
-      workPieceDepth = Double.parseDouble(args[0]);
-      routerDia = Double.parseDouble(args[1]);
-    }
+    workPieceDepth = 11.5;
+    routerDia = 2.8;
     
     out.println("(work piece depth: " + workPieceDepth + ")");
     out.println("(router diameter:  " + routerDia + ")");
-    out.println("(motor depth:      " + motorDepth + ")");
-    out.println("(motor width:      " + motorWidth + ")");
-    out.println("(motor length:     " + motorLength + ")");
-    out.println("(flange:           " + flangeWidth + ")");
-    out.println("(wall:             " + wall + ")");
     out.println("(feed:             " + feed + ")");
     out.println("(z step:           " + zStep + ")");
-    out.println("(final dimension:  "
-        + (motorWidth + flangeWidth*2) + "x"
-        + (motorLength + wall*2) + "x" +
-        + (motorDepth + wall) + ")");
-  
     out.println();
+    
     start();
-    
-    out.println();
-    out.println("(top shave)");
-    routeBox(
-        0, 0,
-        motorWidth + flangeWidth * 2 + routerDia, 
-        motorLength + wall * 2 + routerDia, 
-        0,
-        workPieceDepth - (motorDepth + wall));
-    
-    out.println();
-    out.println("(motor fit + length wall)");
-    routeBox(
-        0, 0,
-        motorWidth - routerDia, 
-        motorLength + wall * 2 - routerDia, 
-        workPieceDepth - (motorDepth + wall),
-        workPieceDepth - (motorDepth + wall) + motorDepth - wall*2);
-    
-    out.println();
-    out.println("(motor fit bottom)");
-    routeBox(
-        0, 0,
-        motorWidth - routerDia, 
-        motorLength - routerDia, 
-        workPieceDepth - (motorDepth + wall) + motorDepth - wall,
-        workPieceDepth - (motorDepth + wall) + motorDepth);
-    
-    out.println();
-    out.println("(cutout)");
-    ArrayList<Coord> cutout = createPath();
-    double cow = motorWidth + flangeWidth * 2 + routerDia - 0.5;
-    double coh = motorLength + wall * 2 + routerDia - 0.5;
-    double coiw = motorWidth + wall * 2 + routerDia;
-    addToPath(cutout, -coiw/2, -coh/2);
-    
-    addToPath(cutout, coiw/2, -coh/2);
-    addToPath(cutout, coiw/2, -flangePos);
-    addToPath(cutout, cow/2, -flangePos);
-    addToPath(cutout, cow/2, coh/2 - flangePos);
-    addToPath(cutout, coiw/2, coh/2 - flangePos);
-    addToPath(cutout, coiw/2, coh/2);
+    routeHole(0, 0, holeDia/2 - routerDia/2, 0, holeDepth);
+    routeRing(0, 0, drillDia/2 - routerDia/2, 0, workPieceDepth+extraToBottom*2);
 
-    addToPath(cutout, -coiw/2, coh/2);
-    addToPath(cutout, -coiw/2, coh/2 - flangePos);
-    addToPath(cutout, -cow/2, coh/2 - flangePos);
-    addToPath(cutout, -cow/2, -flangePos);
-    addToPath(cutout, -coiw/2, -flangePos);
-    //addToPath(cutout, -coiw/2, -coh/2);
+    ArrayList<Coord> cutOut = createPath();
+    addToPath(cutOut, -width/2 - routerDia/2, 0);
+
+    addToPath(cutOut, -width/2 - routerDia/2, -height/2 - routerDia/2 + 3);
+    addToPath(cutOut, -width/2 - routerDia/2 + 3, -height/2 - routerDia/2);
     
-    routePath(cutout, 0, workPieceDepth + extraToBottom);
+    addToPath(cutOut, width/2 + routerDia/2 - 3, -height/2 - routerDia/2);
+    addToPath(cutOut, width/2 + routerDia/2, -height/2 - routerDia/2 + 3);
+
+    addToPath(cutOut, width/2 + routerDia/2, height/2 + routerDia/2 - 3);
+    addToPath(cutOut, width/2 + routerDia/2 - 3, height/2 + routerDia/2);
     
+    addToPath(cutOut, -width/2 - routerDia/2 + 3, height/2 + routerDia/2);
+    addToPath(cutOut, -width/2 - routerDia/2, height/2 + routerDia/2 - 3);
     
+    addToPath(cutOut, -width/2 - routerDia/2, 0);
+
+    routePath(cutOut, 0, workPieceDepth+extraToBottom);
     
     end();
   }
@@ -291,6 +253,127 @@ public class WheelAdaptorMount {
     goUp();
   }
   
+  // route out a ring from start z to given z
+  static void routeRing(double cx, double cy, double r, double startZ, double z) {
+    if (startZ >= z) return;
+    if (r <= 0) {
+      throw new RuntimeException("Invalid radius (" + r + ")");
+    }
+    out.println(
+        "(ring: center " + cx + "," + cy + 
+        " radius:" + r + 
+        " from -" + startZ + " to -" + z + ")");
+    double curZ = startZ + zStep;
+    boolean stop = false;
+    
+    goUp();
+    goXYRapid(cx, cy-r);
+    do {
+      goZ(curZ);
+     
+      out.println("G02 X" + cx + " Y" + (cy+r) + " R" + r);
+      out.println("G02 X" + cx + " Y" + (cy-r) + " R" + r);
+
+      if (curZ == z) {
+        break;
+      } else if (curZ + zStep > z) {
+        curZ = z;
+        if (stop) {
+          break;
+        } else {
+          stop = true;
+        }
+      } else {
+        curZ += zStep;
+      }
+    } while (true);
+
+    // up
+    goUp();
+  }
+
+  // route out a hole from start z to given z
+  static void routeHole(double cx, double cy, double r, double startZ, double z) {
+    if (startZ >= z) return;
+    if (r <= 0) {
+      throw new RuntimeException("Invalid radius (" + r + ")");
+    }
+    out.println(
+        "(hole: center " + cx + "," + cy + 
+        " radius:" + r + 
+        " from -" + startZ + " to -" + z + ")");
+    double curZ = startZ + zStep;
+    boolean stop = false;
+    
+    goUp();
+    goXYRapid(cx, cy-r);
+    do {
+      goZ(curZ);
+      double curR = r;
+      while (curR > 0) {
+        goXY(cx, cy-curR);
+        out.println("G02 X" + cx + " Y" + (cy+curR) + " R" + curR);
+        out.println("G02 X" + cx + " Y" + (cy-curR) + " R" + curR);
+        curR -= (routerDia - routeOverlap); 
+      }
+      goXY(cx, cy-r);
+
+      if (curZ == z) {
+        break;
+      } else if (curZ + zStep > z) {
+        curZ = z;
+        if (stop) {
+          break;
+        } else {
+          stop = true;
+        }
+      } else {
+        curZ += zStep;
+      }
+    } while (true);
+
+    // up
+    goUp();
+  }
+  
+  // drill a hole from start z to given z
+  static void routeDrill(double cx, double cy, double startZ, double z) {
+    if (startZ >= z) return;
+    out.println(
+        "(drill: center " + cx + "," + cy + 
+        " from -" + startZ + " to -" + z + ")");
+    
+    goUp();
+    goXYRapid(cx, cy);
+    goZ(startZ);
+    goZ(z);
+
+    // up
+    goUp();
+  }
+  
+  // peck drill a hole from start z to given z
+  static void routeDrillPeck(double cx, double cy, double startZ, double z) {
+    if (startZ >= z) return;
+    out.println(
+        "(drill peck: center " + cx + "," + cy + 
+        " from -" + startZ + " to -" + z + ")");
+    
+    goUp();
+    goXYRapid(cx, cy);
+    double curZ = startZ;
+    while (curZ < z) {
+      curZ += zStep;
+      if (curZ > z) curZ = z;
+      goZ(curZ);
+      goUp();
+      if (curZ < z) goRapidDown(curZ - zStep);
+    }
+
+    // up
+    goUp();
+  }
+  
   // route out a plane starting at cx-cw/2,cy-ch/2
   // assuming z to be positioned, feed to be set, starting position to be set
   static void routePlane(double cx, double cy, double cw, double ch, boolean horiz) {
@@ -370,6 +453,10 @@ public class WheelAdaptorMount {
   
   static void goUp() {
     out.println("G00 Z" + hoverDistance);
+  }
+
+  static void goRapidDown(double z) {
+    out.println("G00 Z" + (-z));
   }
 
   static void goXYRapid(double x, double y) {
