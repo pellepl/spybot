@@ -129,9 +129,9 @@ static void NVIC_config(void)
 #endif
 
 #ifdef CONFIG_I2C
-  NVIC_SetPriority(I2C2_EV_IRQn, NVIC_EncodePriority(prioGrp, 1, 1));
+  NVIC_SetPriority(I2C2_EV_IRQn, NVIC_EncodePriority(prioGrp, 7, 1));
   NVIC_EnableIRQ(I2C2_EV_IRQn);
-  NVIC_SetPriority(I2C2_ER_IRQn, NVIC_EncodePriority(prioGrp, 1, 1));
+  NVIC_SetPriority(I2C2_ER_IRQn, NVIC_EncodePriority(prioGrp, 7, 1));
   NVIC_EnableIRQ(I2C2_ER_IRQn);
 #endif
 

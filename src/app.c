@@ -39,6 +39,7 @@ static time batt_meas_start;
 static time last_batt_meas = 0;
 static bool batt_measured = FALSE;
 static u32_t last_batt_time;
+static u16_t last_batt_raw_time;
 
 u8_t const REPLY_OK[] = {ACK_OK};
 u8_t const REPLY_DENY[] = {ACK_DENY};
@@ -309,10 +310,14 @@ static void stmpe_batt_meas_adc_cb(u16_t adc_val) {
       batt_meas_sum /= 4;
       u32_t v_1000 = batt_meas_sum * 7400 / 0xab0;
       last_batt_time = v_1000;
+      last_batt_raw_time = batt_meas_sum;
       DBG(D_APP, D_INFO, "BATT: %i.%03i V\n", v_1000 / 1000, v_1000 % 1000);
       batt_meas_state = 0;
       gpio_disable(BAT_LOAD_PORT, BAT_LOAD_PIN);
       STMPE_req_gpio_set(0, STMPE_GPIO_VBAT_EN);
+#ifdef CONFIG_SPYBOT_ROVER
+      remote->batt = (batt_meas_sum >> 4) & 0xff;
+#endif
     } else {
       STMPE_req_read_adc(STMPE_ADC_VBAT, stmpe_batt_meas_adc_cb);
     }

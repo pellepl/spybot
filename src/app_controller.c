@@ -763,7 +763,7 @@ static void app_control_tick(void) {
         (remote->light_ir ? SPYBOT_ACTION_LIGHT_IR : 0) |
         (remote->light_white ? SPYBOT_ACTION_LIGHT_WHITE : 0) |
         (remote->beep ? SPYBOT_ACTION_BEEP : 0);
-    u8_t sr = SPYBOT_SR_ACC | SPYBOT_SR_HEADING;
+    u8_t sr = SPYBOT_SR_ACC | SPYBOT_SR_HEADING | SPYBOT_SR_BATT;
     sr |= (common->tick_count % 6) ? 0 : SPYBOT_SR_RADAR;
     u8_t msg[] = {
         CMD_CONTROL, left_motor, right_motor, pan, tilt, radar, act, sr

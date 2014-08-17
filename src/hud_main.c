@@ -119,13 +119,13 @@ void hud_paint_main(gcontext *ctx, bool init) {
     }
 
     u32_t last_batt_1000 = APP_get_last_batt();
-    if (last_batt_1000 > 7000)
+    if (last_batt_1000 > 3900*2)
       GFX_printn(ctx, "\013", 0, 3, 0, COL_OVER);
-    else if (last_batt_1000 > 6500)
+    else if (last_batt_1000 > 3775*2)
       GFX_printn(ctx, "\014", 0, 3, 0, COL_OVER);
-    else if (last_batt_1000 > 6000)
+    else if (last_batt_1000 > 3700*2)
       GFX_printn(ctx, "\015", 0, 3, 0, COL_OVER);
-    else if (last_batt_1000 > 5500)
+    else if (last_batt_1000 > 3600*2)
       GFX_printn(ctx, "\016", 0, 3, 0, COL_OVER);
     else if (last_batt_1000 == 0)
       GFX_printn(ctx, "\012", 0, 3, 0, COL_OVER);
@@ -146,13 +146,29 @@ void hud_paint_main(gcontext *ctx, bool init) {
 
   // paired state
 
-  // joystick control
+  // joystick control, remote settings/state
   if (!show_init) {
     GFX_printn(ctx, APP_get_joystick_control() == APP_JOYSTICK_CONTROL_MOTOR ? "\020" : "\021",
         0, 7, 0, COL_OVER);
     GFX_printn(ctx, APP_remote_get()->light_ir ? "\033" : "\032", 0, 9, 0, COL_OVER);
     GFX_printn(ctx, APP_remote_get()->light_white ? "\035" : "\034", 0, 11, 0, COL_OVER);
-    GFX_printn(ctx, "\013", 0, 13, 0, COL_OVER);
+    u8_t remote_batt = APP_remote_get()->batt;
+    u32_t v_1000 = (remote_batt << 4) * 7400 / 0xab0; // TODO might need modification for remote
+    if (v_1000 > 3900*2)
+      GFX_printn(ctx, "\013", 0, 13, 0, COL_OVER);
+    else if (v_1000 > 3775*2)
+      GFX_printn(ctx, "\014", 0, 13, 0, COL_OVER);
+    else if (v_1000 > 3700*2)
+      GFX_printn(ctx, "\015", 0, 13, 0, COL_OVER);
+    else if (v_1000 > 3600*2)
+      GFX_printn(ctx, "\016", 0, 13, 0, COL_OVER);
+    else if (v_1000 == 0)
+      GFX_printn(ctx, "\012", 0, 13, 0, COL_OVER);
+    else {
+      if (((now>>8)&1))
+        GFX_printn(ctx, "\016", 0, 13, 0, COL_OVER);
+    }
+    //GFX_printn(ctx, "\013", 0, 13, 0, COL_OVER);
   }
 
   // audio

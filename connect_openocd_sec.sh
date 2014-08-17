@@ -1,2 +1,2 @@
-~/opt/openocd_0.7.0/bin/openocd -s /home/petera/opt/openocd_0.7.0/share/openocd/scripts -f openocd/spybot_sec.cfg
+/home/petera/opt/openocd_inst/bin/openocd -s /home/petera/opt/openocd_inst/share/openocd/scripts -f openocd/spybot_sec.cfg
 

@@ -102,6 +102,7 @@ static int f_dbg_tx(char *s);
 static int f_i2c_read(int addr, int reg);
 static int f_i2c_write(int addr, int reg, int data);
 static int f_i2c_scan(void);
+static int f_i2c_reset(void);
 
 #ifdef CONFIG_M24M01
 static int f_ee_open(void);
@@ -319,6 +320,8 @@ static cmd c_tbl[] = {
     },
     { .name = "i2c_scan", .fn = (func) f_i2c_scan,
         .help = "scans i2c bus for all addresses\n" },
+    { .name = "i2c_reset", .fn = (func) f_i2c_reset,
+        .help = "reset i2c bus\n" },
 
 #ifdef CONFIG_M24M01
         { .name = "ee_open", .fn = (func) f_ee_open,
@@ -1032,6 +1035,14 @@ static int f_i2c_scan(void) {
   if (res != I2C_OK) print("i2c cb err %i\n", res);
   res = I2C_query(_I2C_BUS(0), i2c_scan_addr);
   if (res != I2C_OK) print("i2c query err %i\n", res);
+  return 0;
+}
+
+static int f_i2c_reset(void) {
+  I2C_reset(_I2C_BUS(0));
+  // force release of i2c mutex
+  TASK_mutex_try_lock(&i2c_mutex);
+  TASK_mutex_unlock(&i2c_mutex);
   return 0;
 }
 

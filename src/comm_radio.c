@@ -197,11 +197,11 @@ void COMRAD_init(void) {
   spybot_conf.out_clk_enable = NRF905_CFG_OUT_CLK_OFF;
   spybot_conf.out_clk_freq = NRF905_CFG_OUT_CLK_FREQ_1MHZ;
   spybot_conf.pa_pwr= comrad.rad_config.pa;
-#ifdef SECONDARY
-  spybot_conf.rx_address = 0x9ce3aed2;
-#else
+//#ifdef SECONDARY
+//  spybot_conf.rx_address = 0x9ce3aed2;
+//#else
   spybot_conf.rx_address = 0x631c512d;
-#endif
+//#endif
   spybot_conf.rx_address_field_width = NRF905_CFG_ADDRESS_FIELD_WIDTH_4;
   spybot_conf.rx_payload_width = COMM_LNK_MAX_DATA;
   spybot_conf.rx_reduced_power = NRF905_CFG_RX_REDUCED_POWER_OFF;
@@ -213,11 +213,11 @@ void COMRAD_init(void) {
     DBG(D_COMM, D_WARN, "COMRAD init config failed %i\n", res);
   }
   SYS_hardsleep_ms(250); // ugly wait for conf to finish - todo
-#ifdef SECONDARY
+//#ifdef SECONDARY
   u8_t tx_addr[4] = {0x63, 0x1c, 0x51, 0x2d};
-#else
-  u8_t tx_addr[4] = {0x9c, 0xe3, 0xae, 0xd2};
-#endif
+//#else
+//  u8_t tx_addr[4] = {0x9c, 0xe3, 0xae, 0xd2};
+//#endif
   res = NRF905_IMPL_conf_tx_addr(tx_addr, TRUE);
   if (res != NRF905_OK) {
     DBG(D_COMM, D_WARN, "COMRAD config tx addr failed %i\n", res);
