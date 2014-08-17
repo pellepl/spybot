@@ -23,7 +23,7 @@ public class WheelAdaptorMount {
   //                                      
   
   static double drillDia = 3.3;
-  static double holeDia = 9.8;
+  static double holeDia = 9.3;
   static double holeDepth = 4;
   static double holeCenterFromBottom = 11;
   static double width = 25;
