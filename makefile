@@ -61,7 +61,7 @@ else
 builddir = build
 endif
 
-basetoolsdir = /home/petera/toolchain/arm-elf-tools-4.8.2
+basetoolsdir = /home/petera/toolchain/arm-elf-tools-fp-4.8.2
 #basetoolsdir = /home/petera/toolchain/gcc/arm-elf-tools-4.8.1
 #basetoolsdir = /home/petera/toolchain/gcc/arm-elf-tools-4.7.1
 #basetoolsdir = /usr/local/gcc/arm-elf-tools-4.8.2
