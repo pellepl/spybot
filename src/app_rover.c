@@ -366,7 +366,7 @@ static void app_rover_handle_rx(comm_arg *rx, u16_t len, u8_t *data, bool alread
       reply[reply_ix++] = app_cfg->main.radar_adjust;
       reply[reply_ix++] = app_cfg->main.cam_pan_adjust;
       reply[reply_ix++] = app_cfg->main.cam_tilt_adjust;
-      reply[reply_ix++] = app_cfg->main.common;
+      reply[reply_ix++] = app_cfg->main.control;
       DBG(D_APP, D_DEBUG, "rover returned config\n");
     } else {
       reply[reply_ix++] = 0; // nok, no config yet - try later

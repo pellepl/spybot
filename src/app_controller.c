@@ -551,11 +551,11 @@ static void app_control_diag_task(u32_t phase, void *b) {
   case DIAG_REMOTE_SETTINGS: {
     if (APP_pair_status() == PAIRING_OK) {
       dprint(" REMOTE CONFIG\n");
-      dprint("   PAN    %i\n", APP_cfg_get()->main.cam_pan_adjust);
-      dprint("   TILT   %i\n", APP_cfg_get()->main.cam_tilt_adjust);
-      dprint("   STEER  %i\n", APP_cfg_get()->main.steer_adjust);
-      dprint("   RADAR  %i\n", APP_cfg_get()->main.radar_adjust);
-      dprint("   COMMON %08b\n", APP_cfg_get()->main.common);
+      dprint("   PAN     %i\n", APP_cfg_get()->main.cam_pan_adjust);
+      dprint("   TILT    %i\n", APP_cfg_get()->main.cam_tilt_adjust);
+      dprint("   STEER   %i\n", APP_cfg_get()->main.steer_adjust);
+      dprint("   RADAR   %i\n", APP_cfg_get()->main.radar_adjust);
+      dprint("   CONTROL %08b\n", APP_cfg_get()->main.control);
     } else {
       dprint(" NOT PAIRED, NO CONFIG\n");
     }
@@ -700,7 +700,7 @@ static void app_control_handle_ack(u8_t cmd, comm_arg *rx, u16_t len, u8_t *data
       APP_cfg_set(CFG_RADAR_ADJUST, (s8_t)data[3]);
       APP_cfg_set(CFG_CAM_PAN_ADJUST, (s8_t)data[4]);
       APP_cfg_set(CFG_CAM_TILT_ADJUST, (s8_t)data[5]);
-      APP_cfg_set(CFG_COMMON, (u8_t)data[6]);
+      APP_cfg_set(CFG_CONTROL, (u8_t)data[6]);
       app_control_clr_remote_req(APP_CTRL_REMOTE_REQ_GET_CONFIG);
     } else {
       // rover has no config yet

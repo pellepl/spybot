@@ -184,7 +184,7 @@ static void cfg_ee_set_default(void) {
   cfg.config.cfg.main.cam_tilt_adjust = 0;
   cfg.config.cfg.main.radar_adjust = 0;
   cfg.config.cfg.main.steer_adjust = 0;
-  cfg.config.cfg.main.common = 0;
+  cfg.config.cfg.main.control = 0;
 
   cfg.config.cfg.accel.acc_x_min = -1064;
   cfg.config.cfg.accel.acc_x_max = 1051;

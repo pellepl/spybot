@@ -316,7 +316,7 @@ static void stmpe_batt_meas_adc_cb(u16_t adc_val) {
       gpio_disable(BAT_LOAD_PORT, BAT_LOAD_PIN);
       STMPE_req_gpio_set(0, STMPE_GPIO_VBAT_EN);
 #ifdef CONFIG_SPYBOT_ROVER
-      remote->batt = (batt_meas_sum >> 4) & 0xff;
+      remote.batt = (batt_meas_sum >> 4) & 0xff;
 #endif
     } else {
       STMPE_req_read_adc(STMPE_ADC_VBAT, stmpe_batt_meas_adc_cb);
@@ -462,8 +462,8 @@ s16_t APP_cfg_get_val(spybot_cfg c) {
   case CFG_CAM_TILT_ADJUST:
     return (s16_t) app_cfg.main.cam_tilt_adjust ;
   break;
-  case CFG_COMMON:
-    return (s16_t) app_cfg.main.common ;
+  case CFG_CONTROL:
+    return (s16_t) app_cfg.main.control ;
   break;
   case CFG_RADIO_CHANNEL:
     return (s16_t) app_cfg.radio.radio_channel ;
@@ -528,8 +528,8 @@ void APP_cfg_set(spybot_cfg c, s16_t val) {
   case CFG_CAM_TILT_ADJUST:
     app_cfg.main.cam_tilt_adjust = val;
   break;
-  case CFG_COMMON:
-    app_cfg.main.common = val;
+  case CFG_CONTROL:
+    app_cfg.main.control = val;
   break;
   case CFG_RADIO_CHANNEL:
     app_cfg.radio.radio_channel = val;

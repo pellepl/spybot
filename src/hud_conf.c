@@ -17,7 +17,7 @@ typedef enum {
    CONF_STEER,
    CONF_RADAR,
    CONF_CAMERA,
-   CONF_COMMON,
+   CONF_CONTROL,
    CONF_EXIT
 } conf_state;
 
@@ -26,13 +26,13 @@ static const char * const(MAIN_MENU[]) =  {
   "STEERING",
   "RADAR",
   "CAMERA",
-  "GENERAL",
+  "CONTROL",
   "EXIT",
   NULL
 };
 
 static const char * const(COMMON_MENU[]) =  {
-    "CONFIG COMMON",
+    "CONFIG CONTROL",
   "INV JOYSTICK H",
   "INV JOYSTICK V",
   "INV LEFT MOTOR",
@@ -252,7 +252,7 @@ static void hud_conf_input_main(input_type in, bool change) {
     if (conf.state == CONF_EXIT) {
       hud_conf_set_menu(EXIT_MENU);
     }
-    if (conf.state == CONF_COMMON) {
+    if (conf.state == CONF_CONTROL) {
       hud_conf_set_menu(COMMON_MENU);
     }
   }
@@ -427,20 +427,20 @@ static void hud_conf_input_exit(input_type in, bool change) {
 }
 
 
-////////////////////////////////////////////////////// COMMON
+////////////////////////////////////////////////////// CONTROL
 
-static void hud_conf_paint_common(gcontext *ctx) {
+static void hud_conf_paint_control(gcontext *ctx) {
   ROVER_view(230,200,230, 0, 0, -4*PI_TRIG_T/5, FALSE);
   hud_conf_paint_menu(ctx);
-  hud_conf_paint_checkbox(ctx, 200, 8*4+12*0, conf.remote.common & CFG_COMMON_JOY_H_INVERT);
-  hud_conf_paint_checkbox(ctx, 200, 8*4+12*1, conf.remote.common & CFG_COMMON_JOY_V_INVERT);
-  hud_conf_paint_checkbox(ctx, 200, 8*4+12*2, conf.remote.common & CFG_COMMON_LEFT_INVERT);
-  hud_conf_paint_checkbox(ctx, 200, 8*4+12*3, conf.remote.common & CFG_COMMON_RIGHT_INVERT);
-  hud_conf_paint_checkbox(ctx, 200, 8*4+12*4, conf.remote.common & CFG_COMMON_PAN_INVERT);
-  hud_conf_paint_checkbox(ctx, 200, 8*4+12*5, conf.remote.common & CFG_COMMON_TILT_INVERT);
+  hud_conf_paint_checkbox(ctx, 200, 8*4+12*0, conf.remote.control & CFG_CONTROL_JOY_H_INVERT);
+  hud_conf_paint_checkbox(ctx, 200, 8*4+12*1, conf.remote.control & CFG_CONTROL_JOY_V_INVERT);
+  hud_conf_paint_checkbox(ctx, 200, 8*4+12*2, conf.remote.control & CFG_CONTROL_LEFT_INVERT);
+  hud_conf_paint_checkbox(ctx, 200, 8*4+12*3, conf.remote.control & CFG_CONTROL_RIGHT_INVERT);
+  hud_conf_paint_checkbox(ctx, 200, 8*4+12*4, conf.remote.control & CFG_CONTROL_PAN_INVERT);
+  hud_conf_paint_checkbox(ctx, 200, 8*4+12*5, conf.remote.control & CFG_CONTROL_TILT_INVERT);
 }
 
-static void hud_conf_input_common(input_type in, bool change) {
+static void hud_conf_input_control(input_type in, bool change) {
   if (!change) {
     return;
   }
@@ -464,34 +464,34 @@ static void hud_conf_input_common(input_type in, bool change) {
     switch (conf.menu_sel_ix) {
     case 0:
       conf.dirty = TRUE;
-      conf.remote.common ^= CFG_COMMON_JOY_H_INVERT;
+      conf.remote.control ^= CFG_CONTROL_JOY_H_INVERT;
       break;
     case 1:
       conf.dirty = TRUE;
-      conf.remote.common ^= CFG_COMMON_JOY_V_INVERT;
+      conf.remote.control ^= CFG_CONTROL_JOY_V_INVERT;
       break;
     case 2:
       conf.dirty = TRUE;
-      conf.remote.common ^= CFG_COMMON_LEFT_INVERT;
+      conf.remote.control ^= CFG_CONTROL_LEFT_INVERT;
       break;
     case 3:
       conf.dirty = TRUE;
-      conf.remote.common ^= CFG_COMMON_RIGHT_INVERT;
+      conf.remote.control ^= CFG_CONTROL_RIGHT_INVERT;
       break;
     case 4:
       conf.dirty = TRUE;
-      conf.remote.common ^= CFG_COMMON_PAN_INVERT;
+      conf.remote.control ^= CFG_CONTROL_PAN_INVERT;
       break;
     case 5:
       conf.dirty = TRUE;
-      conf.remote.common ^= CFG_COMMON_TILT_INVERT;
+      conf.remote.control ^= CFG_CONTROL_TILT_INVERT;
       break;
     default:
       conf.state = CONF_MAIN;
       hud_conf_set_menu(MAIN_MENU);
       break;
     }
-    APP_remote_update_config(CFG_COMMON, conf.remote.common, TRUE);
+    APP_remote_update_config(CFG_CONTROL, conf.remote.control, TRUE);
   }
 }
 
@@ -530,8 +530,8 @@ void hud_paint_config(gcontext *ctx, bool init) {
   case CONF_CAMERA:
     hud_conf_paint_camera(ctx);
     break;
-  case CONF_COMMON:
-    hud_conf_paint_common(ctx);
+  case CONF_CONTROL:
+    hud_conf_paint_control(ctx);
     break;
   case CONF_EXIT:
     hud_conf_paint_exit(ctx);
@@ -553,8 +553,8 @@ void HUD_input(input_type in, bool change) {
   case CONF_CAMERA:
     hud_conf_input_camera(in, change);
     break;
-  case CONF_COMMON:
-    hud_conf_input_common(in, change);
+  case CONF_CONTROL:
+    hud_conf_input_control(in, change);
     break;
   case CONF_EXIT:
     hud_conf_input_exit(in, change);

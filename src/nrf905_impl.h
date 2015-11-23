@@ -8,7 +8,7 @@
 #ifndef NRF905_IMPL_H_
 #define NRF905_IMPL_H_
 
-#include "nrf905_driver.h"
+#include "../../generic/system/src/nrf905_driver.h"
 
 // called upon reception of a radio packet
 typedef void (*nrf905_rx)(u8_t *data, u8_t len);

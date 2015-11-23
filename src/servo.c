@@ -95,9 +95,9 @@ void SERVO_control(servo_out servo, s8_t value) {
   pwm_val = 6*pwm_val / 7;
   pwm_val += 1*(adj<<8) / 7;
 
-  if (servo == SERVO_CAM_PAN && (APP_cfg_get_val(CFG_COMMON) & CFG_COMMON_PAN_INVERT)) {
+  if (servo == SERVO_CAM_PAN && (APP_cfg_get_val(CFG_CONTROL) & CFG_CONTROL_PAN_INVERT)) {
     pwm_val = -pwm_val;
-  } else if (servo == SERVO_CAM_TILT && (APP_cfg_get_val(CFG_COMMON) & CFG_COMMON_TILT_INVERT)) {
+  } else if (servo == SERVO_CAM_TILT && (APP_cfg_get_val(CFG_CONTROL) & CFG_CONTROL_TILT_INVERT)) {
     pwm_val = -pwm_val;
   }
 

@@ -12,19 +12,19 @@
 
 #define CONFIGURATION_VERSION     0x00020001
 
-#define CFG_COMMON_LEFT_INVERT    (1<<0)
-#define CFG_COMMON_RIGHT_INVERT   (1<<1)
-#define CFG_COMMON_PAN_INVERT     (1<<2)
-#define CFG_COMMON_TILT_INVERT    (1<<3)
-#define CFG_COMMON_JOY_H_INVERT   (1<<4)
-#define CFG_COMMON_JOY_V_INVERT   (1<<5)
+#define CFG_CONTROL_LEFT_INVERT    (1<<0)
+#define CFG_CONTROL_RIGHT_INVERT   (1<<1)
+#define CFG_CONTROL_PAN_INVERT     (1<<2)
+#define CFG_CONTROL_TILT_INVERT    (1<<3)
+#define CFG_CONTROL_JOY_H_INVERT   (1<<4)
+#define CFG_CONTROL_JOY_V_INVERT   (1<<5)
 
 typedef enum {
   CFG_STEER_ADJUST = 0,
   CFG_RADAR_ADJUST,
   CFG_CAM_PAN_ADJUST,
   CFG_CAM_TILT_ADJUST,
-  CFG_COMMON,
+  CFG_CONTROL,
 
   CFG_RADIO_CHANNEL,
   CFG_RADIO_PA,
@@ -52,7 +52,7 @@ typedef struct __attribute__ (( packed )) {
   s8_t radar_adjust;
   s8_t cam_pan_adjust;
   s8_t cam_tilt_adjust;
-  u8_t common;
+  u8_t control;
 } configuration_main_t;
 
 #define CFG_RADIO_PA_SCHEME_STATIC_10     0

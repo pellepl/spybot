@@ -249,10 +249,10 @@ void MOTOR_control(s16_t ohori, s16_t overi) {
   motor.ts_last_control = SYS_get_time_ms();
 
   // check configuration for axis inversion
-  if (APP_cfg_get_val(CFG_COMMON) & CFG_COMMON_JOY_H_INVERT) {
+  if (APP_cfg_get_val(CFG_CONTROL) & CFG_CONTROL_JOY_H_INVERT) {
     ohori = -ohori;
   }
-  if (APP_cfg_get_val(CFG_COMMON) & CFG_COMMON_JOY_V_INVERT) {
+  if (APP_cfg_get_val(CFG_CONTROL) & CFG_CONTROL_JOY_V_INVERT) {
     overi = -overi;
   }
 
@@ -286,10 +286,10 @@ void MOTOR_control(s16_t ohori, s16_t overi) {
     left = (s16_t)((s32_t)(adj*left)/128);
   }
 
-  if (APP_cfg_get_val(CFG_COMMON) & CFG_COMMON_LEFT_INVERT) {
+  if (APP_cfg_get_val(CFG_CONTROL) & CFG_CONTROL_LEFT_INVERT) {
     left = -left;
   }
-  if (APP_cfg_get_val(CFG_COMMON) & CFG_COMMON_RIGHT_INVERT) {
+  if (APP_cfg_get_val(CFG_CONTROL) & CFG_CONTROL_RIGHT_INVERT) {
     right = -right;
   }
 
